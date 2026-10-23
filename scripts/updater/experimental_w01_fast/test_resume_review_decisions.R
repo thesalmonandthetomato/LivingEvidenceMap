@@ -53,3 +53,31 @@ stopifnot(call(at("wrong_hash"),at("wrong_hash.jsonl"))!=0L)
 writeLines(toJSON(list(review_case_id=id,action="strip_abstract"),auto_unbox=TRUE),at("repairs_bad.jsonl"))
 stopifnot(call(at("repairs"),repairs=at("repairs_bad.jsonl"))!=0L)
 cat("PASS: authentic human decision resumes, uncertain/hash mismatch/repairs fail closed; original scores preserved\n")
+
+
+# Existing Shiny ready-handoff/export manifest must agree byte-for-byte.
+writeLines(toJSON(list(schema="living-evidence-map-workflow01-shiny-handoff-v1",
+status="ready",checkpoint_pointer_path="docs/test_pointer.json",
+checkpoint_run_id="1234",queue_sha256=sha,queue_cases=1L,
+export_run_id="5678",decisions_export_sha256=digest(file=at("decisions.jsonl"),algo="sha256")),
+auto_unbox=TRUE),at("handoff.json"))
+writeLines(toJSON(list(schema="living-evidence-map-workflow01-shiny-decision-export-manifest-v2",
+checkpoint_pointer_path="docs/test_pointer.json",checkpoint_run_id="1234",
+queue_sha256=sha,queue_cases=1L,export_run_id="5678",
+export_sha256=digest(file=at("decisions.jsonl"),algo="sha256"),
+repairs_sha256=digest(file=at("repairs.jsonl"),algo="sha256"),
+complete=TRUE,unresolved_cases=0L,uncertain_cases=0L),auto_unbox=TRUE),at("export.json"))
+verify<-function(handoff=at("handoff.json"),out=at("shiny-verified.json")){
+ z<-suppressWarnings(system2(file.path(R.home("bin"),"Rscript"),
+ c("scripts/updater/experimental_w01_fast/verify_shiny_return.R",
+ "--handoff",handoff,"--export-manifest",at("export.json"),
+ "--decisions",at("decisions.jsonl"),"--repairs",at("repairs.jsonl"),
+ "--queue",qp,"--output",out),stdout=TRUE,stderr=TRUE))
+ if(is.null(attr(z,"status")))0L else as.integer(attr(z,"status"))
+}
+stopifnot(verify()==0L)
+stopifnot(fromJSON(at("shiny-verified.json"))$status=="VERIFIED_SHINY_RETURN")
+bad<-fromJSON(at("handoff.json"));bad$queue_sha256<-"tampered"
+write_json(bad,at("tampered-handoff.json"),auto_unbox=TRUE)
+stopifnot(verify(at("tampered-handoff.json"),at("tampered-result.json"))!=0L)
+cat("PASS: authentic Shiny handoff hashes accepted; mismatched queue rejected\\n")
