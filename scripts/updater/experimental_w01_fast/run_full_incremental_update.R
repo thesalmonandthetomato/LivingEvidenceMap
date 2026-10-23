@@ -193,7 +193,7 @@ run("stage_canonical_contract",file.path(base,"stage_production_canonical_contra
  "--previous-canonical-manifest",file.path(previous_root,"canonical","canonical_manifest.json")))
 if(!file.exists(file.path(output,"production_canonical","canonical_manifest.json")))stop("Canonical phase did not produce production manifest")
 }
-if(phase%in%c("all","delta")){
+if(phase%in%c("all","delta") || (phase=="canonical"&&!is.null(reviewed_root))){
 if(!file.exists(file.path(output,"production_canonical","canonical_manifest.json")) || !file.exists(file.path(output,"production_final","final_pair_decisions.csv")))stop("Missing canonical checkpoint")
 # Validate persistence using the unmodified W01 delta generator and replay engine.
 if(delta_writer=="direct"){
