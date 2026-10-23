@@ -1,4 +1,4 @@
-name: W01-Fast verified Shiny bound resume validation
+name: W01-Fast verified Shiny return resume regression
 on:
   push:
     branches: [w01-fast-direct-delta]
