@@ -1,0 +1,54 @@
+{
+  "schema": "living-evidence-map-workflow04-screening-archive-v1",
+  "workflow": "04",
+  "state": "relevance_screening",
+  "source_github_run_id": "40028381004",
+  "publication_github_run_id": "40028381004",
+  "source_github_run_url": "https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/40028381004",
+  "repository": "thesalmonandthetomato/LivingEvidenceMap",
+  "upstream_lean_canonical_sha256": "0111e07be6c71069f28dc8420ed1fecf494af0efe31d651e2ec6e8ef75fc1fb1",
+  "upstream_workflow03_publication_status_sha256": "0210b4075172f629e0f2594251a2164d2da16bf3ffb869abad67686c9e41b8b7",
+  "prompt_sha256": "ab71cad800996f2aea4cf1313c3ab749017f01094946830671f2f579a4710f69",
+  "records": 50554,
+  "retained": 23328,
+  "excluded": 27226,
+  "unresolved": 0,
+  "inclusion_rate": 0.461447165407287,
+  "workflow04_final_screening_layer_sha256": "c171749a40ca576be1f72d7478c7044039ebad2009be8bcda3af66a9de1b2ba7",
+  "included_record_ids_sha256": "8b9d106749884cafd191c32b086a0b90c0d81ee81c751fd1fe191758992f73da",
+  "excluded_record_ids_sha256": "609265fa502d71f00a5f0ec3ec500e40685a155f8903ee4043fbbc02242dca57",
+  "summary_sha256": "33b2d83245058b09c9327022bc77340829a6ba3041eda30c2121d03737531f9e",
+  "agreement_summary_sha256": null,
+  "human_abstract_corrections": 0,
+  "human_abstract_corrections_sha256": null,
+  "file_visibility": "restricted",
+  "files": {
+    "state_archive": {
+      "filename": "LivingEvidenceMap_workflow04_run-40028381004_screening_state.tar.gz",
+      "bytes": 25423313,
+      "sha256": "f71088a8c8cc2233d817f4616af93395031fdb49e67bcd224184832c8a8005a6"
+    }
+  },
+  "status": "published",
+  "zenodo_record_id": "23605686",
+  "zenodo_deposition_id": "23605686",
+  "doi": "10.5281/zenodo.23605686",
+  "record_url": "https://zenodo.org/records/23605686",
+  "visibility": "restricted",
+  "archive_files": [
+    {
+      "filename": "LivingEvidenceMap_workflow04_run-40028381004_screening_state.tar.gz",
+      "bytes": 25423313,
+      "sha256": "f71088a8c8cc2233d817f4616af93395031fdb49e67bcd224184832c8a8005a6",
+      "zenodo_checksum": "md5:e0beb75354bd1ed7644da6d76998dbd8"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow04_run-40028381004_manifest.json",
+      "bytes": 1610,
+      "sha256": "b1c2538697ea8d89269415fc8649824c19ea5a2538d077a7c3914d37370cce03",
+      "zenodo_checksum": "md5:f781788a9e3c7045c2c76c5e8be9e631"
+    }
+  ],
+  "manifest_sha256": "b1c2538697ea8d89269415fc8649824c19ea5a2538d077a7c3914d37370cce03",
+  "published_at_utc": "2026-10-23T22:19:42Z"
+}
