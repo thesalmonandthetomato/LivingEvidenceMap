@@ -1,0 +1,44 @@
+{
+  "status": "published",
+  "workflow": "01",
+  "state": "delta",
+  "github_run_id": "39990028078",
+  "github_run_url": "https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/39990028078",
+  "source_manifestations": 136057,
+  "preserved_pair_decisions": 1599264,
+  "incremental_pair_decisions": 1719,
+  "manual_review_pairs": 0,
+  "canonical_records": 50567,
+  "canonical_jsonl_sha256": "4eb0ce57c54887c8f1fec607996c65cace6c57f3ffca65e78dced42a1029e14e",
+  "canonical_jsonl_bytes": 620366376,
+  "previous_github_run_id": "39140209398",
+  "previous_zenodo_record_id": "23455348",
+  "previous_manifest_sha256": "f8e640939f88bfd3841c9c5ef006656be2bc53322e00520a07650d7a0d909213",
+  "delta_new_source_manifestations": 60,
+  "delta_pair_decision_upserts": 1719,
+  "delta_cluster_map_upserts": 237,
+  "delta_canonical_upserts": 98,
+  "delta_canonical_retired_ids": 0,
+  "zenodo_record_id": "23602204",
+  "zenodo_deposition_id": "23602204",
+  "doi": "10.5281/zenodo.23602204",
+  "record_url": "https://zenodo.org/records/23602204",
+  "title": "Living Evidence Map Workflow 01 delta | run 39990028078",
+  "visibility": "restricted",
+  "archive_files": [
+    {
+      "filename": "LivingEvidenceMap_workflow01_run-39990028078_delta.tar.gz",
+      "bytes": 480548,
+      "sha256": "a0131d2ccf87817a9b6c49aeed39e6440a077222b927cf5e5493cd755643708e",
+      "zenodo_checksum": "md5:439bb56798814d05586a62bd58fc82bc"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow01_run-39990028078_delta-manifest.json",
+      "bytes": 10334,
+      "sha256": "95bffa6e9c49c459f15136abfc7781a38419dd0cc52f11222550ffe04f2e2aea",
+      "zenodo_checksum": "md5:ac000b7f372c6d5023981ff113ed471b"
+    }
+  ],
+  "manifest_sha256": "95bffa6e9c49c459f15136abfc7781a38419dd0cc52f11222550ffe04f2e2aea",
+  "published_at_utc": "2026-10-23T18:05:58Z"
+}
