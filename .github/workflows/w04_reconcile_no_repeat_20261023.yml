@@ -1,4 +1,4 @@
-name: W04 reconcile 107 review cases without repeat screening
+name: W04 reconcile against final approved human decisions
 on:
   push:
     branches: [w01-fast-direct-delta]
@@ -21,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/w04/{prior,current,consensus}
-          gh run download 39150923062 --repo "$GITHUB_REPOSITORY" --name workflow04-production-39150923062 --dir /tmp/w04/prior
+          gh run download 39160841782 --repo "$GITHUB_REPOSITORY" --name workflow04-shiny-resume-39160841782 --dir /tmp/w04/prior
           gh run download 40019139120 --repo "$GITHUB_REPOSITORY" --name workflow04-prepared-40019139120 --dir /tmp/w04/current
           gh run download 40019139120 --repo "$GITHUB_REPOSITORY" --name workflow04-new-consensus-40019139120 --dir /tmp/w04/consensus
       - name: Reconcile without changing Shiny or publication
