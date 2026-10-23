@@ -66,14 +66,17 @@ jobs:
           fields=collections.Counter();combos=collections.Counter();title_abstract=0;only_aux=0;abstract_gained=0;abstract_lost=0;examples=[]
           for rid in sorted(ids):
               p=view(prev[rid]);c=view(curr[rid]);changed=tuple(k for k in p if p[k]!=c[k])
-              if not changed:raise RuntimeError(f'No field differs for fingerprint change {rid}')
+              if not changed:
+                  combos[('unchanged_against_raw_prior',)]+=1
+                  examples.append({'record_id':rid,'fields':'unchanged_against_raw_prior','old_title_len':len(p['title']),'new_title_len':len(c['title']),'old_abstract_len':len(p['abstract']),'new_abstract_len':len(c['abstract'])})
+                  continue
               fields.update(changed);combos[changed]+=1
               if 'title' in changed or 'abstract' in changed:title_abstract+=1
               else:only_aux+=1
               if not p['abstract'] and c['abstract']:abstract_gained+=1
               if p['abstract'] and not c['abstract']:abstract_lost+=1
               examples.append({'record_id':rid,'fields':','.join(changed),'old_title_len':len(p['title']),'new_title_len':len(c['title']),'old_abstract_len':len(p['abstract']),'new_abstract_len':len(c['abstract'])})
-          report={'changed_existing_records':len(ids),'changed_field_counts':dict(fields),'changes_only_outside_title_abstract':only_aux,'title_or_abstract_changed':title_abstract,'abstract_gained':abstract_gained,'abstract_lost':abstract_lost,'field_combinations':{'+'.join(k):v for k,v in combos.items()}}
+          report={'changed_existing_records':len(ids),'changed_field_counts':dict(fields),'changes_only_outside_title_abstract':only_aux,'title_or_abstract_changed':title_abstract,'abstract_gained':abstract_gained,'abstract_lost':abstract_lost,'unchanged_against_raw_prior':combos[('unchanged_against_raw_prior',)],'field_combinations':{'+'.join(k):v for k,v in combos.items()}}
           print(json.dumps(report,indent=2))
           pathlib.Path('/tmp/w04_audit_summary.json').write_text(json.dumps(report,indent=2))
           with pathlib.Path('/tmp/w04_audit_records.csv').open('w') as f:
