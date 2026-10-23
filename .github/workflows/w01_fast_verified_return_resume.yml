@@ -46,7 +46,7 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$CHECKPOINT_RUN" =~ ^[0-9]+$ && "$EXPORT_RUN" =~ ^[0-9]+$ ]] || exit 1
-          [[ "$HANDOFF_PATH" =~ ^docs/deduplication/handoffs/w01/run-[0-9]+\\.json$ ]] || exit 1
+          [[ "$HANDOFF_PATH" =~ ^docs/deduplication/handoffs/w01/run-[0-9]+\.json$ ]] || exit 1
           test -s "$HANDOFF_PATH"
           mkdir -p restored/checkpoint restored/export
           gh run download "$CHECKPOINT_RUN" --repo "$GITHUB_REPOSITORY" \
@@ -103,6 +103,7 @@ jobs:
           test ! -e outputs/experimental_w01_fast/shadow
           test ! -e previous_state
           cp -a restored/checkpoint/. .
+          sha256sum -c outputs/workflow01_stage_prepare_checksums.txt
           test -s outputs/workflow01_union/source_inputs.json
           test -s previous_state/canonical/records.jsonl
           test -s previous_state/canonical/canonical_manifest.json
