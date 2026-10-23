@@ -1,0 +1,73 @@
+name: W04 reconcile 107 review cases without repeat screening
+on:
+  push:
+    branches: [w01-fast-direct-delta]
+    paths: ['.github/workflows/w04_reconcile_no_repeat_20261023.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-direct-delta
+          persist-credentials: false
+      - name: Restore immutable previous and current W04 inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/w04/{prior,current,consensus}
+          gh run download 39150923062 --repo "$GITHUB_REPOSITORY" --name workflow04-production-39150923062 --dir /tmp/w04/prior
+          gh run download 40019139120 --repo "$GITHUB_REPOSITORY" --name workflow04-prepared-40019139120 --dir /tmp/w04/current
+          gh run download 40019139120 --repo "$GITHUB_REPOSITORY" --name workflow04-new-consensus-40019139120 --dir /tmp/w04/consensus
+      - name: Reconcile without changing Shiny or publication
+        run: |
+          python3 - <<'PY'
+          import json,csv,pathlib,collections
+          roots={k:pathlib.Path('/tmp/w04')/k for k in ('prior','current','consensus')}
+          def find(root,name):
+              hits=list(root.rglob(name))
+              if len(hits)!=1:raise RuntimeError(f'{name}: {len(hits)} matches in {root}, {hits[:3]}')
+              return hits[0]
+          def jl(path):
+              with path.open() as f:
+                  for line in f:
+                      if line.strip():yield json.loads(line)
+          def layer(root,name):return {r['record_id']:r for r in jl(find(root,name))}
+          old=layer(roots['prior'],'workflow04_final_screening_layer.jsonl')
+          reused=layer(roots['current'],'reused_workflow04_layer.jsonl')
+          fresh=layer(roots['consensus'],'workflow04_consensus_layer.jsonl')
+          with find(roots['current'],'screen_queue_manifest.csv').open() as f: queue=list(csv.DictReader(f))
+          new_ids={r['record_id'] for r in queue if r['queue_reason']=='new_record_id'}
+          old_ids={r['record_id'] for r in queue if r['queue_reason']!='new_record_id'}
+          if len(new_ids)!=16 or len(old_ids)!=154 or len(queue)!=170:raise RuntimeError(f'Unexpected queue partition: {len(new_ids)} new, {len(old_ids)} existing')
+          if set(fresh)!=new_ids|old_ids:raise RuntimeError('Fresh results differ from prepared queue')
+          if set(reused)&(new_ids|old_ids):raise RuntimeError('Overlapping screening identities')
+          if not old_ids.issubset(old):raise RuntimeError(f'Previously screened IDs missing: {len(old_ids-set(old))}')
+          prior_dec=collections.Counter((old[i].get('screening') or {}).get('decision') for i in old_ids)
+          if set(prior_dec)-{'retain','exclude'}:raise RuntimeError(f'Old decisions need human work: {prior_dec}')
+          restored={i:old[i] for i in old_ids}
+          combined={**reused,**restored,**{i:fresh[i] for i in new_ids}}
+          if len(combined)!=50554:raise RuntimeError(f'Combined coverage mismatch: {len(combined)}')
+          uncertain=[i for i,r in combined.items() if (r.get('screening') or {}).get('decision')=='uncertain']
+          only_new=set(uncertain)<=new_ids
+          if not only_new:raise RuntimeError(f'Unexpected previously screened uncertainties: {set(uncertain)-new_ids}')
+          out=pathlib.Path('/tmp/w04/reconciled');out.mkdir()
+          with (out/'screening_layer.jsonl').open('w') as f:
+              for i in sorted(combined):f.write(json.dumps(combined[i],ensure_ascii=False,separators=(',',':'))+'\n')
+          with (out/'new_uncertain_cases.jsonl').open('w') as f:
+              for i in sorted(uncertain):f.write(json.dumps(combined[i],ensure_ascii=False,separators=(',',':'))+'\n')
+          report={'status':'PASS_RECONCILED_NONPUBLISHING','eligible_records':len(combined),'original_shiny_cases':107,'prior_decisions_restored':len(restored),'prior_decisions':dict(prior_dec),'new_records':len(new_ids),'new_uncertainties':len(uncertain),'new_uncertain_record_ids':sorted(uncertain),'previously_screened_requiring_human_redo':0}
+          (out/'report.json').write_text(json.dumps(report,indent=2))
+          print(json.dumps(report,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: w04-reconciled-previous-decisions-no-rescreen
+          path: /tmp/w04/reconciled/
+          retention-days: 30
+          if-no-files-found: error
