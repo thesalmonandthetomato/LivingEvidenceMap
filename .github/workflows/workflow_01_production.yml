@@ -439,23 +439,38 @@ jobs:
             --expected-prior-manifestations "$PRIOR_N" \
             --output-dir outputs/workflow01_union
 
-      - name: Generate incremental duplicate candidates
+      - name: Generate legacy candidates or Fast metadata-only index
+        env:
+          W01_ENGINE: ${{ inputs.w01_engine || 'legacy' }}
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p outputs/workflow01_candidates
-          Rscript scripts/updater/workflow_01_deduplication_incremental_candidates.R \
-            --input-manifest outputs/workflow01_union/source_inputs.json \
-            --old-manifestation-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
-            --output-dir outputs/workflow01_candidates \
-            --score-n 1 \
+          args=(
+            --input-manifest outputs/workflow01_union/source_inputs.json
+            --old-manifestation-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv
+            --output-dir outputs/workflow01_candidates
+            --score-n 1
             --workflow01-run-id "$GITHUB_RUN_ID"
+          )
+          if [ "$W01_ENGINE" = fast ]; then
+            args+=(--validate-index-only true)
+          elif [ "$W01_ENGINE" != legacy ]; then
+            echo "Unsupported engine" >&2
+            exit 1
+          fi
+          Rscript scripts/updater/workflow_01_deduplication_incremental_candidates.R "${args[@]}"
 
       - name: Record handoff integrity (prepare)
         shell: bash
         run: |
           set -euo pipefail
-          sha256sum previous_state/workflow01_full_five_source/summary.json outputs/workflow01_union/source_inputs.json outputs/workflow01_candidates/normalised_metadata.csv outputs/workflow01_candidates/all_candidate_pairs.csv > outputs/workflow01_stage_prepare_checksums.txt
+          files=(previous_state/workflow01_full_five_source/summary.json outputs/workflow01_union/source_inputs.json outputs/workflow01_candidates/normalised_metadata.csv)
+          if [ "${{ inputs.w01_engine || 'legacy' }}" = legacy ]; then
+            files+=(outputs/workflow01_candidates/all_candidate_pairs.csv)
+          fi
+          for file in "${files[@]}"; do test -s "$file" || exit 1; done
+          sha256sum "${files[@]}" > outputs/workflow01_stage_prepare_checksums.txt
       - name: Transfer stage prepare working state
         uses: actions/upload-artifact@v4
         with:
