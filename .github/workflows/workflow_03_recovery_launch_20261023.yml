@@ -1,0 +1,19 @@
+name: W03 full publication-status recovery 2026-10-23
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - '.github/workflows/workflow_03_recovery_launch_20261023.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: write
+jobs:
+  full_w03:
+    uses: ./.github/workflows/workflow_03_production.yml
+    with:
+      limit: '0'
+      batch_size: '100'
+      publish: true
+      lean_pointer_path: docs/compaction/zenodo/run-40000668150.json
+    secrets: inherit
