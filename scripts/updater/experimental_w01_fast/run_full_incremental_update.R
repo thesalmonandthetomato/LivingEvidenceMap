@@ -119,6 +119,11 @@ if(!file.exists(file.path(output,"cumulative_decisions.csv")) || !file.exists(fi
 }
 if(phase=="canonical"&&!is.null(reviewed_root)){
  # Resume only from the independently verified Shiny review adapter.
+ verified_return<-file.path(reviewed_root,"shiny_return_verified.json")
+ if(!file.exists(verified_return))stop("Missing independently verified Shiny return")
+ vr<-fromJSON(verified_return)
+ if(!identical(vr$status,"VERIFIED_SHINY_RETURN")||!identical(vr$production_publication_allowed,FALSE)||!identical(vr$workflow02_dispatch_allowed,FALSE))stop("Invalid Shiny return certificate")
+
  manifest_path<-file.path(reviewed_root,"resume_manifest.json")
  original_report<-file.path(output,"run_report.json")
  original_scores<-file.path(output,"rescored","rescored_sample.csv")
@@ -133,7 +138,9 @@ if(phase=="canonical"&&!is.null(reviewed_root)){
     !identical(mr$status,"VALIDATED_RESUME_READY")||
     !identical(mr$publication_allowed,FALSE)||
     !identical(mr$original_scoring_sha256,digest(file=original_scores,algo="sha256"))||
-    !identical(mr$resolved_scoring_sha256,digest(file=reviewed_scores,algo="sha256")))
+    !identical(mr$resolved_scoring_sha256,digest(file=reviewed_scores,algo="sha256"))||
+    !identical(mr$queue_sha256,vr$queue_sha256)||
+    !identical(as.integer(mr$repair_count),0L))
    stop("Reviewed continuation does not match immutable Fast scoring checkpoint")
  if(any(file.exists(file.path(output,c("stable_decisions.csv","cumulative_decisions.csv",
    "cumulative_decisions.csv.audit.json")))))stop("Existing continuation; refuse overwrite")
