@@ -60,7 +60,24 @@ writeLines(toJSON(decision,auto_unbox=TRUE),at("wrong_hash.jsonl"))
 stopifnot(call(at("wrong_hash"),at("wrong_hash.jsonl"))!=0L)
 writeLines(toJSON(list(review_case_id=id,action="strip_abstract"),auto_unbox=TRUE),at("repairs_bad.jsonl"))
 stopifnot(call(at("repairs"),repairs=at("repairs_bad.jsonl"))!=0L)
-cat("PASS: authentic human decision resumes, uncertain/hash mismatch/repairs fail closed; original scores preserved\n")
+# Valid Shiny edit must survive into an immutable continuation checkpoint.
+repair<-list(review_case_id=id,queue_sha256=sha,source="a",source_record_id="a1",
+ action="set_title",value="Corrected title",reason="Verified against article",
+ recorded_by="fixture",recorded_at_utc="2026-10-23T00:00:00Z")
+writeLines(toJSON(repair,auto_unbox=TRUE),at("valid_repairs.jsonl"))
+cert<-fromJSON(at("verified_shiny.json"))
+cert$repair_sha256<-digest(file=at("valid_repairs.jsonl"),algo="sha256")
+write_json(cert,at("verified_shiny.json"),auto_unbox=TRUE)
+stopifnot(call(at("valid_repair"),repairs=at("valid_repairs.jsonl"))==0L)
+rman<-fromJSON(at("valid_repair","resume_manifest.json"))
+stopifnot(rman$repair_count==1L,
+ rman$review_repairs_sha256==digest(file=at("valid_repairs.jsonl"),algo="sha256"),
+ identical(readLines(at("valid_repair","verified_new_repairs.jsonl")),
+ readLines(at("valid_repairs.jsonl"))))
+# Restore original certificate for subsequent independent Shiny export checks.
+cert$repair_sha256<-digest(file=at("repairs.jsonl"),algo="sha256")
+write_json(cert,at("verified_shiny.json"),auto_unbox=TRUE)
+cat("PASS: authentic human decision resumes, uncertain/hash mismatch/invalid repairs fail closed; valid edits retained; original scores preserved\n")
 
 
 # Existing Shiny ready-handoff/export manifest must agree byte-for-byte.
