@@ -59,7 +59,8 @@ dir.create(out,recursive=TRUE)
 fwrite(out_rows,file.path(out,"affected_works.csv"))
 writeLines(toJSON(list(schema="w01-fast-affected-works-v1",
  prior_works=nrow(old_members),successor_works=nrow(new_members),
- affected_prior_works=length(affected_old),affected_successor_works=length(affected_new),\n repair_affected_successor_works=length(unique(repair_works)),
+ affected_prior_works=length(affected_old),affected_successor_works=length(affected_new),
+ repair_affected_successor_works=length(unique(repair_works)),
  production_publication_allowed=FALSE),auto_unbox=TRUE,pretty=TRUE),
  file.path(out,"manifest.json"))
 cat(sprintf("PASS: %d previous and %d successor works affected\n",length(affected_old),length(affected_new)))
