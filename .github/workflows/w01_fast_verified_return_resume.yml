@@ -1,0 +1,95 @@
+name: W01-Fast isolated verified Shiny return resume
+on:
+  workflow_dispatch:
+    inputs:
+      checkpoint_run_id:
+        description: 'Original non-publishing Fast shadow GitHub run ID'
+        required: true
+        type: string
+      export_run_id:
+        description: 'Completed W01 Shiny export GitHub run ID'
+        required: true
+        type: string
+      handoff_path:
+        description: 'Path to externally issued W01 Shiny handoff JSON in experimental branch'
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+jobs:
+  resume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-direct-delta
+          persist-credentials: false
+      - name: Install only required R dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends r-base-core r-cran-data.table r-cran-jsonlite r-cran-digest
+      - name: Restore explicitly selected immutable Fast checkpoint and Shiny export
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHECKPOINT_RUN: ${{ inputs.checkpoint_run_id }}
+          EXPORT_RUN: ${{ inputs.export_run_id }}
+          HANDOFF_PATH: ${{ inputs.handoff_path }}
+        run: |
+          set -euo pipefail
+          [[ "$CHECKPOINT_RUN" =~ ^[0-9]+$ && "$EXPORT_RUN" =~ ^[0-9]+$ ]] || exit 1
+          [[ "$HANDOFF_PATH" =~ ^docs/deduplication/handoffs/w01/run-[0-9]+\\.json$ ]] || exit 1
+          test -s "$HANDOFF_PATH"
+          mkdir -p restored/checkpoint restored/export
+          gh run download "$CHECKPOINT_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name "w01-fast-review-checkpoint-$CHECKPOINT_RUN" --dir restored/checkpoint
+          gh run download "$EXPORT_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name "workflow01-human-decisions-$CHECKPOINT_RUN-$EXPORT_RUN" --dir restored/export
+          test -s restored/checkpoint/outputs/experimental_w01_fast/shadow/run_report.json
+          test -s restored/export/human_decisions.jsonl
+          test -f restored/export/data_quality_repairs.jsonl
+          test -s restored/export/human_decisions.manifest.json
+          test -s restored/checkpoint/outputs/workflow01_candidates/normalised_metadata.csv
+          test -s restored/checkpoint/previous_state/workflow01_full_five_source/manifestation_cluster_map.csv
+          test -s restored/checkpoint/previous_state/workflow01_full_five_source/final_pair_decisions.csv
+          HANDOFF_PATH="$HANDOFF_PATH" CHECKPOINT_RUN="$CHECKPOINT_RUN" EXPORT_RUN="$EXPORT_RUN" Rscript - <<'RS'
+          library(jsonlite)
+          h<-fromJSON(Sys.getenv("HANDOFF_PATH"))
+          e<-fromJSON("restored/export/human_decisions.manifest.json")
+          stopifnot(identical(h$schema,"living-evidence-map-workflow01-shiny-handoff-v1"),
+                    identical(h$status,"ready"),
+                    identical(as.character(h$checkpoint_run_id),Sys.getenv("CHECKPOINT_RUN")),
+                    identical(as.character(h$export_run_id),Sys.getenv("EXPORT_RUN")),
+                    identical(as.character(e$checkpoint_run_id),Sys.getenv("CHECKPOINT_RUN")),
+                    identical(as.character(e$export_run_id),Sys.getenv("EXPORT_RUN")),
+                    identical(as.character(h$decisions_artifact),
+                      paste0("workflow01-human-decisions-",Sys.getenv("CHECKPOINT_RUN"),"-",Sys.getenv("EXPORT_RUN"))))
+          RS
+      - name: Verify and ingest Shiny return, no external writes
+        shell: bash
+        env:
+          HANDOFF_PATH: ${{ inputs.handoff_path }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/experimental_w01_fast/ingest_shiny_return.R \
+            --fast-root restored/checkpoint/outputs/experimental_w01_fast/shadow \
+            --metadata restored/checkpoint/outputs/workflow01_candidates/normalised_metadata.csv \
+            --previous-map restored/checkpoint/previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
+            --previous-decisions restored/checkpoint/previous_state/workflow01_full_five_source/final_pair_decisions.csv \
+            --handoff "$HANDOFF_PATH" \
+            --export-manifest restored/export/human_decisions.manifest.json \
+            --decisions restored/export/human_decisions.jsonl \
+            --repairs restored/export/data_quality_repairs.jsonl \
+            --output-dir restored/verified_resume
+          test -s restored/verified_resume/COMPLETE.json
+      - name: Archive isolated verified return checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-fast-verified-return-${{ inputs.checkpoint_run_id }}-${{ github.run_id }}
+          path: restored/verified_resume/
+          retention-days: 90
+          if-no-files-found: error
