@@ -60,3 +60,9 @@ Branch scope: `w01-fast-direct-delta` only. No deployment, Zenodo upload, Shiny 
 5. Final acceptance: **PENDING.** The routing and fixture tests prove structural contracts, and a previous authoritative October shadow passed; the combined Fast path from the new production entry point has not been executed. A deliberately bounded final test and direct human-review path validation are needed before seeking permission for production release.
 
 Do not merge the workflow merely because structural or zero-review tests pass. The Shiny review/resumption interface is the material outstanding implementation blocker.
+
+## Human-review queue checkpoint (23 October 2026)
+
+The isolated Fast orchestrator now emits existing-format `cases.jsonl` and `human_review_package` outputs for scored `review` cases and records status `AWAITING_HUMAN_REVIEW`. This is a non-publishing checkpoint; the Fast route skips the final publication-shadow step and retains review package artifacts when review is pending. Routing and output-order assertions passed in Actions runs 39928895458 and 39929080754. These checks are structural and do not establish compatibility with the live Shiny backend.
+
+**Do not activate Fast for production**: the current workflow does not upload a pending Fast queue to the Shiny backend or resume canonicalisation from verified human decisions. Human data-quality repairs and complete human provenance remain unsolved. A reviewed decision must never be treated as an automatic duplicate edge. No workflow should publish or dispatch W02 from `AWAITING_HUMAN_REVIEW`.
