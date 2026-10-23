@@ -42,7 +42,9 @@ call<-function(out,decisions=at("decisions.jsonl"),repairs=at("repairs.jsonl")){
  "--queue",qp,"--decisions",decisions,"--repairs",repairs,
  "--verified-shiny-return",at("verified_shiny.json"),
  "--output-dir",out),stdout=TRUE,stderr=TRUE))
- if(is.null(attr(z,"status")))0L else as.integer(attr(z,"status"))
+ status<-if(is.null(attr(z,"status")))0L else as.integer(attr(z,"status"))
+ if(status!=0L)message("Expected/observed adapter diagnostic: ",paste(z,collapse=" | "))
+ status
 }
 stopifnot(call(at("valid"))==0L)
 z<-fread(at("valid","resolved_scoring.csv"))
