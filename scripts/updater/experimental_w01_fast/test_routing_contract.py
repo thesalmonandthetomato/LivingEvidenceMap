@@ -13,6 +13,9 @@ assert "ref: w01-fast-direct-delta" in shadow
 assert "--delta-writer direct" in shadow
 assert "certify_zero_review_ledger.R" in shadow
 assert "assemble_publication_shadow.R" in shadow
+assert "AWAITING_HUMAN_REVIEW" in shadow
+assert "steps.fast_execution.outputs.review_pending == 'false'" in shadow
+assert "human_review_package/" in shadow
 assert "publication_shadow/publication_shadow_manifest.json" in shadow
 assert shadow.index("certify_zero_review_ledger.R") < shadow.index("assemble_publication_shadow.R")
 assert "workflow01-stage-canonicalise-" not in shadow
