@@ -8,7 +8,8 @@ output<-arg("--output-dir");run_id<-arg("--run-id")
 strips_path<-arg("--strip-actions");repairs_path<-arg("--repair-ledger")
 audit_path<-arg("--repair-audit")
 previous_manifest_path<-arg("--previous-canonical-manifest")
-required<-c(map_path,canonical_path,strips_path,repairs_path,audit_path,previous_manifest_path)
+previous_repairs_path<-arg("--previous-repairs")
+required<-c(map_path,canonical_path,strips_path,repairs_path,audit_path,previous_manifest_path,previous_repairs_path)
 if(any(!file.exists(required))||dir.exists(output)||file.exists(output))
  stop("Missing required inputs or output already exists")
 m<-fread(map_path,colClasses=list(character=c("source","source_record_id","cluster_id")))
@@ -39,9 +40,34 @@ nrepairs<-sum(nzchar(trimws(readLines(repairs_path,warn=FALSE))))
 audit_lines<-readLines(audit_path,warn=FALSE)
 audit_lines<-audit_lines[nzchar(trimws(audit_lines))]
 prev_manifest<-fromJSON(previous_manifest_path)
-if(!identical(as.integer(prev_manifest$approved_data_quality_repairs),as.integer(nrepairs))||
- !identical(as.integer(prev_manifest$applied_data_quality_repairs),as.integer(nrepairs)))
- stop("Cumulative repair ledger differs from the verified prior canonical manifest; full W01 handling required")
+# The previous canonical manifest attests the PREVIOUS repair ledger, not newly
+# approved Shiny edits. Verify historic repair bytes are immutable and all new
+# cumulative entries are independently applied to regenerated affected works.
+nonempty<-function(p){z<-readLines(p,warn=FALSE,encoding="UTF-8");z[nzchar(trimws(z))]}
+history<-nonempty(previous_repairs_path);current<-nonempty(repairs_path)
+key_repair<-function(line){
+ z<-fromJSON(line,simplifyVector=FALSE)
+ paste(as.character(z$review_case_id %||% ""),as.character(z$source),
+ as.character(z$source_record_id),as.character(z$action),sep="|")
+}
+`%||%`<-function(x,y)if(is.null(x))y else x
+hk<-if(length(history))vapply(history,key_repair,character(1))else character()
+ck<-if(length(current))vapply(current,key_repair,character(1))else character()
+if(anyDuplicated(hk)||anyDuplicated(ck)||any(!hk%in%ck)||
+ any(unname(setNames(current,ck)[hk])!=history))
+ stop("Cumulative repairs altered or dropped previously approved actions")
+if(!identical(as.integer(prev_manifest$approved_data_quality_repairs),as.integer(length(history)))||
+ !identical(as.integer(prev_manifest$applied_data_quality_repairs),as.integer(length(history)))||
+ nrepairs!=length(current))
+ stop("Prior canonical manifest or current repair count is inconsistent")
+if(length(setdiff(ck,hk))){
+ audits_all<-if(length(audit_lines))lapply(audit_lines,fromJSON,simplifyVector=FALSE)else list()
+ ak<-if(length(audits_all))vapply(audits_all,function(z)paste(
+ as.character(z$review_case_id %||% ""),as.character(z$source),
+ as.character(z$source_record_id),as.character(z$action),sep="|"),character(1))else character()
+ if(!all(setdiff(ck,hk)%in%ak))
+  stop("Newly approved repairs are missing from the canonical application audit")
+}
 if(length(audit_lines)>nrepairs)stop("Changed-work repair audit exceeds cumulative repairs")
 if(length(audit_lines)){
   audits<-lapply(audit_lines,fromJSON,simplifyVector=FALSE)
