@@ -1,4 +1,4 @@
-name: W01-Fast canonical-only delta upsert regression
+name: W01-Fast apt R direct delta execution
 on:
   push:
     branches: [w01-fast-direct-delta]
@@ -14,12 +14,13 @@ jobs:
         with:
           ref: w01-fast-direct-delta
           persist-credentials: false
-      - uses: r-lib/actions/setup-r@v2
-        with:
-          use-public-rspm: true
-      - name: Install minimal test dependencies
-        shell: Rscript {0}
-        run: install.packages(c('data.table','jsonlite','digest'))
+      - name: Install R and dependencies from Ubuntu packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends r-base-core r-cran-data.table r-cran-jsonlite r-cran-digest
+          Rscript -e 'stopifnot(requireNamespace("data.table",quietly=TRUE),requireNamespace("jsonlite",quietly=TRUE),requireNamespace("digest",quietly=TRUE));cat(R.version.string,"\\n")'
       - name: Verify actual Fast execution wiring
         run: python3 scripts/updater/experimental_w01_fast/test_routing_contract.py
       - name: Exercise Fast persistence staging using small fixtures
