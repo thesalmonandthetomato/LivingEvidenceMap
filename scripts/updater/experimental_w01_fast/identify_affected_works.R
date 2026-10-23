@@ -33,6 +33,7 @@ affected_new<-names(new_signatures)[!names(new_signatures)%in%names(old_signatur
  vapply(names(new_signatures),function(id)!identical(unname(new_signatures[[id]]),unname(old_signatures[id])),logical(1))]
 # Explicit human repairs can alter canonical content without changing cluster membership.
 repair_works<-character()
+repair_prior_works<-character()
 if(!is.null(repairs_path)){
  if(!file.exists(repairs_path))stop("Approved repair ledger missing")
  lines<-readLines(repairs_path,warn=FALSE,encoding="UTF-8")
@@ -47,8 +48,11 @@ if(!is.null(repairs_path)){
   work<-next_by_key[[k]]
   if(is.null(work))stop("Approved repair references absent manifestation")
   repair_works<-c(repair_works,work)
+  old_work<-setNames(old$cluster_id,old$key)[[k]]
+  if(!is.null(old_work))repair_prior_works<-c(repair_prior_works,old_work)
  }
 }
+affected_old<-sort(unique(c(affected_old,repair_prior_works)))
 affected_new<-sort(unique(c(affected_new,repair_works)))
 out_rows<-rbindlist(list(
  data.table(stage="prior",cluster_id=affected_old),
@@ -61,6 +65,7 @@ writeLines(toJSON(list(schema="w01-fast-affected-works-v1",
  prior_works=nrow(old_members),successor_works=nrow(new_members),
  affected_prior_works=length(affected_old),affected_successor_works=length(affected_new),
  repair_affected_successor_works=length(unique(repair_works)),
+ repair_affected_prior_works=length(unique(repair_prior_works)),
  production_publication_allowed=FALSE),auto_unbox=TRUE,pretty=TRUE),
  file.path(out,"manifest.json"))
 cat(sprintf("PASS: %d previous and %d successor works affected\n",length(affected_old),length(affected_new)))
