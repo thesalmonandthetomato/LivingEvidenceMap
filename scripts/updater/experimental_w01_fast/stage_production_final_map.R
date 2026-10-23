@@ -74,6 +74,22 @@ if(aud$final_decisions!=nrow(d))stop("Decision audit count mismatch")
 counts$preserved_pair_decisions<-as.integer(aud$historical_decisions)
 counts$incremental_candidate_rows<-as.integer(aud$incremental_decisions)
 counts$incremental_pair_decisions<-as.integer(aud$incremental_decisions)
+# Human provenance applies only to newly scored pairs; historic decisions
+# were already finalised and must not be counted as this run's reviews.
+new_rows<-if(as.integer(aud$incremental_decisions)>0L)
+ seq.int(as.integer(aud$historical_decisions)+1L,nrow(d)) else integer()
+human_rows<-new_rows[grepl("^human_(duplicate|not_duplicate)$",d$review_route[new_rows])]
+if(length(human_rows)){
+ if(any(is.na(d$rescored_rule[human_rows]))||
+    any(d$rescored_rule[human_rows]!=d$review_route[human_rows])||
+    any(!d$rescored_classification[human_rows]%in%c("duplicate","unresolved")))
+  stop("Human review provenance or final classification inconsistent")
+}
+counts$human_final_decisions<-length(human_rows)
+counts$adjudicated_cases<-length(human_rows)
+counts$manual_review_pairs<-length(human_rows)
+counts$automatic_duplicate_edges<-sum(d$rescored_classification=="duplicate" &
+ !grepl("^human_",d$review_route))
 dir.create(out,recursive=TRUE)
 fwrite(map,file.path(out,"manifestation_cluster_map.csv"))
 fwrite(data.table(retired_cluster_id=character(),surviving_cluster_id=character(),reason=character()),
