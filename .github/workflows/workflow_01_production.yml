@@ -36,7 +36,7 @@ on:
         required: true
         type: string
       w01_engine:
-        description: 'Execution engine: legacy (Fast integration not yet enabled)'
+        description: 'Execution engine: legacy default; Fast runs isolated non-publishing shadow only'
         required: false
         default: legacy
         type: choice
@@ -82,7 +82,7 @@ jobs:
           set -euo pipefail
           case "$W01_ENGINE" in
             legacy) echo "PASS: unchanged legacy W01 execution selected";;
-            fast) echo "::error::W01-Fast is not yet wired to the production adjudication and publication lifecycle; refusing to run legacy under a Fast request"; exit 1;;
+            fast) echo "PASS: isolated W01-Fast shadow selected; no publication or W02 dispatch";;
             *) echo "::error::Unsupported W01 engine"; exit 1;;
           esac
 
@@ -472,7 +472,77 @@ jobs:
           compression-level: 0
           if-no-files-found: error
 
+  fast_shadow:
+    needs: prepare
+    if: ${{ inputs.w01_engine == 'fast' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-direct-delta
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install Fast runtime dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','digest','httr2','readr','stringdist','stringi','xml2','yaml'))
+      - name: Restore authoritative W01 prepare checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: workflow01-stage-prepare-${{ github.run_id }}
+          path: .
+      - name: Verify frozen original inputs before Fast execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum -c outputs/workflow01_stage_prepare_checksums.txt
+          test -s previous_state/workflow01_full_five_source/manifestation_cluster_map.csv
+          test -s previous_state/workflow01_full_five_source/final_pair_decisions.csv
+          test -s previous_state/canonical/records.jsonl
+          test -s outputs/workflow01_candidates/normalised_metadata.csv
+          test -s outputs/workflow01_union/source_inputs.json
+      - name: Execute W01-Fast in isolated non-publishing mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/experimental_w01_fast/run_full_incremental_update.R \
+            --delta-writer direct \
+            --metadata outputs/workflow01_candidates/normalised_metadata.csv \
+            --prior-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
+            --previous-decisions previous_state/workflow01_full_five_source/final_pair_decisions.csv \
+            --source-manifest outputs/workflow01_union/source_inputs.json \
+            --current-seed-root outputs/workflow01_union \
+            --prior-canonical previous_state/canonical/records.jsonl \
+            --previous-root previous_state \
+            --previous-pointer "${{ inputs.previous_workflow01_pointer_path }}" \
+            --strip-actions previous_state/workflow01_full_five_source/abstract_strip_actions.jsonl \
+            --repairs previous_state/provenance/cumulative_data_quality_repairs.jsonl \
+            --output-dir outputs/experimental_w01_fast/shadow
+          Rscript scripts/updater/experimental_w01_fast/certify_zero_review_ledger.R \
+            --fast-root outputs/experimental_w01_fast/shadow \
+            --prior-repairs previous_state/provenance/cumulative_data_quality_repairs.jsonl \
+            --output-dir outputs/experimental_w01_fast/verified_review
+      - name: Upload isolated Fast evidence (never publish)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-fast-isolated-shadow-${{ github.run_id }}
+          path: |
+            outputs/experimental_w01_fast/shadow/run_report.json
+            outputs/experimental_w01_fast/shadow/production_final/summary.json
+            outputs/experimental_w01_fast/shadow/production_canonical/canonical_manifest.json
+            outputs/experimental_w01_fast/shadow/delta/delta_manifest.json
+            outputs/experimental_w01_fast/verified_review/certificate.json
+          retention-days: 7
+          if-no-files-found: warn
+
   adjudicate:
+    if: ${{ inputs.w01_engine != 'fast' }}
     needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 55
@@ -764,6 +834,7 @@ jobs:
           if-no-files-found: error
 
   canonicalise:
+    if: ${{ inputs.w01_engine != 'fast' }}
     needs: adjudicate
     runs-on: ubuntu-latest
     timeout-minutes: 55
@@ -1061,7 +1132,7 @@ jobs:
 
   publish:
     needs: [adjudicate, canonicalise]
-    if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
+    if: ${{ inputs.w01_engine != 'fast' && needs.adjudicate.outputs.pending_count == '0' }}
     runs-on: ubuntu-latest
     timeout-minutes: 55
     steps:
