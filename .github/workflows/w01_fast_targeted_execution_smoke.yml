@@ -1,4 +1,4 @@
-name: W01-Fast targeted execution path smoke
+name: W01-Fast repair affected-work regression
 on:
   push:
     branches: [w01-fast-direct-delta]
