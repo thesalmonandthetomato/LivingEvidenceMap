@@ -101,5 +101,6 @@ review_repairs_sha256=digest(file=repairs,algo="sha256"),
 original_scoring_sha256=digest(file=scored,algo="sha256"),
 resolved_scoring_sha256=digest(file=resolved,algo="sha256"),
 publication_allowed=FALSE),file.path(out,"resume_manifest.json"),pretty=TRUE,auto_unbox=TRUE)
-if(!file.copy(repairs,file.path(out,"verified_new_repairs.jsonl")))stop("Cannot preserve approved repair edits")\nif(!file.copy(verified,file.path(out,"shiny_return_verified.json")))stop("Cannot preserve verified Shiny return")
+if(!file.copy(repairs,file.path(out,"verified_new_repairs.jsonl")))stop("Cannot preserve approved repair edits")
+if(!file.copy(verified,file.path(out,"shiny_return_verified.json")))stop("Cannot preserve verified Shiny return")
 cat("PASS: checked human review and staged non-publishing continuation inputs\n")
