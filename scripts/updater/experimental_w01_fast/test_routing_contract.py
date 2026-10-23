@@ -55,3 +55,7 @@ assert 'shiny_return_verified.json' in orchestrator
 assert 'VERIFIED_SHINY_RETURN' in orchestrator
 assert 'mr$queue_sha256,vr$queue_sha256' in orchestrator
 assert 'mr$repair_count' in orchestrator
+
+assert "w01-fast-review-checkpoint-" in shadow
+assert "steps.fast_execution.outputs.review_pending == 'true'" in shadow
+assert "retention-days: 14" in shadow
