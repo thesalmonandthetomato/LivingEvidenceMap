@@ -36,7 +36,7 @@ on:
         required: true
         type: string
       w01_engine:
-        description: 'Execution engine: legacy default; Fast runs isolated non-publishing shadow only'
+        description: 'Execution engine: legacy default; Fast publishes only after verified direct-delta replay and no pending human review'
         required: false
         default: legacy
         type: choice
@@ -492,6 +492,8 @@ jobs:
     if: ${{ inputs.w01_engine == 'fast' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    outputs:
+      review_pending: ${{ steps.fast_execution.outputs.review_pending }}
     permissions:
       contents: read
       actions: read
@@ -585,6 +587,14 @@ jobs:
           name: w01-fast-shiny-handoff-${{ github.run_id }}
           path: outputs/experimental_w01_fast/shiny_handoff/
           retention-days: 14
+          if-no-files-found: error
+      - name: Transfer complete validated Fast publication handoff
+        if: ${{ steps.fast_execution.outputs.review_pending == 'false' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow01-fast-publish-ready-${{ github.run_id }}
+          path: outputs/experimental_w01_fast/publication_shadow/
+          retention-days: 7
           if-no-files-found: error
       - name: Save recoverable pending Fast review checkpoint
         if: ${{ steps.fast_execution.outputs.review_pending == 'true' }}
@@ -1208,8 +1218,8 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: [adjudicate, canonicalise]
-    if: ${{ inputs.w01_engine != 'fast' && needs.adjudicate.outputs.pending_count == '0' }}
+    needs: [fast_shadow, adjudicate, canonicalise]
+    if: ${{ always() && ((inputs.w01_engine == 'fast' && needs.fast_shadow.result == 'success' && needs.fast_shadow.outputs.review_pending == 'false') || (inputs.w01_engine != 'fast' && needs.adjudicate.outputs.pending_count == '0' && needs.canonicalise.result == 'success')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 55
     steps:
@@ -1227,7 +1237,7 @@ jobs:
       - name: Restore validated handoff from canonicalise
         uses: actions/download-artifact@v4
         with:
-          name: workflow01-stage-canonicalise-${{ github.run_id }}
+          name: ${{ inputs.w01_engine == 'fast' && format('workflow01-fast-publish-ready-{0}', github.run_id) || format('workflow01-stage-canonicalise-{0}', github.run_id) }}
           path: .
       - name: Validate restored handoff
         shell: bash
@@ -1240,7 +1250,7 @@ jobs:
           test -s outputs/canonical/records.jsonl
           sha256sum -c outputs/workflow01_stage_canonicalise_checksums.txt
       - name: Validate final state and build delta
-        if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
+        if: ${{ inputs.w01_engine != 'fast' && needs.adjudicate.outputs.pending_count == '0' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -1258,7 +1268,7 @@ jobs:
             --run-id "$GITHUB_RUN_ID"
 
       - name: Replay delta and require exact reconstruction
-        if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
+        if: ${{ inputs.w01_engine != 'fast' && needs.adjudicate.outputs.pending_count == '0' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -1268,7 +1278,7 @@ jobs:
             --output-root outputs/replayed
 
       - name: Archive only the validated delta to Zenodo
-        if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
+        if: ${{ inputs.w01_engine == 'fast' || needs.adjudicate.outputs.pending_count == '0' }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         shell: bash
@@ -1282,7 +1292,7 @@ jobs:
             --output-dir outputs/zenodo
 
       - name: Register delta and final run report
-        if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
+        if: ${{ inputs.w01_engine == 'fast' || needs.adjudicate.outputs.pending_count == '0' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -1308,7 +1318,7 @@ jobs:
           fi
 
       - name: Update current-run live status through W01
-        if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
+        if: ${{ inputs.w01_engine == 'fast' || needs.adjudicate.outputs.pending_count == '0' }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
@@ -1340,7 +1350,7 @@ jobs:
           fi
 
       - name: Upload validated Workflow 01 handoff cache
-        if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
+        if: ${{ inputs.w01_engine == 'fast' || needs.adjudicate.outputs.pending_count == '0' }}
         uses: actions/upload-artifact@v4
         with:
           name: workflow01-handoff-${{ github.run_id }}
@@ -1351,7 +1361,7 @@ jobs:
           if-no-files-found: error
 
       - name: Trigger Workflow 02 after successful Workflow 01
-        if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
+        if: ${{ inputs.w01_engine == 'fast' || needs.adjudicate.outputs.pending_count == '0' }}
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
