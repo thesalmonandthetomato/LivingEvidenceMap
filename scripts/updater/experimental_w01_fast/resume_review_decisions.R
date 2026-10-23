@@ -6,11 +6,12 @@ arg<-function(k){i<-match(k,a);if(is.na(i)||i==length(a))stop("Missing ",k);a[[i
 root<-arg("--fast-root");meta<-arg("--metadata");prior<-arg("--previous-map")
 old<-arg("--previous-decisions");queue<-arg("--queue");decisions<-arg("--decisions")
 repairs<-arg("--repairs");out<-arg("--output-dir")
+verified<-arg("--verified-shiny-return")
 if(dir.exists(out)||file.exists(out))stop("Refusing overwrite")
 original<-file.path(root,"adjudication","human_review_package","human_review_cases.jsonl")
 scored<-file.path(root,"rescored","rescored_sample.csv")
 report<-file.path(root,"run_report.json")
-if(any(!file.exists(c(original,scored,report,meta,prior,old,queue,decisions,repairs))))
+if(any(!file.exists(c(original,scored,report,meta,prior,old,queue,decisions,repairs,verified))))
  stop("Missing original review checkpoint or signed input")
 readj<-function(p){z<-readLines(p,warn=FALSE);lapply(z[nzchar(trimws(z))],fromJSON,simplifyVector=FALSE)}
 vr<-fromJSON(verified)
