@@ -1,4 +1,4 @@
-name: W01-Fast verified Shiny return resume regression
+name: W01-Fast production review integrity gate regression
 on:
   push:
     branches: [w01-fast-direct-delta]
