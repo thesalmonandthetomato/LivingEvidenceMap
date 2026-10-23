@@ -89,7 +89,7 @@ jobs:
       - name: Checkout Workflow 01 implementation
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.WORKFLOW01_BRANCH }}
+          ref: ${{ inputs.w01_engine == 'fast' && 'w01-fast-direct-delta' || env.WORKFLOW01_BRANCH }}
           fetch-depth: 0
 
       - name: Checkout Workflow 00 pointer registry
