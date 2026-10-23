@@ -38,3 +38,15 @@ assert 'workflow_01_build_human_review_package.R' in orchestrator
 assert 'write_report("AWAITING_HUMAN_REVIEW")' in orchestrator
 assert orchestrator.index('write_report("AWAITING_HUMAN_REVIEW")') < orchestrator.index('run("stage_cumulative_ledger"')
 assert 'quit(save="no",status=0L)' in orchestrator
+
+assert 'reviewed_root<-arg("--reviewed-root",optional=TRUE)' in orchestrator
+assert 'phase=="canonical"&&!is.null(reviewed_root)' in orchestrator
+assert 'VALIDATED_RESUME_READY' in orchestrator
+assert 'original_scoring_sha256' in orchestrator
+assert 'resolved_scoring_sha256' in orchestrator
+assert 'file.path(reviewed_root,"resolved_scoring.csv")' in orchestrator
+assert 'run("replay_delta"' in orchestrator
+resume=Path("scripts/updater/experimental_w01_fast/resume_review_decisions.R").read_text()
+assert 'Nonempty human repair provenance not yet supported' in resume
+assert 'Refusing overwrite' in resume
+assert 'VALIDATED_RESUME_READY' in resume
