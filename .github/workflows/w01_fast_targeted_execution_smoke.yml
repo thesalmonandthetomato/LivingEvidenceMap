@@ -1,4 +1,4 @@
-name: W01-Fast verified return canonical replay safety
+name: W01-Fast frozen Shiny return checksum acceptance
 on:
   push:
     branches: [w01-fast-direct-delta]
