@@ -1,4 +1,4 @@
-name: W01-Fast complete reviewed continuation execution
+name: W01-Fast historic and reviewed repair contract execution
 on:
   push:
     branches: [w01-fast-direct-delta]
