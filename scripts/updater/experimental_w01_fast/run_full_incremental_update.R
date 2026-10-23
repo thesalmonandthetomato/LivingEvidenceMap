@@ -140,13 +140,31 @@ if(phase=="canonical"&&!is.null(reviewed_root)){
     !identical(mr$original_scoring_sha256,digest(file=original_scores,algo="sha256"))||
     !identical(mr$resolved_scoring_sha256,digest(file=reviewed_scores,algo="sha256"))||
     !identical(mr$queue_sha256,vr$queue_sha256)||
-    !identical(as.integer(mr$repair_count),0L))
+    !identical(mr$review_repairs_sha256,vr$repair_sha256)||
+    !identical(mr$review_repairs_sha256,digest(file=file.path(reviewed_root,"verified_new_repairs.jsonl"),algo="sha256")))
    stop("Reviewed continuation does not match immutable Fast scoring checkpoint")
  if(any(file.exists(file.path(output,c("stable_decisions.csv","cumulative_decisions.csv",
    "cumulative_decisions.csv.audit.json")))))stop("Existing continuation; refuse overwrite")
  for(nm in c("stable_decisions.csv","cumulative_decisions.csv","cumulative_decisions.csv.audit.json")){
     if(!file.copy(file.path(reviewed_root,nm),file.path(output,nm)))stop("Cannot stage ",nm)
  }
+}
+if(phase=="canonical"&&!is.null(reviewed_root)){
+ # Production merger is the only authority for cumulative repair and strip provenance.
+ # Keep source ledger inputs untouched and use isolated merged outputs downstream.
+ merged_root<-file.path(output,"reviewed_directives")
+ if(dir.exists(merged_root))stop("Existing reviewed directive checkpoint; refuse overwrite")
+ dir.create(merged_root)
+ empty_new_strips<-file.path(merged_root,"new_strips.jsonl")
+ file.create(empty_new_strips)
+ run("merge_verified_review_repairs","scripts/updater/workflow_01_merge_cumulative_repairs.R",
+ c("--previous-repairs",repairs,
+ "--new-repairs",file.path(reviewed_root,"verified_new_repairs.jsonl"),
+ "--previous-strips",strips,"--new-strips",empty_new_strips,
+ "--output-repairs",file.path(merged_root,"cumulative_repairs.jsonl"),
+ "--output-strips",file.path(merged_root,"cumulative_strips.jsonl")))
+ repairs<-file.path(merged_root,"cumulative_repairs.jsonl")
+ strips<-file.path(merged_root,"cumulative_strips.jsonl")
 }
 if(phase%in%c("all","canonical")){
 if(!file.exists(file.path(output,"cumulative_decisions.csv")) || !file.exists(file.path(output,"stable_decisions.csv"))) stop("Missing scoring checkpoint")
