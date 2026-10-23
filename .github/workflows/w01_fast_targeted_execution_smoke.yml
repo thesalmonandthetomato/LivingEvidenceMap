@@ -1,4 +1,4 @@
-name: W01-Fast historic and reviewed repair contract execution
+name: W01-Fast historic pair schema replay execution
 on:
   push:
     branches: [w01-fast-direct-delta]
