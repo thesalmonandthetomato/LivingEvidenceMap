@@ -1,4 +1,4 @@
-name: W01-Fast Shiny returned decisions ingestion execution
+name: W01-Fast isolated return workflow contract
 on:
   push:
     branches: [w01-fast-direct-delta]
@@ -22,7 +22,9 @@ jobs:
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends r-base-core r-cran-data.table r-cran-jsonlite r-cran-digest
           Rscript -e 'stopifnot(requireNamespace("data.table",quietly=TRUE),requireNamespace("jsonlite",quietly=TRUE),requireNamespace("digest",quietly=TRUE));cat(R.version.string,"\\n")'
       - name: Verify actual Fast execution wiring
-        run: python3 scripts/updater/experimental_w01_fast/test_routing_contract.py
+        run: |
+          python3 scripts/updater/experimental_w01_fast/test_routing_contract.py
+          python3 scripts/updater/experimental_w01_fast/test_verified_return_workflow.py
       - name: Exercise Fast persistence staging using small fixtures
         shell: bash
         run: |
