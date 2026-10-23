@@ -1,4 +1,4 @@
-name: W01-Fast human review resume fixture validation
+name: W01-Fast Shiny return and review resume validation
 on:
   push:
     branches: [w01-fast-direct-delta]
@@ -20,5 +20,10 @@ jobs:
       - name: Install review adapter dependencies
         shell: Rscript {0}
         run: install.packages(c('data.table','jsonlite','digest'))
+      - name: Parse Fast continuation and verify real Shiny return and review fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript -e 'parse(file="scripts/updater/experimental_w01_fast/run_full_incremental_update.R"); parse(file="scripts/updater/experimental_w01_fast/resume_review_decisions.R"); parse(file="scripts/updater/experimental_w01_fast/verify_shiny_return.R"); cat("PASS: all continuation R scripts parse\\n")' > /dev/null
       - name: Test reviewed scoring, queue hashes and identity checks
         run: Rscript scripts/updater/experimental_w01_fast/test_resume_review_decisions.R
