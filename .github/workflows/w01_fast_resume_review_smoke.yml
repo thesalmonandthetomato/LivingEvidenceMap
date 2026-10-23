@@ -1,4 +1,4 @@
-name: W01-Fast human review resume fixture
+name: W01-Fast human review resume fixture validation
 on:
   push:
     branches: [w01-fast-direct-delta]
