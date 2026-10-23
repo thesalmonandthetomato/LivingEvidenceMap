@@ -48,14 +48,15 @@ assert 'file.path(reviewed_root,"resolved_scoring.csv")' in orchestrator
 assert 'run("replay_delta"' in orchestrator
 resume=Path("scripts/updater/experimental_w01_fast/resume_review_decisions.R").read_text()
 assert 'workflow_01_validate_human_review_state.R' in resume
-assert 'Validated human repairs remain unsupported by Fast canonical delta' in resume
+assert 'verified_new_repairs.jsonl' in resume
+assert 'workflow_01_merge_cumulative_repairs.R' in orchestrator
 assert 'Refusing overwrite' in resume
 assert 'VALIDATED_RESUME_READY' in resume
 
 assert 'shiny_return_verified.json' in orchestrator
 assert 'VERIFIED_SHINY_RETURN' in orchestrator
 assert 'mr$queue_sha256,vr$queue_sha256' in orchestrator
-assert 'mr$repair_count' in orchestrator
+assert 'mr$review_repairs_sha256' in orchestrator
 
 assert "w01-fast-review-checkpoint-" in shadow
 assert "steps.fast_execution.outputs.review_pending == 'true'" in shadow
