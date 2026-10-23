@@ -567,6 +567,25 @@ jobs:
             --output-root outputs/experimental_w01_fast/publication_shadow
           test -s outputs/experimental_w01_fast/publication_shadow/publication_shadow_manifest.json
           echo 'PASS: non-publishing W01-Fast handoff; legacy publication and W02 remain disabled'
+      - name: Stage Shiny-compatible Fast review handoff without publication
+        if: ${{ steps.fast_execution.outputs.review_pending == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/experimental_w01_fast/stage_shiny_queue_handoff.R \
+            --fast-root outputs/experimental_w01_fast/shadow \
+            --source-run-id "${{ github.run_id }}" \
+            --output-dir outputs/experimental_w01_fast/shiny_handoff
+          test -s outputs/experimental_w01_fast/shiny_handoff/handoff_manifest.json
+          echo 'PASS: Shiny W01 queue contract staged; active Google Sheet unchanged'
+      - name: Upload non-publishing Fast Shiny handoff
+        if: ${{ steps.fast_execution.outputs.review_pending == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-fast-shiny-handoff-${{ github.run_id }}
+          path: outputs/experimental_w01_fast/shiny_handoff/
+          retention-days: 14
+          if-no-files-found: error
       - name: Save recoverable pending Fast review checkpoint
         if: ${{ steps.fast_execution.outputs.review_pending == 'true' }}
         uses: actions/upload-artifact@v4
