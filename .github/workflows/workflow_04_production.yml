@@ -167,6 +167,21 @@ jobs:
             --force-rescreen-output inputs/current/manual_repair_force_rescreen_record_ids.txt
           mv inputs/current/canonical_lean.repaired.jsonl inputs/current/canonical_lean.jsonl
 
+      - name: Restore protected W04 human abstracts before screening
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          HUMAN_CORRECTIONS_POINTER: ${{ github.workspace }}/docs/workflow04/human_abstract_corrections/run-37511638503.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$HUMAN_CORRECTIONS_POINTER"
+          test -s inputs/current/canonical_lean.jsonl
+          cp inputs/current/canonical_lean.jsonl inputs/current/canonical_lean.raw.jsonl
+          Rscript scripts/updater/workflow_04_restore_protected_abstracts_current.R
+          test -s inputs/current/canonical_lean.jsonl
+          test -s outputs/human_overlay/audit.jsonl
+          test "$(wc -l < outputs/human_overlay/audit.jsonl)" -eq 157
+
       - name: Restore prior W04 state
         if: ${{ inputs.prior_workflow04_pointer_path != 'none' && inputs.prior_workflow04_pointer_path != '' }}
         env:
