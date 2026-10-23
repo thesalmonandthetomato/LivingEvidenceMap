@@ -3,6 +3,7 @@
 # Preserve verbatim JSONL and avoid row-index references.
 suppressPackageStartupMessages({library(data.table);library(jsonlite);library(digest)})
 args<-commandArgs(trailingOnly=TRUE)
+`%||%`<-function(x,y)if(is.null(x)) y else x
 arg<-function(k,required=TRUE){i<-match(k,args);if(is.na(i)){if(required)stop(paste("Missing",k));return(NULL)}
  if(i==length(args))stop(paste("Missing value",k));args[[i+1L]]}
 map_path<-arg("--affected-cluster-map");out<-arg("--output-dir")
