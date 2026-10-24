@@ -26,3 +26,4 @@ Regenerate using corrected visualisations/07_flow_diagram.R source renderer; 202
 Regenerate flow diagram using permanent abbreviated database labels (Biol. Agr. Index; Polit. Sci.; ProQuestD&T); 2026-10-24.
 Rerender W09 with provenance-backed last-search dates and Zenodo publication dates for CAB/ProQuest; 2026-10-24.
 Rebuild W09 with final W08 exclusion-attributed flow reconciliation; 2026-10-24.
+Retry W09 after authenticated manual Zenodo draft fallback with W01 source-date provenance; 2026-10-24.
