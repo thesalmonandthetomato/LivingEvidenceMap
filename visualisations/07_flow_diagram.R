@@ -124,6 +124,18 @@ manual_date_info <- lapply(names(manual), function(code) zenodo_date(manual[[cod
 names(manual_date_info) <- names(manual)
 manual_date_types <- vapply(manual_date_info, function(z) attr(z, "date_type"), character(1))
 manual_dates <- vapply(manual_date_info, as.character, character(1))
+# A Zenodo draft creation date is not a search or publication date. For draft
+# sources use the archived W01 source-level search date instead.
+for (code in names(manual_dates)) {
+  if (identical(manual_date_types[[code]], "draft_created")) {
+    original <- as.character(source_meta$search_date[source_meta$code == code])
+    if (length(original) != 1L || !grepl("^\\d{4}-\\d{2}-\\d{2}$", original) ||
+        is.na(as.Date(original)))
+      stop("Manual draft lacks W01 search-date provenance for ", code)
+    manual_dates[[code]] <- original
+    manual_date_types[[code]] <- "w01_source_search_date"
+  }
+}
 missing_codes <- setdiff(source_meta$code, union(latest_codes, names(manual_dates)))
 if (length(missing_codes)) stop("Unregistered W09 source: ",
                                  paste(missing_codes, collapse = ", "), call. = FALSE)
