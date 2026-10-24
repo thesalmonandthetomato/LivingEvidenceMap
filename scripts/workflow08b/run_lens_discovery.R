@@ -2,6 +2,7 @@
 # W08b Lens-first citation discovery. Isolated manual runner, no W01 or Zenodo writes.
 # Usage: Rscript scripts/workflow08b/run_lens_discovery.R crosswalk.csv output_dir [max_requests]
 suppressPackageStartupMessages({library(jsonlite);library(httr2)})
+`%||%`<-function(x,y)if(is.null(x))y else x
 args<-commandArgs(trailingOnly=TRUE)
 if(length(args)<2L||length(args)>3L)stop("Usage: run_lens_discovery.R crosswalk.csv output_dir [max_requests]")
 input<-args[[1L]];out<-args[[2L]]
@@ -89,6 +90,22 @@ summary<-list(schema="workflow08b-lens-discovery-dev-v1",requests_this_execution
  incomplete_seeds=sum(vapply(existing,function(x)!identical(x$status,"complete"),logical(1))),
  restricted_to_lens_id_seeds=TRUE,openalex_not_queried=TRUE,
  candidate_bibliography_not_downloaded=TRUE,w01_handoff_not_enabled=TRUE)
+# Summarise failure mechanisms without exposing source identifiers to public logs.
+incomplete<-Filter(function(x)!identical(x$status,"complete"),existing)
+reasons<-vapply(incomplete,function(x){
+ e<-as.character(x$error %||% "unknown")
+ if(grepl("^Lens HTTP",e))return("api_http_failure")
+ if(grepl("Citation ID counts",e,fixed=TRUE))return("citation_count_mismatch")
+ if(grepl("not uniquely",e,fixed=TRUE))return("seed_not_uniquely_resolved")
+ if(grepl("timeout|timed out",e,ignore.case=TRUE))return("request_timeout")
+ "other_request_error"
+},character(1))
+summary$incomplete_by_reason<-as.list(table(reasons))
+if(length(incomplete)){
+  message("W08b incomplete seed categories: ",
+    paste(sprintf("%s=%d",names(summary$incomplete_by_reason),
+      unlist(summary$incomplete_by_reason)),collapse=", "))
+}
 writeLines(toJSON(summary,pretty=TRUE,auto_unbox=TRUE),
            file.path(out,"discovery_summary.json"))
 cat("W08b Lens discovery checkpoint: requests=",selected,
