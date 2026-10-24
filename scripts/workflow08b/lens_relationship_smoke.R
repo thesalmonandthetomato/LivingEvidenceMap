@@ -13,13 +13,16 @@ if(!nrow(s))stop("No unambiguous Lens seed")
 id<-s$lens_id[[1L]]
 if(grepl("|",id,fixed=TRUE))stop("Conflicting Lens IDs must not be queried")
 fields<-c("lens_id","reference_count","referenced_by_count","references","referenced_by")
-payload<-list(query=list(term=list(lens_id=id)),include=fields,size=1L)
+payload<-list(query=list(terms=list(lens_id=list(id))),include=fields,size=1L)
 req<-request("https://api.lens.org/scholarly/search") |>
  req_headers(Authorization=paste("Bearer",token),Accept="application/json",`Content-Type`="application/json") |>
  req_body_json(payload,auto_unbox=TRUE) |> req_timeout(90) |>
  req_error(is_error=function(resp)FALSE)
 response<-req_perform(req); status<-resp_status(response)
-if(status!=200L)stop("Lens smoke request returned HTTP ",status)
+if(status!=200L){
+  error_text <- substr(resp_body_string(response),1L,2000L)
+  stop("Lens smoke request returned HTTP ",status,": ",error_text)
+}
 body<-resp_body_json(response,simplifyVector=FALSE)
 n<-length(body$data %||% list())
 if(n>1L)stop("Exceeded one-result hard cap")
