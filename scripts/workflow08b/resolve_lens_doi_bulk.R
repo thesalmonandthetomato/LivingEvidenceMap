@@ -26,7 +26,20 @@ d<-d[order(d$record_id),,drop=FALSE]
 d<-d[!vapply(d$record_id,function(id){
  z<-previous[[id]];!is.null(z)&&z$status%in%c("resolved","not_found","ambiguous")
 },logical(1)),,drop=FALSE]
-if(anyDuplicated(d$doi))stop("Repeated DOI among distinct W08 seeds: requires identity adjudication")
+# Distinct W08 identities sharing a DOI must not block unrelated lookups.
+# Quarantine each collision for identity adjudication, without querying Lens.
+dupe<-duplicated(d$doi)|duplicated(d$doi,fromLast=TRUE)
+if(any(dupe)){
+ for(i in which(dupe)){
+  append_collision<-list(record_id=d$record_id[[i]],doi=d$doi[[i]],
+   lens_id=NULL,status="ambiguous",provider="lens",
+   error="duplicate_doi_across_w08_seed_ids",
+   checked_at=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"))
+  con<-file(journal,"at");writeLines(toJSON(append_collision,auto_unbox=TRUE,null="null"),con);close(con)
+  previous[[d$record_id[[i]]]]<-append_collision
+ }
+}
+d<-d[!dupe,,drop=FALSE]
 chunks<-split(seq_len(nrow(d)),ceiling(seq_len(nrow(d))/500L))
 if(length(chunks)>limit)chunks<-chunks[seq_len(limit)]
 append<-function(z){
@@ -77,6 +90,7 @@ for(i in seq_len(nrow(d))){
 write.csv(d,file.path(out,"doi_seed_resolution_subset.csv"),row.names=FALSE)
 summary<-list(schema="workflow08b-lens-doi-bulk-v1",requests=requests,
  total_in_journal=length(previous),
+ ambiguous=sum(vapply(previous,function(z)identical(z$status,"ambiguous"),logical(1))),
  resolved=sum(vapply(previous,function(z)identical(z$status,"resolved"),logical(1))),
  not_found=sum(vapply(previous,function(z)identical(z$status,"not_found"),logical(1))),
  halted=!is.null(halt),halt_reason=halt)
