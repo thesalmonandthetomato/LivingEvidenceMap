@@ -10,7 +10,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
         with:
@@ -21,11 +21,11 @@ jobs:
           use-public-rspm: true
       - name: Install isolated dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest','httr2'))
+        run: install.packages(c('jsonlite','digest','httr2','data.table'))
       - name: Parse audit scripts
         shell: Rscript {0}
         run: |
-          parse(file='scripts/workflow08b/audit_identifiers.R')
+          parse(file='scripts/workflow08b/crosswalk_identifiers.R')
           parse(file='scripts/updater/workflow_10_restore_canonical_from_zenodo.R')
       - name: Restore authoritative W08 canonical and verify checksum
         env:
@@ -38,13 +38,26 @@ jobs:
           Rscript scripts/updater/workflow_10_restore_canonical_from_zenodo.R \
             --pointer docs/workflow08/zenodo/run-40028381004.json \
             --output "$RUNNER_TEMP/w08b/canonical.jsonl"
-      - name: Read-only identity audit, private outputs
+      - name: Reconstruct authoritative W01 from published baseline and delta chain
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/workflow08b/audit_identifiers.R \
-            "$RUNNER_TEMP/w08b/canonical.jsonl" "$RUNNER_TEMP/w08b/audit"
-          Rscript -e 'x<-jsonlite::fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"w08b/audit/summary.json"));stopifnot(x$records==22923L);cat(jsonlite::toJSON(x,auto_unbox=TRUE,pretty=TRUE),"\\n")'
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer docs/deduplication/zenodo/run-39990028078.json \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root "$RUNNER_TEMP/w08b/w01_state"
+          test -s "$RUNNER_TEMP/w08b/w01_state/canonical/records.jsonl"
+      - name: Build strict W08-to-W01 identifier crosswalk
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/crosswalk_identifiers.R \
+            "$RUNNER_TEMP/w08b/canonical.jsonl" \
+            "$RUNNER_TEMP/w08b/w01_state/canonical/records.jsonl" \
+            "$RUNNER_TEMP/w08b/audit"
+          Rscript -e 'x<-jsonlite::fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"w08b/audit/summary.json"));stopifnot(x$w08_records==22923L,x$w01_matches==22923L);cat(jsonlite::toJSON(x,auto_unbox=TRUE,pretty=TRUE),"\\n")'
       - name: Report aggregate coverage only
         shell: bash
         run: |
