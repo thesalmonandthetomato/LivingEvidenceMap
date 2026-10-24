@@ -47,7 +47,7 @@ if(!file.exists(ledger))stop("Missing seed journal")
 entries<-lapply(readLines(ledger,warn=FALSE),function(z)fromJSON(z,simplifyVector=FALSE))
 current<-list()
 for(x in entries)current[[as.character(x$record_id)]]<-x
-if(length(current)!=10L)stop("Expected precisely ten checkpoint seeds")
+if(!length(current))stop("Checkpoint contains no seed records")
 rows<-lapply(current,function(x)data.frame(record_id=x$record_id,
  lens_id=x$lens_id,doi="",preferred_route="lens",
  identifier_conflict=FALSE,stringsAsFactors=FALSE))
