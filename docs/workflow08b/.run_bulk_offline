@@ -7,3 +7,4 @@ Retry cancelled offline regression with corrected 25-minute setup allowance; 202
 Validate added OpenAlex fallback parser in the bundled offline regression.
 Validate candidate metadata retrieval/reconciliation and DOI quarantines.
 Validate historical DOI crosscheck including previously excluded W01 works.
+Retry historical DOI regression after identity and NA-safe indexing repair.
