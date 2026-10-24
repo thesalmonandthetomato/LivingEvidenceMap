@@ -14,8 +14,8 @@ if(!all(c("provider","related_provider_id")%in%names(ids)))stop("Invalid provide
 if(anyDuplicated(ids[c("provider","related_provider_id")]))stop("Duplicate provider keys")
 ids<-sort(unique(ids$related_provider_id[ids$provider=="lens"]))
 if(any(!nzchar(ids)))stop("Empty Lens candidate ID")
-cfg<-fromJSON(strategy,simplifyVector=FALSE)
-if(!identical(cfg$search_version,"v2"))stop("Unsupported registered search strategy")
+cfg<-if(identical(strategy,"-"))NULL else fromJSON(strategy,simplifyVector=FALSE)
+if(!is.null(cfg)&&!identical(cfg$search_version,"v2"))stop("Unsupported registered search strategy")
 token<-Sys.getenv("LENS_API_TOKEN","");if(!nzchar(token))stop("Lens token absent")
 dir.create(out,recursive=TRUE,showWarnings=FALSE)
 ledger<-file.path(out,"lens_candidate_status.jsonl")
@@ -26,7 +26,7 @@ if(file.exists(ledger))for(line in readLines(ledger,warn=FALSE)){
  x<-fromJSON(line,simplifyVector=FALSE);seen[[as.character(x$lens_id)]]<-x
 }
 ids<-ids[!vapply(ids,function(id){
- x<-seen[[id]];!is.null(x)&&x$status%in%c("complete","not_found")
+ x<-seen[[id]];!is.null(x)&&x$status%in%c("complete")
 },logical(1))]
 chunks<-split(seq_along(ids),ceiling(seq_along(ids)/500L))
 chunks<-head(chunks,limit)
@@ -50,7 +50,7 @@ extract_abstract<-function(z){
 }
 topic<-function(xs)paste(vapply(c("title","abstract","keyword"),function(field)
  paste0(field,":(",paste(xs,collapse=" OR "),")"),character(1)),collapse=" OR ")
-original<-paste0("(",topic(unlist(cfg$species_terms)),") AND (",topic(unlist(cfg$farm_terms)),")")
+original<-if(is.null(cfg))NULL else paste0("(",topic(unlist(cfg$species_terms)),") AND (",topic(unlist(cfg$farm_terms)),")")
 # Provider-side NOT must not hide candidates before complete identity or
 # provenance capture: retrieve complete bibliography first, then validate the
 # NOT predicate separately via a dedicated provider-control query.
@@ -76,8 +76,8 @@ for(ix in chunks){
  if(any(!got%in%batch))message("Quarantining ",sum(!got%in%batch)," unrequested Lens candidates")\n records<-records[got%in%batch];got<-got[got%in%batch]\n byid<-setNames(seq_along(got),got)
  for(id in batch){
   if(!id%in%names(byid)){
-   append(ledger,list(lens_id=id,status="not_found",provider="lens"))
-   seen[[id]]<-list(status="not_found")
+   append(ledger,list(lens_id=id,status="incomplete",provider="lens",error="Seed absent from bulk response"))
+   seen[[id]]<-list(status="incomplete")
    next
   }
   z<-records[[byid[[id]]]]
@@ -93,7 +93,7 @@ for(ix in chunks){
 }
 summary<-list(schema="workflow08b-lens-candidate-metadata-v1",requests=attempted,
  completed_this_run=completed,halted=!is.null(halt),halt_reason=halt,
- original_strategy_version="v2",original_query_expression=original,
+ original_strategy_version=if(is.null(cfg))"deferred" else "v2",original_query_expression=original,
  provider_not_filter_applied=FALSE,
  screening_handoff_authorised=FALSE)
 writeLines(toJSON(summary,pretty=TRUE,auto_unbox=TRUE,null="null"),file.path(out,"candidate_retrieval_summary.json"))
