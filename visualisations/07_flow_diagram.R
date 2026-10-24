@@ -131,6 +131,11 @@ n_topic_uncoded <- metric(w08, "topic_without")
 # Final post-screening exclusions are recorded separately from W04 because they
 # arise during species/topic/final adjudication rather than title/abstract screening.
 n_post_w04_excluded <- n_w04_retained - n_final_included
+# Retrospective W08 reconciliation: numbers in the flow represent the final
+# included population. Original W04 decisions remain in the reporting inputs.
+n_w04_retained_final <- n_final_included
+n_downstream_excluded <- n_post_w04_excluded
+n_final_excluded_after_retractions <- n_w04 + n_downstream_excluded
 
 stopifnot(
   sum(source_meta$hits) == n_combined,
