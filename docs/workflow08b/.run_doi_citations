@@ -1,1 +1,2 @@
 Retrieve citations of DOI-resolved Lens seeds using archived checkpoint 23626425; do not repeat completed Lens seeds.
+Retry after fixing workflow restore checkpoint to 23626425 containing identity_crosswalk_resolved.csv.
