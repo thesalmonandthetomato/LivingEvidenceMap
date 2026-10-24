@@ -1,5 +1,11 @@
 # Workflow 10: interactive dashboard and public evidence-map interface
 
+## October 2026 release status (24 October 2026)
+
+This document retains historical implementation and validation details below. References labelled **current production state** with dates in early October 2026 are historical snapshots, not the authoritative status of the completed 19 October monthly search update. For the latest release, use the registered stage pointers, their checksums, and `docs/current_run/current_run_status.json` rather than the older counts and run IDs quoted below. The accepted October release concluded with **22,923 included records** after W08; those are final W08 counts, not the earlier W04 retained total. Documentation changes do not modify scientific inputs, execution or provenance.
+
+The October W10 dashboard uses **22,923** final W08 canonical records. It republishes W09 reporting outputs alongside dashboard files; the flow diagram's EBSCO-label change belongs in W09's renderer, not W10 data transformations. W10 should be dispatched after successful W09 regeneration and verified at the public destination. Manual CAB/PQD&T source registrations must remain accounted for in database-count validation.
+
 ## Purpose
 
 Workflow 10 is the final presentation and output-cataloguing endpoint of the LivingEvidenceMap pipeline. It restores the latest authoritative Workflow 08 included-only canonical evidence base after successful Workflow 09 publication, validates its provenance, projects it into a static browser-based dashboard, and writes an internal repository-only output registry archived by search date.
