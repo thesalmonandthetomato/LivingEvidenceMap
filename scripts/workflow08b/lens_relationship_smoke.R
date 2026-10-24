@@ -2,7 +2,7 @@
 # W08b bounded Lens relationship API smoke-test (one seed, one request).
 # Never expands citing IDs into full records and never calls OpenAlex.
 suppressPackageStartupMessages({library(jsonlite);library(httr2)})
-`%||cat("PASS: Lens one-seed relationship schema smoke request; matched=",n,"\n")
+`%||%`<-function(x,y)if(is.null(x))y else x
 a<-commandArgs(trailingOnly=TRUE)
 if(length(a)!=2L)stop("Usage: lens_relationship_smoke.R <private_trial_seeds.csv> <summary.json>")
 token<-Sys.getenv("LENS_API_TOKEN","")
@@ -36,4 +36,3 @@ result<-list(schema="workflow08b-lens-smoke-v1",query_count=1L,
 dir.create(dirname(a[[2L]]),recursive=TRUE,showWarnings=FALSE)
 writeLines(toJSON(result,auto_unbox=TRUE,pretty=TRUE,null="null"),a[[2L]])
 cat("PASS: Lens one-seed relationship schema smoke request; matched=",n,"\n")
-`%||%`<-function(x,y)if(is.null(x))y else x
