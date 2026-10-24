@@ -85,22 +85,45 @@ if (!length(manual)) stop("Missing monthly manual Zenodo source registry", call.
 zenodo_date <- function(doi, code) {
   id <- sub("^10[.]5281/zenodo[.]", "", as.character(doi))
   if (!grepl("^[0-9]+$", id)) stop("Invalid Zenodo DOI for ", code, call. = FALSE)
-  req <- httr2::request(paste0("https://zenodo.org/api/records/", id)) |>
-    httr2::req_timeout(60)
   token <- Sys.getenv("ZENODO_ACCESS_TOKEN", "")
-  if (nzchar(token)) req <- httr2::req_headers(req, Authorization = paste("Bearer", token))
-  z <- httr2::resp_body_json(httr2::req_perform(req), simplifyVector = FALSE)
-  actual_doi <- as.character(z$pids$doi$identifier %||% z$doi %||% "")
-  if (!identical(tolower(actual_doi), tolower(as.character(doi))))
+  fetch_json <- function(url) {
+    req <- httr2::request(url) |> httr2::req_timeout(60) |>
+      httr2::req_error(is_error = function(resp) FALSE)
+    if (nzchar(token)) req <- httr2::req_headers(req, Authorization = paste("Bearer", token))
+    resp <- httr2::req_perform(req)
+    if (httr2::resp_status(resp) == 404L) return(NULL)
+    if (httr2::resp_status(resp) != 200L)
+      stop("Zenodo metadata lookup for ", code, ": HTTP ", httr2::resp_status(resp))
+    httr2::resp_body_json(resp, simplifyVector = FALSE)
+  }
+  z <- fetch_json(paste0("https://zenodo.org/api/records/", id))
+  mode <- "published"
+  if (is.null(z)) {
+    if (!nzchar(token)) stop("Private Zenodo draft requires credentials for ", code)
+    z <- fetch_json(paste0("https://zenodo.org/api/deposit/depositions/", id))
+    if (is.null(z)) stop("Zenodo draft/record ", id, " not found for ", code)
+    mode <- if (isTRUE(z$submitted)) "deposition_published" else "draft"
+  }
+  # Drafts can have reserved DOIs, but a DOI reservation is not publication.
+  actual_doi <- as.character(z$pids$doi$identifier %||% z$doi %||%
+    z$metadata$doi %||% z$metadata$prereserve_doi$doi %||% "")
+  if (nzchar(actual_doi) &&
+      !identical(tolower(actual_doi), tolower(as.character(doi))))
     stop("Zenodo DOI mismatch for ", code, call. = FALSE)
   date <- as.character(z$metadata$publication_date %||% z$metadata$publicationdate %||% "")
+  if (identical(mode, "draft")) {
+    # A draft creation date is a record-provenance date, not a publication date.
+    date <- substr(as.character(z$created %||% ""), 1L, 10L)
+  }
   if (!grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", date) || is.na(as.Date(date)))
-    stop("Invalid Zenodo publication date for ", code, call. = FALSE)
+    stop("No verifiable Zenodo date for ", code, " (", mode, ")", call. = FALSE)
+  attr(date, "date_type") <- if (identical(mode, "draft")) "draft_created" else "published"
   date
 }
-manual_dates <- vapply(names(manual), function(code) {
-  zenodo_date(manual[[code]]$zenodo_doi, code)
-}, character(1))
+manual_date_info <- lapply(names(manual), function(code) zenodo_date(manual[[code]]$zenodo_doi, code))
+names(manual_date_info) <- names(manual)
+manual_date_types <- vapply(manual_date_info, function(z) attr(z, "date_type"), character(1))
+manual_dates <- vapply(manual_date_info, as.character, character(1))
 missing_codes <- setdiff(source_meta$code, union(latest_codes, names(manual_dates)))
 if (length(missing_codes)) stop("Unregistered W09 source: ",
                                  paste(missing_codes, collapse = ", "), call. = FALSE)
@@ -108,8 +131,8 @@ source_meta$search_date <- vapply(source_meta$code, function(code) {
   if (code %in% names(manual_dates)) manual_dates[[code]] else latest_date
 }, character(1))
 source_meta$search_date_display <- format(as.Date(source_meta$search_date), "%d-%m-%Y")
-cat("PASS: manual Zenodo publication dates: ",
-    paste(names(manual_dates), manual_dates, collapse = "; "), "\n")
+cat("PASS: manual Zenodo dates (published or draft creation): ",
+    paste(names(manual_dates), manual_dates, manual_date_types, collapse = "; "), "\n")
 
 n_combined <- metric(w01, "source_manifestations")
 n_deduplicated <- metric(w01, "canonical_records")
