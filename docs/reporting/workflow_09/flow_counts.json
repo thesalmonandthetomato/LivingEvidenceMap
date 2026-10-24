@@ -1,6 +1,6 @@
 {
   "schema": "living-evidence-map-workflow09-flow-counts-v3",
-  "generated_at_utc": "2026-10-24T11:09:15Z",
+  "generated_at_utc": "2026-10-24T18:31:59Z",
   "search_update_date": "2026-10-19",
   "input_mode": "compact_workflow_reporting_snapshots",
   "input_directory": "/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/docs/reporting/workflow_09_inputs/current",
@@ -43,7 +43,7 @@
         "code": "agricola",
         "database": "AGRICOLA",
         "hits": 2746,
-        "search_date": "2026-09-23"
+        "search_date": "2026-10-19"
       },
       {
         "code": "cab",
@@ -133,7 +133,7 @@
         "code": "openalex",
         "database": "OpenAlex",
         "hits": 28184,
-        "search_date": "2026-09-23"
+        "search_date": "2026-10-19"
       },
       {
         "code": "proquest",
@@ -145,19 +145,19 @@
         "code": "scopus",
         "database": "Scopus",
         "hits": 20015,
-        "search_date": "2026-09-23"
+        "search_date": "2026-10-19"
       },
       {
         "code": "lens",
         "database": "The Lens",
         "hits": 24175,
-        "search_date": "2026-09-23"
+        "search_date": "2026-10-19"
       },
       {
         "code": "wos",
         "database": "WoSCC",
         "hits": 15202,
-        "search_date": "2026-09-23"
+        "search_date": "2026-10-19"
       }
     ],
     "combined_search_results": 136057,
@@ -167,10 +167,15 @@
     "retractions_excluded": 13,
     "title_abstract_screened": 50554,
     "workflow04_exclusions": 27226,
-    "title_abstract_retained": 23328,
+    "title_abstract_retained": 22923,
+    "title_abstract_retained_provisional": 23328,
+    "final_species_eligible": 22923,
+    "post_screening_species_exclusions": 228,
+    "post_screening_late_exclusions": 150,
+    "post_screening_review_other_exclusions": 27,
     "species_none_deterministic_exclusions": 228,
     "workflow07_late_exclusions": 152,
-    "workflow08_other_exclusions": 25,
+    "workflow08_other_exclusions": 27,
     "post_workflow04_exclusions_total": 405,
     "final_geography_coded": 9525,
     "final_geography_uncoded": 13398,
