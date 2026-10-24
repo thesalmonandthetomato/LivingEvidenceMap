@@ -1,12 +1,12 @@
 # Workflow 01: Multi-source deduplication, adjudication and canonicalisation
 
-## Current production state (4 October 2026)
+## Current production state and W01-Fast update path (24 October 2026)
 
-The current authoritative W01 state is run **36971418284**, published as restricted Zenodo record **23096518** (DOI `10.5281/zenodo.23096518`). It contains **118,527 source manifestations** and **47,094 canonical works**, with canonical SHA-256 `fb6e35b0bceb15629af20f006310aaae75416fc3aa985b906cf82b0df7b6e142`. This state incorporates the current CAB Abstracts and ProQuest/PQD&T additions while preserving the earlier API-source manifestations and stable work identities.
+The accepted October update is **GitHub run 39990028078**, registered in `docs/deduplication/zenodo/run-39990028078.json`. This supersedes the run and corpus totals formerly described at the start of this document. Always read the current pointer and its validated lineage for authoritative record counts, checksums and Zenodo IDs. The 4 October 2026 figures remain historical, not current production figures.
 
-The historical 90,137-manifestation / 32,292-work five-source corpus remains the immutable full baseline from which the current state is reconstructed by registered deltas; it is not the current corpus size.
+**W01-Fast for routine updates.** The operational update uses a stable source-record identity gate before bibliographic comparison. Source-plus-native-ID matches are reused rather than rescored; newly observed source manifestations are compared against a derived persistent index and with one another using blocking/candidate reduction. Existing historical decisions and canonical identities are preserved. The index is an acceleration aid, not the authoritative decision store. Preserve duplicate-pair decisions, human-reviewed metadata, stable work IDs and the immutable baseline/delta lineage. Never reconstruct and rescore all historical pairs merely because a small monthly source delta has arrived.
 
-Both the normal W01 production finalisation path and the post-Shiny human-review resume path now update the current-run status JSON and Shiny pipeline status directly after the accepted W01 state is registered.
+Relevant design and implementations: `docs/workflow01_persistent_dedup_index.md`; `scripts/updater/workflow_01_source_identity_filter.R`; `scripts/updater/workflow_01_build_dedup_index.R`; `scripts/updater/experimental_w01_fast/`; and the actual live W01 production controller. **Caution:** the experimental scripts and workflows are not automatically equivalent to the deployed production path. For every update, verify the live controller, authoritative pointer, deduplication QC and successful W01-to-W02 handoff before describing a particular Fast optimisation as deployed. The older workflow map below describes the baseline-plus-delta adjudication and archival contract and must not be interpreted as requiring a full historical pair reconstruction on each update.
 
 ## Purpose
 
