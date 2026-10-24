@@ -1,0 +1,52 @@
+{
+  "status": "published",
+  "workflow": "08",
+  "state": "corrected_final_adjudicated_canonical",
+  "supersedes_zenodo_record_id": "23459613",
+  "supersedes_doi": "10.5281/zenodo.23459613",
+  "source_github_run_id": "40028381004",
+  "source_github_commit": "fe01977c525341770ef167702665999c82e7f014",
+  "source_github_run_url": "https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/40028381004",
+  "source_canonical_population": 50567,
+  "canonical_records": 22923,
+  "excluded_records": 27644,
+  "w08_decision_issues": 159,
+  "canonical_schema_version": "living-evidence-map-canonical-v1",
+  "annotation_preservation": "lossless-upstream-handoff-v2",
+  "final_canonical_jsonl_sha256": "5be8c3e2f236650e13550156f4851220c24add4ff58f81e16d2bb94bf6bd61f1",
+  "final_canonical_jsonl_bytes": 287721593,
+  "excluded_records_csv_sha256": "fa5b1d4713f0006dceb59f7123ca4512daf5f25e719f41ff0a65299ac796fca0",
+  "adjudication_ledger_sha256": "e6b95c5ba56c09a9dd8f56ad6aa9e971858f35b6fb871aca56e9d5129283bd68",
+  "zenodo_record_id": "23607235",
+  "zenodo_deposition_id": "23607235",
+  "doi": "10.5281/zenodo.23607235",
+  "record_url": "https://zenodo.org/records/23607235",
+  "visibility": "restricted",
+  "files": [
+    {
+      "filename": "living_evidence_map_canonical_final.jsonl",
+      "bytes": 287721593,
+      "sha256": "5be8c3e2f236650e13550156f4851220c24add4ff58f81e16d2bb94bf6bd61f1",
+      "zenodo_checksum": "md5:df52f78e98769bb941f22de384e510be"
+    },
+    {
+      "filename": "workflow08_excluded_records.csv",
+      "bytes": 7399635,
+      "sha256": "fa5b1d4713f0006dceb59f7123ca4512daf5f25e719f41ff0a65299ac796fca0",
+      "zenodo_checksum": "md5:02bf8e25edcc063edd6b084603401e97"
+    },
+    {
+      "filename": "workflow08_adjudication_ledger.jsonl",
+      "bytes": 131147,
+      "sha256": "e6b95c5ba56c09a9dd8f56ad6aa9e971858f35b6fb871aca56e9d5129283bd68",
+      "zenodo_checksum": "md5:2565607c188edebae4e1e24c365919ac"
+    },
+    {
+      "filename": "workflow08_final_manifest.json",
+      "bytes": 2626,
+      "sha256": "f39b768b3e9d1d7a412a0c03fdb773eefe408f17b326c18336cd0e0dfd27f353",
+      "zenodo_checksum": "md5:eb4709dfad36e11125b9a8be6b3b227e"
+    }
+  ],
+  "published_at_utc": "2026-10-24T00:26:44Z"
+}
