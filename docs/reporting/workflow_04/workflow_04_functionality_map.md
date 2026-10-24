@@ -1,5 +1,11 @@
 # Workflow 04: relevance screening
 
+## October 2026 release status (24 October 2026)
+
+This document retains historical implementation and validation details below. References labelled **current production state** with dates in early October 2026 are historical snapshots, not the authoritative status of the completed 19 October monthly search update. For the latest release, use the registered stage pointers, their checksums, and `docs/current_run/current_run_status.json` rather than the older counts and run IDs quoted below. The accepted October release concluded with **22,923 included records** after W08; those are final W08 counts, not the earlier W04 retained total. Documentation changes do not modify scientific inputs, execution or provenance.
+
+The corrected W04 October screening recovery is run **40028381004** (pointer `docs/workflow04/zenodo/run-40028381004.json`). It restored **157 protected human-edited abstracts**, reused **50,538 historical decisions**, screened only **16** genuinely new records and ended with **zero unresolved records**. A routine bibliographic metadata change alone must not force rescreening of an already decided record. The old 107-case uncertainty queue was superseded, not a new human-review requirement.
+
 ## Purpose
 
 Workflow 04 screens the publication-status-eligible canonical corpus from Workflow 03 for relevance to the Living Evidence Map of commercial aquaculture of Atlantic salmon, specified Pacific salmon species and rainbow trout.
