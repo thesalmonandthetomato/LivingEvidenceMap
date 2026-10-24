@@ -90,3 +90,15 @@ Rscript scripts/workflow08b/run_lens_discovery.R /private/seed_identifier_crossw
 ```
 
 **Not ready for monthly production:** This manual runner only processes direct Lens-ID seeds. It does not yet handle DOI-based Lens resolution, OpenAlex fallback, comparing fresh monthly forward lists against historical lists, reference-count-triggered backward refresh, permanent Zenodo registration, cross-provider identity resolution, NOT-filtered candidate bibliographic retrieval, or W01/W09 orchestration. Existing output folders must remain private. It is not automatically scheduled or triggered.
+
+
+## Incremental monthly development (24 October 2026)
+
+- The ten-seed isolated Lens trial is now **10/10 complete**, with preserved restricted Zenodo checkpoint **23623623** (run **40118419800**). The initial four incomplete seeds were caused by Lens omitting zero-direction count fields; this is fixed.
+- `scripts/workflow08b/restore_discovery.R` restores the prior restricted checkpoint using Zenodo file checksums. It does not reconstruct W01.
+- `scripts/workflow08b/plan_monthly.R crosswalk.csv previous_status.jsonl update_id output_dir` produces an offline deterministic per-seed plan and aggregate route counts. It never sends provider requests.
+- The crosswalk now routes unambiguous **DOI-bearing** seeds through Lens DOI resolution *before* OpenAlex fallback; DOI resolution and actual OpenAlex fallback API implementations are still pending.
+- `run_lens_discovery.R` accepts an optional fourth argument `update_id`: within that update each complete Lens-ID seed is refreshed once for forward citations, while backward edges are re-emitted only for newly eligible/incomplete seeds or when reported reference counts grow. Historic edges remain in the journal. Subsequent updates must use a checksum-verified restored checkpoint. Existing trial calls without `update_id` retain their skip-completed behaviour.
+- `merge_edges.R` now accepts an empty but valid edge journal as an explicit zero-citation result.
+
+**Not yet production-ready:** authoritative prior-month Zenodo pointer registry, monthly forward-edge delta reconciliation, DOI Lens lookup, OpenAlex fallback, licensed NOT-filtered candidate retrieval, cross-provider and W01 identity resolution, one-generation W01-Fast handoff, and Shiny/W09 publication integration. No production W00–W10 execution behaviour has been changed for W08b.
