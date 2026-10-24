@@ -28,7 +28,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/workflow08b/restore_discovery.R 23626037 "$RUNNER_TEMP/w08b"
+          Rscript scripts/workflow08b/restore_discovery.R 23626425 "$RUNNER_TEMP/w08b"
           test -s "$RUNNER_TEMP/w08b/identity_crosswalk_resolved.csv"
           Rscript -e 'x<-read.csv(file.path(Sys.getenv("RUNNER_TEMP"),"w08b/identity_crosswalk_resolved.csv"),stringsAsFactors=FALSE);stopifnot(nrow(x)==22923L,!anyDuplicated(x$record_id))'
       - name: Run remaining Lens-ID seeds in batches of up to 500
