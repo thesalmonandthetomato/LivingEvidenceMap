@@ -26,6 +26,7 @@ jobs:
         shell: Rscript {0}
         run: |
           parse(file='scripts/workflow08b/crosswalk_identifiers.R')
+          parse(file='scripts/workflow08b/select_api_trial.R')
           parse(file='scripts/updater/workflow_10_restore_canonical_from_zenodo.R')
       - name: Restore authoritative W08 canonical and verify checksum
         env:
@@ -58,6 +59,14 @@ jobs:
             "$RUNNER_TEMP/w08b/w01_state/canonical/records.jsonl" \
             "$RUNNER_TEMP/w08b/audit"
           Rscript -e 'x<-jsonlite::fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"w08b/audit/summary.json"));stopifnot(x$w08_records==22923L,x$w01_matches==22923L);cat(jsonlite::toJSON(x,auto_unbox=TRUE,pretty=TRUE),"\\n")'
+      - name: Prepare private bounded Lens-first trial cohort
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/select_api_trial.R \
+            "$RUNNER_TEMP/w08b/audit/seed_identifier_crosswalk.csv" \
+            "$RUNNER_TEMP/w08b/trial"
+          Rscript -e 'z<-jsonlite::fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"w08b/trial/trial_summary.json"));stopifnot(z$total<=12L,!z$provider_queries_authorised)'
       - name: Report aggregate coverage only
         shell: bash
         run: |
