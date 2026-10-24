@@ -304,9 +304,7 @@ boxes <- bind_rows(
 
   box("species", main_x, 4.18, process_box_w, 0.76, paste0("Species eligible after final review\nn = ", fmt(n_final_included)), "annotate"),
   box("post_screening_exclusions", side_x, 4.18, process_box_w, 0.76,
-      paste0("Additional eligibility exclusions\\nn = ", fmt(n_post_w04_excluded),
-        " (species ", fmt(n_species_excluded_final), ", late ", fmt(n_late_excluded_final),
-        ", review ", fmt(n_review_other_excluded_final), ")"), "exclude"),
+      paste0("Further exclusions after screening\\nn = ", fmt(n_post_w04_excluded)), "exclude"),
   box("geography", main_x, 3.13, process_box_w, 0.76, paste0("Records with geography annotation\nn = ", fmt(n_geography_coded)), "annotate"),
   box("geo_uncoded", side_x, 3.13, process_box_w, 0.76, paste0("Included but uncoded for geography\nn = ", fmt(n_geography_uncoded)), "result"),
   box("topic", main_x, 2.08, process_box_w, 0.76, paste0("Records with topic annotation\nn = ", fmt(n_topic_coded)), "annotate"),
