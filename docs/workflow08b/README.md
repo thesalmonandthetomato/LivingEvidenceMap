@@ -74,3 +74,7 @@ W09 Figure 1 should gain a distinct **Citation chasing** box immediately before 
 7. Only after independent acceptance: activate W08→W08b→supplementary W01→W09 gates, with rollback of the new routing isolated from the original pipeline.
 
 No production stage, trigger or upstream scientific data should be changed by this design document.
+
+## Identifier audit finding (24 October 2026)
+
+GitHub Actions W08b audit run 40099757804 **passed checksum and record-count verification**, but is **not** a provider coverage PASS: its 22,923 W08 included records all have no `manifestations` array in the final W08 JSONL. A total of 15,968 have canonical DOI; Lens/OpenAlex ID coverage from this file alone is zero. Accordingly, do not start citation API tests or treat `manifestations_missing` as permanent unresolved identity. The audit must recover source identifiers from the authoritative restored W01 canonical source-manifestation data, then join by stable canonical `identity.record_id`, requiring exactly one match per included W08 ID and retaining W08 canonical DOI as an independent fallback. Use the existing checksum-verifying W01 baseline-plus-delta restore machinery; never infer provider IDs from unrelated fields or fetch all W00 records to guess identities. The W08 checksum remains `5be8c3e2f236650e13550156f4851220c24add4ff58f81e16d2bb94bf6bd61f1`. Existing `audit_identifiers.R` is a structural diagnostic, not yet the production W08b identifier extractor.
