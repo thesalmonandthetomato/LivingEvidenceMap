@@ -204,12 +204,18 @@ jobs:
           stopifnot(length(source_codes)>0L,!anyDuplicated(source_codes),all(nzchar(source_codes)),all(is.finite(source_hits)),all(source_hits>=0))
           run_status <- fromJSON('docs/current_run/current_run_status.json',simplifyVector=FALSE)
           searched_codes <- names(run_status$search$sources)
+          manual_config <- fromJSON('user_input/monthly_manual_ris.json',simplifyVector=FALSE)
+          manual_codes <- names(manual_config$sources)
+          registered_codes <- union(searched_codes,manual_codes)
           stopifnot(
             identical(as.character(run_status$progress$W00$status),'complete'),
             length(searched_codes)>0L,
             !anyDuplicated(searched_codes),
-            all(source_codes %in% searched_codes),
-            as.integer(payload$metrics$databases_searched)==length(union(source_codes,searched_codes))
+            length(manual_codes)>0L,
+            !anyDuplicated(manual_codes),
+            all(nzchar(manual_codes)),
+            all(source_codes %in% registered_codes),
+            as.integer(payload$metrics$databases_searched)==length(union(source_codes,registered_codes))
           )
           stopifnot(as.character(payload$source$zenodo_record_id)==as.character(pointer$zenodo_record_id))
           stopifnot(tolower(as.character(payload$source$canonical_sha256))==expected_sha)
