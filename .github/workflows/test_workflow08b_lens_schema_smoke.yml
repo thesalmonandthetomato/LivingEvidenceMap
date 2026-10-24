@@ -1,0 +1,35 @@
+name: W08b Lens request schema smoke
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - docs/workflow08b/.run_lens_schema_smoke
+permissions:
+  contents: read
+jobs:
+  lens-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install minimal dependencies
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite'))
+      - name: Check corrected Lens request on known production sentinel
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LENS_API_TOKEN"
+          mkdir -p "$RUNNER_TEMP/w08b"
+          printf 'record_id,lens_id,openalex_id,doi,preferred_route,identifier_conflict\nproduction-sentinel,033-262-857-738-715,,,lens,FALSE\n' > "$RUNNER_TEMP/w08b/trial.csv"
+          Rscript scripts/workflow08b/lens_relationship_smoke.R \
+            "$RUNNER_TEMP/w08b/trial.csv" \
+            "$RUNNER_TEMP/w08b/summary.json"
+          cat "$RUNNER_TEMP/w08b/summary.json"
