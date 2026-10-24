@@ -7,6 +7,7 @@ parse(file="scripts/workflow08b/plan_monthly.R")
 parse(file="scripts/workflow08b/resolve_lens_doi_bulk.R")
 parse(file="scripts/workflow08b/apply_lens_doi_resolution.R")
 parse(file="scripts/workflow08b/filter_original_strategy.R")
+parse(file="scripts/workflow08b/run_openalex_fallback.R")
 root<-tempfile("w08b-regression-");dir.create(root)
 one<-list(identity=list(record_id="work-one"),canonical=list(doi="10.1000/one"),
  manifestations=list(list(source="lens",source_record_id="111-111-111-111-111",
