@@ -34,7 +34,7 @@ todo<-vapply(seq_len(nrow(d)),function(i){
 },logical(1))
 d<-d[todo,,drop=FALSE]
 if(anyDuplicated(d$lens_id))stop("Multiple seed identities share Lens ID; resolve before bulk discovery")
-chunks<-split(seq_len(nrow(d)),ceiling(seq_len(nrow(d))/400L))
+chunks<-split(seq_len(nrow(d)),ceiling(seq_len(nrow(d))/500L))
 if(length(chunks)>max_batches)chunks<-chunks[seq_len(max_batches)]
 get_ids<-function(x){
  if(is.null(x))return(character())
