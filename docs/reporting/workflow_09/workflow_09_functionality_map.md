@@ -1,5 +1,11 @@
 # Workflow 09: reporting, publication outputs and reference-library export
 
+## October 2026 release status (24 October 2026)
+
+This document retains historical implementation and validation details below. References labelled **current production state** with dates in early October 2026 are historical snapshots, not the authoritative status of the completed 19 October monthly search update. For the latest release, use the registered stage pointers, their checksums, and `docs/current_run/current_run_status.json` rather than the older counts and run IDs quoted below. The accepted October release concluded with **22,923 included records** after W08; those are final W08 counts, not the earlier W04 retained total. Documentation changes do not modify scientific inputs, execution or provenance.
+
+October W09 publication succeeded in GitHub Actions run **40074970003**, using authoritative W01/W02/W08 provenance. The figure renderer `docs/reporting/workflow_09/figure_code/figure_01_flow_diagram.R` removes the literal leading `Ebsco ` **only from displayed bibliographic source labels in the flow diagram**. Source codes, hit counts, search dates, `flow_counts.json`, Zenodo provenance and other displays retain their original data. A W09 report regeneration is required before W10 can republish this visual change.
+
 ## Purpose
 
 Workflow 09 is the final reporting and publication stage of the LivingEvidenceMap pipeline. It does not alter screening or annotation decisions. Instead, it restores the latest authoritative Workflow 08 included-only canonical dataset and the compact upstream provenance state needed for reporting, then produces a reproducible publication package consisting of:
