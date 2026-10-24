@@ -1,5 +1,11 @@
 # Workflow 01: Multi-source deduplication, adjudication and canonicalisation
 
+## October 2026 release status (24 October 2026)
+
+This document retains historical implementation and validation details below. References labelled **current production state** with dates in early October 2026 are historical snapshots, not the authoritative status of the completed 19 October monthly search update. For the latest release, use the registered stage pointers, their checksums, and `docs/current_run/current_run_status.json` rather than the older counts and run IDs quoted below. The accepted October release concluded with **22,923 included records** after W08; those are final W08 counts, not the earlier W04 retained total. Documentation changes do not modify scientific inputs, execution or provenance.
+
+The production October W01-Fast run is **39990028078** and its repository pointer is `docs/deduplication/zenodo/run-39990028078.json`. For routine updates, filter already-known source/native record identities before candidate comparison, use indexed candidate reduction on genuinely new manifestations and reuse accepted historical pair decisions, human repairs and stable work identities. Preserve provenance and the audited W01-to-W02 canonical handoff. Experimental Fast scripts are not themselves proof of the live controller's behaviour.
+
 ## Current production state and W01-Fast update path (24 October 2026)
 
 The accepted October update is **GitHub run 39990028078**, registered in `docs/deduplication/zenodo/run-39990028078.json`. This supersedes the run and corpus totals formerly described at the start of this document. Always read the current pointer and its validated lineage for authoritative record counts, checksums and Zenodo IDs. The 4 October 2026 figures remain historical, not current production figures.
