@@ -26,9 +26,14 @@ jobs:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
-          Rscript scripts/workflow08b/restore_discovery.R 23627366 "$RUNNER_TEMP/w08b"
+          Rscript scripts/workflow08b/restore_discovery.R 23627417 "$RUNNER_TEMP/w08b"
           test -s "$RUNNER_TEMP/w08b/merged/provider_candidate_ids.csv"
           Rscript -e 'd<-read.csv(file.path(Sys.getenv("RUNNER_TEMP"),"w08b/merged/provider_candidate_ids.csv"));stopifnot(all(c("provider","related_provider_id")%in%names(d)));cat("Candidate register: ",nrow(d)," provider IDs\\n",sep="")'
+      - name: Parse-check all W08b candidate R before any provider calls
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript -e 'parse(file="scripts/workflow08b/retrieve_lens_candidates_bulk.R"); cat("PASS: candidate retrieval R parse\\n")'
       - name: Harvest Lens candidate bibliographies, max 500 IDs per Lens request
         id: harvest
         continue-on-error: true
