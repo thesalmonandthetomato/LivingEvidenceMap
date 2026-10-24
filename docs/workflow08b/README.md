@@ -1,0 +1,76 @@
+# Workflow 08b: citation chasing design and implementation contract
+
+Status: **design and isolated development only; not active in production**. Agreed 24 October 2026.
+
+## Baseline and rollback
+
+- Production working branch: `workflow01-final-architecture`.
+- Immutable pre-development commit SHA: `b7a22548f34e4ae6a27cc8ac7db325da82989de3`.
+- Backup branch: `legacy-pre-w08b-20261024`, created at that exact SHA before the first W08b edit.
+- Preserve the working W00–W10 workflow behaviour until W08b is validated.
+- All W08b work is committed normally and is separately reversible through targeted `git revert`, never history rewriting or force-pushing.
+- Git rollback does not delete/revert external Zenodo archives or already published outputs.
+- A pre-W08b annotated Git tag was proposed but **has not been created**; the existing backup branch and exact SHA are the verified rollback references.
+
+## Inputs and release identity
+
+- The single authoritative, published W08 pointer and checksum-verified **included-only** canonical JSONL. October baseline: 22,923 included records from W08 run 40028381004.
+- Retain W00 source-manifestation identity and identifiers for each canonical work: Lens ID, OpenAlex Work ID and normalised DOI.
+- Version-controlled search strategy: `user_input/workflow00_search_strategy.json`, currently **v2**, containing `maricultur*` in `farm_terms`. W08b must resolve and archive the exact version and provider-specific translated expression for every run; never hard-code a truncated search.
+- Every iteration is part of the **same monthly update_id** as its originating W00–W08, not a new monthly update.
+- First one-off baseline: chase all W08 included seeds. Subsequent monthly rounds: compare W08 included records with the previous accepted W08b seed register.
+
+## Provider routing and cost controls
+
+1. **Lens first** for a seed having a Lens ID or a DOI that Lens can resolve. Obtain reference and citing Lens ID lists with explicit requested API fields, checking completeness/pagination.
+2. **OpenAlex only as fallback** for seeds not resolved in Lens **and with a known OpenAlex Work ID**. Do not overlap complete Lens results with OpenAlex merely to increase coverage. A successful Lens zero-result response is not an error.
+3. Preserve DOI-only seeds without claiming a successful search; attempt Lens DOI resolution, then record unresolved status if it fails. OpenAlex fallback requires an OpenAlex ID.
+4. The two providers' relation schemas and admissible title/abstract/keyword NOT expressions must be tested with small, inexpensive requests before full-corpus execution. Fail closed if equivalent field-limited exclusion cannot be expressed reliably; never silently omit NOT.
+5. Deduplicate discovery IDs and maintain all seed→candidate edges with `backward`, `forward` or both and provider evidence. Retrieve candidate bibliographic records by batched IDs **AND NOT the latest translated source-specific original search expression** in title, abstract and keywords. Apply exclusions before bulk candidate download where supported.
+6. Deduplicate within and across providers, against historical W01 source identities and against prior W08b candidate history. Only genuinely new candidate manifestations are submitted to W01.
+7. Bound API requests, pagination, retries and cost. Archive query text, returned counts, usage, zero-results and failures before authorising the initial full run.
+
+## Persistent state
+
+Use restricted Zenodo archival and checksum-verified repository pointers. Do not edit previously deposited state in place. Design three append/reconcilable datasets:
+
+### Seed register (one row per W08 included canonical work)
+`record_id`, `w08_release_id`, `lens_id`, `openalex_id`, `doi`, `preferred_provider`, `lens_resolution_status`, `openalex_resolution_status`, `backward_status`, `backward_completed_at`, `backward_rechecked_at`, `forward_checked_at`, `reference_count_previous`, `reference_count_current`, `reference_count_source`, `latest_error`, `update_id`.
+
+Backward-search eligibility:
+- first one-off: every resolvable seed;
+- subsequent months: newly included seeds, incomplete/failed seeds, or any completed seed for which its current provider reference count **increased** relative to the count recorded for the prior completed search (e.g., 5→10);
+- log decreases or unexpected count inconsistencies for audit, without automatically discarding historical edges.
+A backward search only becomes `complete` after all accessible reference IDs have been retrieved and archived. Track provider-specific completeness and timestamps.
+
+Forward-search eligibility: **every resolvable included seed every month**. Refresh the full forward ID set rather than relying exclusively on publication/indexing date filters, because old works can acquire newly indexed citation links. Download bibliographic data only for newly discovered candidate IDs.
+
+### Citation-edge register (one row per seed, related work, direction, provider)
+`seed_record_id`, `related_provider_id`, `related_doi`, `direction`, `provider`, `first_seen_at`, `last_seen_at`, `update_id`, `source_request_id`, `status`.
+Never erase previously observed evidence when a current provider response differs.
+
+### Candidate register (one row per identity-resolved candidate)
+`candidate_key`, `lens_id`, `openalex_id`, `doi`, `first_seen_at`, `last_seen_at`, `provenance_edge_count`, `search_strategy_version`, `not_filter_applied`, `existing_w01_identity`, `previously_submitted`, `w01_handoff_status`, `subsequent_disposition`.
+Retain backward/forward/both and all referring seeds as edges, even when candidate records are already represented or excluded.
+
+## One-generation orchestration
+
+Normal monthly W00→W01→W02…W08 yields an accepted included canonical and canonical checksum. W08b then searches only that accepted snapshot. It archives source-state and candidate-state before allowing a **single** supplemental W01-Fast invocation. New citation-chasing manifestations enter W01 under a clearly distinguishable source/provenance pathway and resume W02…W08, retaining the **same** `update_id` and original monthly search provenance. The supplemental W08 completion bypasses W08b, then permits W09→W10. No automatic second citation generation in the same update. Do not enable any of this integration until standalone equivalence and handoff tests pass.
+
+Newly included records produced by citation chasing are eligible for backward chasing in the following monthly cycle (unless explicitly run in a separate future one-off exercise).
+
+## Flow-diagram integration (planned, not yet activated)
+
+W09 Figure 1 should gain a distinct **Citation chasing** box immediately before the final canonical/map box, with counts grounded in the accepted W08b register: seeds backward chased; seeds forward checked; new candidate manifestations; novel works after cross-provider/existing-corpus deduplication; newly included records after supplemental W01–W08; and exclusions after screening. Keep main W00 database-search totals separate and preserve the existing W01/W08 reconciliation identities. Do not fabricate counts or simply add citation candidates to existing included counts; update the final diagram only after a validated reconciliation contract. W10 republishes this W09 figure, with no separate W10 identity transformation.
+
+## Validation and activation gates
+
+1. Verify rollback branch SHA equals the recorded pre-development SHA.
+2. Audit canonical source-ID coverage and the v2 search translation (including `maricultur*`).
+3. Test Lens relationship field selection, pagination, DOI resolution, NOT filtering and provenance on a small seed sample; fallback OpenAlex only for Lens-unresolved seeds with OpenAlex ID.
+4. Test reference-count changes, monthly forward edge set-difference, re-runs, interruptions and resumability.
+5. Validate candidate deduplication, existing W01 identity filtering and one-generation same-update handoff using synthetic/local cases before live execution.
+6. Benchmark requests, latency and charges before approving full baseline.
+7. Only after independent acceptance: activate W08→W08b→supplementary W01→W09 gates, with rollback of the new routing isolated from the original pipeline.
+
+No production stage, trigger or upstream scientific data should be changed by this design document.
