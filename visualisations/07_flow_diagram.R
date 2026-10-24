@@ -497,7 +497,7 @@ ggsave(
 )
 
 # Machine-readable output generated from the same compact reporting inputs.
-n_w08_other_exclusions <- n_post_w04_excluded - n_species_none - n_w07_late
+n_w08_other_exclusions <- n_review_other_excluded_final
 if (n_w08_other_exclusions < 0L) stop("Post-W04 exclusion accounting is negative", call. = FALSE)
 
 counts <- list(
@@ -532,7 +532,12 @@ counts <- list(
     retractions_excluded = n_w03,
     title_abstract_screened = n_screened_ta,
     workflow04_exclusions = n_w04,
-    title_abstract_retained = n_w04_retained,
+    title_abstract_retained = n_w04_retained_final,
+    title_abstract_retained_provisional = n_w04_retained,
+    final_species_eligible = n_final_included,
+    post_screening_species_exclusions = n_species_excluded_final,
+    post_screening_late_exclusions = n_late_excluded_final,
+    post_screening_review_other_exclusions = n_review_other_excluded_final,
     species_none_deterministic_exclusions = n_species_none,
     workflow07_late_exclusions = n_w07_late,
     workflow08_other_exclusions = n_w08_other_exclusions,
