@@ -57,7 +57,7 @@ for(indices in chunks){
  ids<-as.character(batch$lens_id)
  # citationchaser models this as query.terms.lens_id = array of IDs;
  # including six relationship fields, not full candidate bibliographies.
- payload<-list(query=list(terms=list(lens_id=as.list(ids))),size=as.integer(length(ids)),
+ payload<-list(query=list(terms=list(lens_id=as.list(ids))),size=1000L,
   include=c("lens_id","references","references_count","references_resolved_count",
             "scholarly_citations","scholarly_citations_count"))
  resp<-tryCatch(request("https://api.lens.org/scholarly/search") |>
@@ -75,17 +75,21 @@ for(indices in chunks){
  body<-resp_body_json(resp,simplifyVector=FALSE)
  records<-body$data %||% list()
  actual<-vapply(records,function(x)as.character(x$lens_id %||% ""),character(1))
- if(anyDuplicated(actual)||any(!actual%in%ids)||any(!nzchar(actual))){
-  halt<-paste0("Ambiguous bulk result identities: requested=",length(ids),
-   "; returned=",length(actual),
-   "; duplicates=",sum(duplicated(actual)),
-   "; unexpected=",sum(!actual%in%ids),
-   "; missing_identity=",sum(!nzchar(actual)))
-  break
+ if(anyDuplicated(actual)||any(!nzchar(actual))){
+  halt<-paste0("Invalid Lens bulk response: duplicate=",sum(duplicated(actual)),
+   "; empty=",sum(!nzchar(actual)));break
  }
  if(as.integer(body$total %||% length(records))>length(records)){
-  halt<-paste0("Bulk result pagination required: requested=",length(ids),"; returned=",length(records),"; total=",as.integer(body$total));break
+  halt<-paste0("Lens returned partial search page: total=",as.integer(body$total),
+   "; received=",length(records));break
  }
+ # Lens can return an additional non-requested identifier in terms searches.
+ # Never accept those records or assign their edges to a seed. A larger page
+ # ensures that the outlier does not displace a requested seed at size=500.
+ extra<-sum(!actual%in%ids)
+ if(extra>0L)message("Lens bulk: quarantined ",extra,
+   " unexpected returned record(s); no relationships imported from them")
+ records<-records[actual%in%ids];actual<-actual[actual%in%ids]
  lookup<-setNames(seq_along(actual),actual)
  for(i in seq_len(nrow(batch))){
   seed<-batch[i,,drop=FALSE];lid<-seed$lens_id[[1]];id<-seed$record_id[[1]]
