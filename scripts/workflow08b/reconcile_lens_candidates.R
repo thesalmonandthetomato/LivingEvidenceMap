@@ -26,7 +26,7 @@ lookup<-setNames(f$status,f$candidate_key)
 rows<-lapply(seq_len(nrow(p)),function(i){
  z<-p[i,,drop=FALSE];id<-paste0(z$provider[[1]],":",z$related_provider_id[[1]])
  m<-meta[[id]]
- known<-nzchar(z$existing_w01_record_id[[1]])
+ known<-!is.na(z$existing_w01_record_id[[1]]) && nzchar(z$existing_w01_record_id[[1]])
  doi<-if(is.null(m))"" else normdoi(m$doi)
  filter_status<-lookup[[id]] %||% "metadata_unavailable"
  state<-if(known)"already_in_w01_provider_id" else
@@ -50,12 +50,14 @@ if(length(a)==5L){
  if(anyDuplicated(history$doi))stop("Historical DOI index not unique")
  matched<-match(d$doi,history$doi)
  found<-!is.na(matched)&nzchar(d$doi)
- d$historical_doi_status<-ifelse(found,history$identity_status[matched],"not_found")
- d$historical_doi_w01_ids<-ifelse(found,history$w01_record_ids[matched],"")
+ d$historical_doi_status<-rep("not_found",nrow(d))
+ d$historical_doi_w01_ids<-rep("",nrow(d))
+ d$historical_doi_status[found]<-history$identity_status[matched[found]]
+ d$historical_doi_w01_ids[found]<-history$w01_record_ids[matched[found]]
  d$reconciliation_status[found & d$reconciliation_status=="pending_doi_crosscheck" &
-  history$identity_status[matched]=="unique_historical_w01"]<-"already_in_w01_doi"
+  d$historical_doi_status=="unique_historical_w01"]<-"already_in_w01_doi"
  d$reconciliation_status[found & d$reconciliation_status=="pending_doi_crosscheck" &
-  history$identity_status[matched]=="ambiguous_historical_w01"]<-"historical_doi_ambiguous"
+  d$historical_doi_status=="ambiguous_historical_w01"]<-"historical_doi_ambiguous"
  d$reconciliation_status[!found & d$reconciliation_status=="pending_doi_crosscheck"]<-"new_doi_requires_other_identity_checks"
 }
 write.csv(d,file.path(a[[4]],"reconciliation.csv"),row.names=FALSE)
