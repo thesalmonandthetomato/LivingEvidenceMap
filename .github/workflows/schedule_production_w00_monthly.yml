@@ -1,0 +1,41 @@
+name: Schedule production W00 monthly update
+
+on:
+  schedule:
+    # 09:00 Europe/London: 08:00 UTC during BST, 09:00 UTC during GMT.
+    - cron: '0 8,9 19 * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch-production-w00:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch only at 09:00 Europe/London
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "schedule" ]] && [[ "$(TZ=Europe/London date +%H)" != "09" ]]; then
+            echo "Not 09:00 Europe/London; this UTC schedule tick is intentionally skipped."
+            exit 0
+          fi
+          if [[ "$EVENT_NAME" == "schedule" ]] && [[ "$(TZ=Europe/London date +%d)" != "19" ]]; then
+            echo "Not the 19th in London; skip."
+            exit 0
+          fi
+
+          # A scheduled event runs on main; this explicitly dispatches the
+          # separate, established production workflow on its own branch.
+          gh api --method POST \
+            "repos/$GH_REPO/actions/workflows/workflow_00_search_orchestrator.yml/dispatches" \
+            -f ref='workflow01-final-architecture' \
+            -f 'inputs[run_type]=monthly'
+          echo "Dispatched monthly W00 on workflow01-final-architecture."
