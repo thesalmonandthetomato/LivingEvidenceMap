@@ -398,7 +398,7 @@ p <- ggplot() +
   geom_text(
     data = source_headers,
     aes(x = date_x, y = y),
-    label = "Search date", hjust = 0, fontface = "bold",
+    label = "Last searched", hjust = 0, fontface = "bold",
     colour = "#2c454a", size = database_header_size, family = font_family
   ) +
   geom_text(
