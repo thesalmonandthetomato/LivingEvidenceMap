@@ -42,7 +42,7 @@ repeat {lines<-readLines(con,n=500L,warn=FALSE);if(!length(lines))break
     }
     lens<-distinct(lens);oa<-distinct(oa);doi<-distinct(dois)
     conflict<-any(grepl("|",c(lens,oa,doi),fixed=TRUE))
-    route<-if(conflict)"identity_conflict" else if(nzchar(lens))"lens" else if(nzchar(oa))"openalex" else if(nzchar(doi))"lens_doi_lookup" else "unresolved"
+    route<-if(conflict)"identity_conflict" else if(nzchar(lens))"lens" else if(nzchar(doi))"lens_doi_lookup" else if(nzchar(oa))"openalex" else "unresolved"
     assign(id,list(record_id=id,lens_id=lens,openalex_id=oa,doi=doi,preferred_route=route,
                    identifier_conflict=conflict,manifestation_count=length(mans)),envir=found)
   }}
