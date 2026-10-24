@@ -1,6 +1,7 @@
 #!/usr/bin/env Rscript
 # One-seed Lens citation edge extraction, no candidate bibliographic lookup.
 suppressPackageStartupMessages({library(jsonlite);library(httr2)})
+`%||%`<-function(x,y)if(is.null(x))y else x
 a<-commandArgs(trailingOnly=TRUE)
 if(length(a)!=1L)stop("Usage: lens_edges_smoke.R <output-summary.json>")
 token<-Sys.getenv("LENS_API_TOKEN","")
@@ -50,4 +51,3 @@ summary<-list(schema="workflow08b-lens-edge-smoke-v1",
 dir.create(dirname(a[[1L]]),recursive=TRUE,showWarnings=FALSE)
 writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE),a[[1L]])
 cat("PASS: extracted Lens relationship IDs; completeness separately recorded\n")
-`%||%`<-function(x,y)if(is.null(x))y else x
