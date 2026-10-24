@@ -23,7 +23,20 @@ res<-request(url)|>req_headers(Authorization=paste("Bearer",token))|>req_timeout
  req_error(is_error=function(x)FALSE)|>req_perform(path=archive)
 if(resp_status(res)!=200L)stop("Checkpoint download HTTP ",resp_status(res))
 actual<-tolower(digest(file=archive,algo="sha256",serialize=FALSE))
-checksum<-tolower(as.character(files[[1]]$checksum %||% ""))
+checksum<-tolower(as.character(files[[1]]$checksum %||% files[[1]]$checksum_md5 %||% ""))
+if(nzchar(checksum)&&grepl("^[a-f0-9]{32}$",checksum))checksum<-paste0("md5:",checksum)
+if(!nzchar(checksum)){
+  # Legacy depositions can omit file checksums in their list representation.
+  # Cross-check with the API file detail, then fail closed if still absent.
+  detail<-files[[1]]$links$self %||% ""
+  if(nzchar(as.character(detail))){
+    rr<-request(as.character(detail)) |> req_headers(Authorization=paste("Bearer",token)) |>
+      req_timeout(60) |> req_perform()
+    dd<-resp_body_json(rr,simplifyVector=FALSE)
+    checksum<-tolower(as.character(dd$checksum %||% dd$checksum_md5 %||% ""))
+    if(grepl("^[a-f0-9]{32}$",checksum))checksum<-paste0("md5:",checksum)
+  }
+}
 if(!grepl("^md5:[a-f0-9]{32}$",checksum))stop("Published Zenodo archive MD5 checksum missing")
 if(!identical(tolower(digest(file=archive,algo="md5",serialize=FALSE)),sub("^md5:","",checksum)))stop("Published Zenodo checkpoint integrity mismatch")
 members<-utils::untar(archive,list=TRUE)
