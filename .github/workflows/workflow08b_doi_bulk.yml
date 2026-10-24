@@ -1,0 +1,65 @@
+name: W08b DOI-only bulk Lens resolution
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - docs/workflow08b/.run_doi_bulk
+permissions:
+  contents: read
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install R packages
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','httr2','digest'))
+      - name: Restore complete verified seed crosswalk and all previously retrieved citations
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/restore_discovery.R 23626037 "$RUNNER_TEMP/w08b"
+          test -s "$RUNNER_TEMP/w08b/identity_crosswalk.csv"
+          Rscript -e 'd<-read.csv(file.path(Sys.getenv("RUNNER_TEMP"),"w08b/identity_crosswalk.csv"),stringsAsFactors=FALSE);stopifnot(nrow(d)==22923L,!anyDuplicated(d$record_id))'
+      - name: Resolve DOI-only Lens seeds in batches of 500
+        id: doi
+        continue-on-error: true
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/resolve_lens_doi_bulk.R \
+            "$RUNNER_TEMP/w08b/identity_crosswalk.csv" "$RUNNER_TEMP/w08b" 100
+      - name: Apply resolved DOI identities without dropping seed records
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/apply_lens_doi_resolution.R \
+            "$RUNNER_TEMP/w08b/identity_crosswalk.csv" \
+            "$RUNNER_TEMP/w08b/lens_doi_resolution.jsonl" \
+            "$RUNNER_TEMP/w08b/identity_crosswalk_resolved.csv"
+          Rscript -e 'a<-read.csv(file.path(Sys.getenv("RUNNER_TEMP"),"w08b/identity_crosswalk_resolved.csv"),stringsAsFactors=FALSE);stopifnot(nrow(a)==22923L,!anyDuplicated(a$record_id))'
+          cat "$RUNNER_TEMP/w08b/doi_resolution_summary.json"
+      - name: Preserve DOI journal and crosswalk in restricted Zenodo checkpoint
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/archive_discovery.R \
+            "$RUNNER_TEMP/w08b" "$GITHUB_RUN_ID" "$RUNNER_TEMP/w08b-receipt.json"
+          cat "$RUNNER_TEMP/w08b-receipt.json"
+      - name: Fail if DOI provider halted, after archival
+        if: steps.doi.outcome == 'failure'
+        run: exit 1
