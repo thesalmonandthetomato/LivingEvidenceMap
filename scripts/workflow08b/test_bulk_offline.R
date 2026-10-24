@@ -4,6 +4,9 @@
 parse(file="scripts/workflow08b/run_lens_bulk.R")
 parse(file="scripts/workflow08b/filter_existing_w01.R")
 parse(file="scripts/workflow08b/plan_monthly.R")
+parse(file="scripts/workflow08b/resolve_lens_doi_bulk.R")
+parse(file="scripts/workflow08b/apply_lens_doi_resolution.R")
+parse(file="scripts/workflow08b/filter_original_strategy.R")
 root<-tempfile("w08b-regression-");dir.create(root)
 one<-list(identity=list(record_id="work-one"),canonical=list(doi="10.1000/one"),
  manifestations=list(list(source="lens",source_record_id="111-111-111-111-111",
@@ -25,3 +28,22 @@ stopifnot(identical(z$identity_status,c("already_in_w01","already_in_w01",
  "needs_bibliographic_identity_check")))
 stopifnot(z$existing_w01_record_id[[2L]]=="work-excluded")
 cat("PASS: W08b bulk parser and historical-included/excluded identity precheck\n")
+
+# Exercise actual strategy logic and incomplete-metadata quarantine.
+metadata<-file.path(root,"sample_candidates.jsonl")
+writeLines(c(
+ jsonlite::toJSON(list(candidate_key="x1",title="Salmon aquaculture study",
+  abstract="A systematic review",keywords=list("mariculture")),auto_unbox=TRUE),
+ jsonlite::toJSON(list(candidate_key="x2",title="Road transport",
+  abstract="Urban design",keywords=list("commuting")),auto_unbox=TRUE),
+ jsonlite::toJSON(list(candidate_key="x3",title="Salmon farming review"),
+  auto_unbox=TRUE)),metadata)
+filtered<-file.path(root,"strategy.csv")
+audit<-file.path(root,"strategy_audit.json")
+exit<-system2("Rscript",c("scripts/workflow08b/filter_original_strategy.R",
+ shQuote(metadata),shQuote("user_input/workflow00_search_strategy.json"),
+ shQuote(filtered),shQuote(audit)))
+stopifnot(exit==0L)
+v<-read.csv(filtered,stringsAsFactors=FALSE)
+stopifnot(identical(v$status,c("original_strategy_match","not_matched","metadata_incomplete")))
+cat("PASS: bulk DOI parser and original search-strategy filter regression\\n")
