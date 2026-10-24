@@ -31,7 +31,7 @@ ids<-ids[!vapply(ids,function(id){
 chunks<-split(seq_along(ids),ceiling(seq_along(ids)/500L))
 chunks<-head(chunks,limit)
 append<-function(path,x){f<-file(path,"at");on.exit(close(f));writeLines(toJSON(x,auto_unbox=TRUE,null="null"),f)}
-string<-function(x){z<-unlist(x,use.names=FALSE);if(!length(z))return("");as.character(z[[1]])}
+extract_doi<-function(z){\n ids<-z$external_ids %||% list()\n for(id in ids){\n  if(is.list(id)&&identical(tolower(as.character(id$type %||% "")),"doi")){\n   v<-as.character(id$value %||% "");if(length(v)&&nzchar(v[[1L]]))return(v[[1L]])\n  }\n }\n ""\n}\nstring<-function(x){z<-unlist(x,use.names=FALSE);if(!length(z))return("");as.character(z[[1]])}
 doi_norm<-function(x){z<-tolower(trimws(string(x)));z<-sub("^https?://(dx[.])?doi[.]org/","",z);sub("^doi:[[:space:]]*","",z)}
 extract_keywords<-function(z){
  x<-z$keywords %||% z$keyword %||% list()
@@ -70,10 +70,10 @@ for(ix in chunks){
  body<-resp_body_json(result,simplifyVector=FALSE)
  records<-body$data %||% list()
  got<-vapply(records,function(z)string(z$lens_id),character(1))
- if(anyDuplicated(got)||any(!got%in%batch)||as.integer(body$total %||% length(records))>length(records)){
+ if(anyDuplicated(got)||any(!nzchar(got))||as.integer(body$total %||% length(records))>length(records)){
   halt<-"Ambiguous or truncated candidate metadata batch";break
  }
- byid<-setNames(seq_along(got),got)
+ if(any(!got%in%batch))message("Quarantining ",sum(!got%in%batch)," unrequested Lens candidates")\n records<-records[got%in%batch];got<-got[got%in%batch]\n byid<-setNames(seq_along(got),got)
  for(id in batch){
   if(!id%in%names(byid)){
    append(ledger,list(lens_id=id,status="not_found",provider="lens"))
@@ -82,7 +82,7 @@ for(ix in chunks){
   }
   z<-records[[byid[[id]]]]
   record<-list(candidate_key=paste0("lens:",id),provider="lens",lens_id=id,
-    doi=doi_norm(z$doi),title=if(is.null(z$title))NULL else string(z$title),
+    doi=doi_norm(extract_doi(z)),title=if(is.null(z$title))NULL else string(z$title),
     abstract=extract_abstract(z),keywords=if(is.null(z$keyword)&&is.null(z$keywords))NULL else extract_keywords(z),
     year=string(z$year_published),source="Lens scholarly/search")
   append(bibliography,record)
