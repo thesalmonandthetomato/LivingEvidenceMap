@@ -5,3 +5,4 @@ Retry after quarantining missing-metadata candidates before exclusion decisions.
 Retry cancelled offline regression with corrected 25-minute setup allowance; 2026-10-24.
 
 Validate added OpenAlex fallback parser in the bundled offline regression.
+Validate candidate metadata retrieval/reconciliation and DOI quarantines.
