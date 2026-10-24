@@ -34,7 +34,7 @@ for(line in lines){
  complete<-!is.null(x$title) && !is.null(x$abstract) && !is.null(x$keywords)
  s_match<-any(vapply(sp,grepl,logical(1),x=tolower(text),perl=TRUE,ignore.case=TRUE))
  f_match<-any(vapply(fp,grepl,logical(1),x=tolower(text),perl=TRUE,ignore.case=TRUE))
- status<-if(s_match&&f_match)"original_strategy_match" else if(!complete)"metadata_incomplete" else "not_matched"
+ status<-if(!complete)"metadata_incomplete" else if(s_match&&f_match)"original_strategy_match" else "not_matched"
  n<-n+1L;results[[n]]<-data.frame(candidate_key=id,status=status,
   species_term_match=s_match,farm_term_match=f_match,metadata_complete=complete,
   strategy_version="v2",stringsAsFactors=FALSE)
