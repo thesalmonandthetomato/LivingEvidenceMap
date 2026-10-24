@@ -2,6 +2,7 @@
 # W08b monthly seed plan. Offline, deterministic, no network or W01 mutation.
 # Usage: plan_monthly.R crosswalk.csv previous/lens_seed_status.jsonl update_id output_dir
 suppressPackageStartupMessages(library(jsonlite))
+`%||%`<-function(x,y)if(is.null(x))y else x
 a<-commandArgs(trailingOnly=TRUE)
 if(length(a)!=4L)stop("Usage: plan_monthly.R crosswalk.csv previous_status.jsonl update_id output_dir")
 input<-a[[1]];history<-a[[2]];update<-a[[3]];out<-a[[4]]
