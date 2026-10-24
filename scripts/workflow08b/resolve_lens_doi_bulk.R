@@ -50,15 +50,14 @@ append<-function(z){
 requests<-0L;halt<-NULL
 for(ix in chunks){
  b<-d[ix,,drop=FALSE]
- payload<-list(query=list(terms=list(doi=as.list(b$doi))),size=as.integer(nrow(b)),
-   include=c("lens_id","doi","external_ids"))
+ payload<-list(query=list(terms=list(doi=as.list(b$doi))),size=500L)
  r<-tryCatch(request("https://api.lens.org/scholarly/search") |>
   req_headers(Authorization=paste("Bearer",token),Accept="application/json") |>
   req_body_json(payload,auto_unbox=TRUE) |> req_timeout(180) |>
   req_error(is_error=function(x)FALSE) |> req_perform(),error=identity)
  requests<-requests+1L
  if(inherits(r,"error")){halt<-conditionMessage(r);break}
- if(resp_status(r)!=200L){halt<-paste("Lens HTTP",resp_status(r));break}
+ if(resp_status(r)!=200L){halt<-paste("Lens HTTP",resp_status(r),substr(resp_body_string(r),1L,500L));break}
  z<-resp_body_json(r,simplifyVector=FALSE)
  rows<-z$data %||% list()
  if(as.integer(z$total %||% length(rows))>length(rows)){halt<-"Incomplete DOI lookup pagination";break}
