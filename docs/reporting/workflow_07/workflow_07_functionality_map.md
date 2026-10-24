@@ -1,5 +1,11 @@
 # Workflow 07: three-pass topic coding and topic-quality control
 
+## October 2026 release status (24 October 2026)
+
+This document retains historical implementation and validation details below. References labelled **current production state** with dates in early October 2026 are historical snapshots, not the authoritative status of the completed 19 October monthly search update. For the latest release, use the registered stage pointers, their checksums, and `docs/current_run/current_run_status.json` rather than the older counts and run IDs quoted below. The accepted October release concluded with **22,923 included records** after W08; those are final W08 counts, not the earlier W04 retained total. Documentation changes do not modify scientific inputs, execution or provenance.
+
+The current October stage was executed downstream of corrected W04 run **40028381004**. Reconcile this stage's authoritative output/registry against the latest current-run status before reporting stage-specific totals; the older 21,819-record figures below are historical. No inference about newly coded or reused records should be made from the old baseline.
+
 ## Current production state (4 October 2026)
 
 The current authoritative W07 state is source run **37153534771**, published as restricted Zenodo record **23131972** (DOI `10.5281/zenodo.23131972`). It covers **21,819 records** and contains **61,939 raw topic assignments**. There are **385 zero-topic records**, of which **234** are retained as included-but-uncoded and **131** are late automatic exclusions. The W07 state identifies **138 potential human-adjudication records** before W08 applies cross-workflow deterministic suppression and current issue-state reuse.
