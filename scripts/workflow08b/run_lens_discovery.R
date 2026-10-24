@@ -4,9 +4,11 @@
 suppressPackageStartupMessages({library(jsonlite);library(httr2)})
 `%||%`<-function(x,y)if(is.null(x))y else x
 args<-commandArgs(trailingOnly=TRUE)
-if(length(args)<2L||length(args)>3L)stop("Usage: run_lens_discovery.R crosswalk.csv output_dir [max_requests]")
+if(length(args)<2L||length(args)>4L)stop("Usage: run_lens_discovery.R crosswalk.csv output_dir [max_requests] [update_id]")
 input<-args[[1L]];out<-args[[2L]]
 limit<-if(length(args)==3L)as.integer(args[[3L]])else 10L
+update_id<-if(length(args)==4L)as.character(args[[4L]])else ""
+if(nzchar(update_id)&&!grepl("^[A-Za-z0-9._-]+$",update_id))stop("Invalid update_id")
 if(is.na(limit)||limit<1L||limit>100L)stop("max_requests must be 1..100 for isolated development")
 token<-Sys.getenv("LENS_API_TOKEN","")
 if(!nzchar(token))stop("LENS_API_TOKEN absent")
@@ -41,7 +43,8 @@ for(i in seq_len(nrow(s))){
  id<-s$record_id[[i]];lid<-s$lens_id[[i]]
  if(grepl("|",lid,fixed=TRUE))next
  previous<-existing[[id]]
- if(!is.null(previous)&&identical(previous$status,"complete"))next
+ if(!nzchar(update_id)&&!is.null(previous)&&identical(previous$status,"complete"))next
+ if(nzchar(update_id)&&!is.null(previous)&&identical(as.character(previous$update_id %||% "" ),update_id) && identical(previous$status,"complete"))next
  if(selected>=limit)break
  selected<-selected+1L
  payload<-list(query=list(terms=list(lens_id=list(lid))),
@@ -71,10 +74,20 @@ for(i in seq_len(nrow(s))){
  }
  # Persist only complete edges; failed requests are retryable without losing provenance.
  if(status=="complete"){
+   # On monthly checks the API supplies both directions. Forward edges always
+   # refresh; backward edges are only re-emitted if a seed is new, previously
+   # incomplete, or the reported reference count has increased. Historical
+   # edges are never deleted from the append-only journal.
+   prior_bc<-if(is.null(previous)) NA_integer_ else
+     suppressWarnings(as.integer(previous$reference_count %||% NA_integer_))
+   previously_complete<-!is.null(previous)&&identical(previous$status,"complete")
+   recheck_backward<-!previously_complete||is.na(prior_bc)||bc>prior_bc
+   if(nzchar(update_id)&&!recheck_backward)back<-character()
    con<-file(edgefile,"at");writeLines(toJSON(list(seed_record_id=id,provider="lens",
       backward_ids=back,forward_ids=forward),auto_unbox=TRUE),con);close(con)
  }
  x<-list(record_id=id,lens_id=lid,provider="lens",status=status,
+    update_id=if(nzchar(update_id))update_id else NULL,
     reference_count=if(length(bc)==1L)bc else NULL,
     scholarly_citations_count=if(length(fc)==1L)fc else NULL,
     backward_ids=length(back),forward_ids=length(forward),
