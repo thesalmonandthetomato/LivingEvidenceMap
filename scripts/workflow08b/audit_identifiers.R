@@ -45,10 +45,11 @@ repeat {
       dois<-c(dois,norm_doi(m$doi))
     }
     lens<-pick(lens);oa<-pick(oa);doi<-pick(dois)
-    provider<-if(nzchar(lens)) "lens" else if(nzchar(oa)) "openalex" else if(nzchar(doi)) "lens_doi_lookup" else "unresolved"
+    ambiguous <- grepl("|",paste(lens,oa,doi),fixed=TRUE)
+    provider<-if(ambiguous) "identity_conflict" else if(nzchar(lens)) "lens" else if(nzchar(oa)) "openalex" else if(nzchar(doi)) "lens_doi_lookup" else "unresolved"
     i<-i+1L
     rows[[i]]<-data.frame(record_id=id,lens_id=lens,openalex_id=oa,doi=doi,
-                          preferred_route=provider,identifier_conflict=grepl("|",paste(lens,oa,doi),fixed=TRUE),
+                          preferred_route=provider,identifier_conflict=ambiguous,
                           manifestation_count=length(mans),stringsAsFactors=FALSE)
   }
 }
@@ -56,8 +57,8 @@ if(!length(rows)) stop("Empty canonical")
 df<-do.call(rbind,rows)
 if(anyDuplicated(df$record_id)) stop("Duplicate W08 canonical record IDs")
 write.csv(df,file.path(out,"seed_identifier_audit.csv"),row.names=FALSE,quote=TRUE)
-routes<-as.list(table(factor(df$preferred_route,levels=c("lens","openalex","lens_doi_lookup","unresolved"))))
-names(routes)<-c("lens","openalex","lens_doi_lookup","unresolved")
+routes<-as.list(table(factor(df$preferred_route,levels=c("lens","openalex","lens_doi_lookup","unresolved","identity_conflict"))))
+names(routes)<-c("lens","openalex","lens_doi_lookup","unresolved","identity_conflict")
 summary<-list(schema="workflow08b-identifier-audit-v1",records=nrow(df),
               routes=routes,ambiguous_identifiers=sum(df$identifier_conflict),
               has_lens=sum(nzchar(df$lens_id)),has_openalex=sum(nzchar(df$openalex_id)),
