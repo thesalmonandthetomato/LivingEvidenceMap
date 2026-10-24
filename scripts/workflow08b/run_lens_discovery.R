@@ -83,6 +83,7 @@ for(i in seq_len(nrow(s))){
    previously_complete<-!is.null(previous)&&identical(previous$status,"complete")
    recheck_backward<-!previously_complete||is.na(prior_bc)||bc>prior_bc
    if(nzchar(update_id)&&!recheck_backward)back<-character()
+   backward_retrieved_this_update<-recheck_backward
    con<-file(edgefile,"at");writeLines(toJSON(list(seed_record_id=id,provider="lens",
       backward_ids=back,forward_ids=forward),auto_unbox=TRUE),con);close(con)
  }
@@ -90,7 +91,9 @@ for(i in seq_len(nrow(s))){
     update_id=if(nzchar(update_id))update_id else NULL,
     reference_count=if(length(bc)==1L)bc else NULL,
     scholarly_citations_count=if(length(fc)==1L)fc else NULL,
-    backward_ids=length(back),forward_ids=length(forward),
+    backward_ids=if(status=="complete" && nzchar(update_id) && !backward_retrieved_this_update) as.integer(previous$backward_ids %||% 0L) else length(back),
+    backward_refreshed=if(status=="complete" && nzchar(update_id)) backward_retrieved_this_update else (status=="complete"),
+    forward_ids=length(forward),
     last_checked_utc=now(),error=error_text)
  con<-file(ledger,"at");writeLines(toJSON(x,auto_unbox=TRUE,null="null"),con);close(con)
  existing[[id]]<-x
