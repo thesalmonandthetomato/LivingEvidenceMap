@@ -24,7 +24,7 @@ d$doi<-normal(d$doi)
 d<-d[nzchar(d$doi)&!grepl("|",d$doi,fixed=TRUE),,drop=FALSE]
 d<-d[order(d$record_id),,drop=FALSE]
 d<-d[!vapply(d$record_id,function(id){
- z<-previous[[id]];!is.null(z)&&z$status%in%c("resolved","not_found","ambiguous")
+ z<-previous[[id]];!is.null(z)&&z$status%in%c("resolved","ambiguous")
 },logical(1)),,drop=FALSE]
 # Distinct W08 identities sharing a DOI must not block unrelated lookups.
 # Quarantine each collision for identity adjudication, without querying Lens.
@@ -60,6 +60,7 @@ for(ix in chunks){
  if(resp_status(r)!=200L){halt<-paste("Lens HTTP",resp_status(r),substr(resp_body_string(r),1L,500L));break}
  z<-resp_body_json(r,simplifyVector=FALSE)
  rows<-z$data %||% list()
+ if(length(rows)&&requests==1L)message("Lens DOI response fields: ",paste(names(rows[[1L]]),collapse=","),"; returned_records=",length(rows),"; total=",z$total %||% "unknown")
  if(as.integer(z$total %||% length(rows))>length(rows)){halt<-"Incomplete DOI lookup pagination";break}
  bydoi<-list()
  for(item in rows){
@@ -69,6 +70,7 @@ for(ix in chunks){
    bydoi[[doi]]<-c(bydoi[[doi]] %||% character(),as.character(item$lens_id %||% ""))
  }
  if(!is.null(halt))break
+ if(length(rows)>0L && length(bydoi)==0L){halt<-"Lens returned matches but parser found zero DOI fields; fail closed";break}
  for(i in seq_len(nrow(b))){
   ids<-unique(bydoi[[b$doi[[i]]]] %||% character())
   ids<-ids[nzchar(ids)]
