@@ -1,3 +1,4 @@
 Resolve all DOI-only W08b seed IDs by Lens 500-DOI terms queries using verified checkpoint 23626037; archive private progress.
 Retry after quarantining duplicate DOI seed identities rather than aborting all bulk DOI lookups.
 Retry CitationChaser-compatible DOI request payload from checkpoint 23626220, with Lens HTTP response diagnostics.
+Complete remaining DOI resolutions using external_ids parser from checkpoint 23626380.
