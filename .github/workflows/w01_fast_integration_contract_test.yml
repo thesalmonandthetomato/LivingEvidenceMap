@@ -1,0 +1,75 @@
+name: W01-Fast staged integration contract
+on:
+  push:
+    branches: [w01-fast-integration]
+    paths:
+      - 'scripts/updater/experimental_w01_fast/stage_production_canonical_contract.R'
+      - 'scripts/updater/experimental_w01_fast/test_production_canonical_contract.R'
+      - 'scripts/updater/experimental_w01_fast/stage_production_pair_ledger.R'
+      - 'scripts/updater/experimental_w01_fast/test_production_pair_ledger.R'
+      - '.github/workflows/w01_fast_integration_contract_test.yml'
+      - 'scripts/updater/workflow_01_validate_delta_fixture.R'
+      - 'scripts/updater/experimental_w01_fast/audit_prior_pair_indices.R'
+      - 'scripts/updater/experimental_w01_fast/stage_production_pair_ledger.R'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install small R requirements
+        shell: Rscript {0}
+        run: install.packages(c("data.table","jsonlite","digest"))
+      - name: Verify canonical output contract and refusal of inconsistent state
+        shell: bash
+        run: |
+          Rscript scripts/updater/experimental_w01_fast/test_production_canonical_contract.R
+          Rscript scripts/updater/experimental_w01_fast/test_production_pair_ledger.R
+      - name: Validate original production delta builder and replay in isolated fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_validate_delta_fixture.R
+
+  prior-index-forensics:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-integration
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install historic restoration and audit dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','digest','httr2'))
+      - name: Restore only published previous W01 and audit pair-index identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer docs/deduplication/zenodo/run-39140209398.json \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root previous_state
+          Rscript scripts/updater/experimental_w01_fast/audit_prior_pair_indices.R \
+            --previous-root previous_state \
+            --output-dir forensic
+      - name: Upload compact read-only historic index audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-fast-historic-index-audit-${{ github.run_id }}
+          path: forensic/report.json
+          if-no-files-found: warn
+          retention-days: 7
