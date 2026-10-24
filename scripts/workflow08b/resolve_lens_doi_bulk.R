@@ -47,6 +47,17 @@ append<-function(z){
  writeLines(toJSON(z,auto_unbox=TRUE,null="null"),f)
  previous[[as.character(z$record_id)]]<<-z
 }
+extract_dois<-function(item){
+ external<-item$external_ids %||% list()
+ ids<-character()
+ for(z in external){
+  if(!is.list(z))next
+  if(tolower(as.character(z$type %||% ""))!="doi")next
+  value<-as.character(z$value %||% "")
+  if(length(value))ids<-c(ids,normal(value))
+ }
+ unique(ids[nzchar(ids)&!is.na(ids)])
+}
 requests<-0L;halt<-NULL
 for(ix in chunks){
  b<-d[ix,,drop=FALSE]
@@ -64,13 +75,17 @@ for(ix in chunks){
  if(as.integer(z$total %||% length(rows))>length(rows)){halt<-"Incomplete DOI lookup pagination";break}
  bydoi<-list()
  for(item in rows){
-   doi<-normal(item$doi %||% "")
-   if(!nzchar(doi))next
-   if(!doi%in%b$doi){halt<-"Lens DOI response outside submitted set";break}
-   bydoi[[doi]]<-c(bydoi[[doi]] %||% character(),as.character(item$lens_id %||% ""))
+   item_dois<-extract_dois(item)
+   matched<-intersect(item_dois,b$doi)
+   if(!length(matched))next
+   lid<-as.character(item$lens_id %||% "")
+   if(length(lid)!=1L||!nzchar(lid)){halt<-"Lens DOI match missing unique Lens ID";break}
+   for(doi in matched)bydoi[[doi]]<-c(bydoi[[doi]] %||% character(),lid)
  }
  if(!is.null(halt))break
- if(length(rows)>0L && length(bydoi)==0L){halt<-"Lens returned matches but parser found zero DOI fields; fail closed";break}
+ if(length(rows)>0L && length(bydoi)==0L){
+  halt<-"Lens returned records but none had a matching external_ids DOI; fail closed";break
+ }
  for(i in seq_len(nrow(b))){
   ids<-unique(bydoi[[b$doi[[i]]]] %||% character())
   ids<-ids[nzchar(ids)]
