@@ -1,6 +1,6 @@
 {
   "schema": "living-evidence-map-workflow09-input-manifest-v1",
-  "generated_at_utc": "2026-10-23T23:59:25Z",
+  "generated_at_utc": "2026-10-24T00:32:06Z",
   "stages": [
     {
       "stage": "W00",
@@ -44,7 +44,7 @@
     },
     {
       "stage": "W08",
-      "source_run_id": "39166740853",
+      "source_run_id": "40028381004",
       "file": "w08_summary.json"
     }
   ],
@@ -111,23 +111,23 @@
     },
     {
       "file": "w08_source_intersections.csv",
-      "bytes": 20885,
-      "sha256": "424602cf5bc448ae2545ac14424a97d32c7b31a402634493375f85c281de541a"
+      "bytes": 20918,
+      "sha256": "661c223b0918e9a9825de78d62b448d71d9c7504e6a04d7a736d370120fb15dc"
     },
     {
       "file": "w08_source_manifest.json",
       "bytes": 796,
-      "sha256": "d80596ffc8efead5c5de641b23f24599662d8675cf6782cc58a20e2f889f1f3c"
+      "sha256": "6b9dfa17f26f3d827e8989cf2575cc278033658cb41fc03c0102a80a85bf1126"
     },
     {
       "file": "w08_source_summary.csv",
       "bytes": 1112,
-      "sha256": "09dbc9467e959d0d2754d5bb1c02fc9303dc3d73f8bcd0ae0c90d5e49697353f"
+      "sha256": "135020adfdc250d1cb61b9f8da380df059522035e193ebcb3f6d4887096c7fe3"
     },
     {
       "file": "w08_summary.json",
       "bytes": 833,
-      "sha256": "8ed4c06cdd03ee34de0d6cdcaab450932441194a748baae7c743c4442b5f8a87"
+      "sha256": "c25db6dd73440599df8ff4b7bcf2fbb35fb996e631f3250ec5142eaf4ae0778b"
     }
   ]
 }
