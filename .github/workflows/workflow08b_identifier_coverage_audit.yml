@@ -1,0 +1,56 @@
+name: W08b isolated W08 identifier coverage audit
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - 'docs/workflow08b/.run_identifier_audit'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install isolated dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2'))
+      - name: Parse audit scripts
+        shell: Rscript {0}
+        run: |
+          parse(file='scripts/workflow08b/audit_identifiers.R')
+          parse(file='scripts/updater/workflow_10_restore_canonical_from_zenodo.R')
+      - name: Restore authoritative W08 canonical and verify checksum
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ZENODO_ACCESS_TOKEN"
+          mkdir -p "$RUNNER_TEMP/w08b"
+          Rscript scripts/updater/workflow_10_restore_canonical_from_zenodo.R \
+            --pointer docs/workflow08/zenodo/run-40028381004.json \
+            --output "$RUNNER_TEMP/w08b/canonical.jsonl"
+      - name: Read-only identity audit, private outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/audit_identifiers.R \
+            "$RUNNER_TEMP/w08b/canonical.jsonl" "$RUNNER_TEMP/w08b/audit"
+          Rscript -e 'x<-jsonlite::fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"w08b/audit/summary.json"));stopifnot(x$records==22923L);cat(jsonlite::toJSON(x,auto_unbox=TRUE,pretty=TRUE),"\\n")'
+      - name: Report aggregate coverage only
+        shell: bash
+        run: |
+          echo '### W08b identifier coverage' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Authoritative October W08: 22,923 included records, checksum verified.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Full record-level identifier CSV remains runner-local and is not uploaded or committed.' >> "$GITHUB_STEP_SUMMARY"
+          echo '\`\`\`json' >> "$GITHUB_STEP_SUMMARY"
+          cat "$RUNNER_TEMP/w08b/audit/summary.json" >> "$GITHUB_STEP_SUMMARY"
+          echo '\`\`\`' >> "$GITHUB_STEP_SUMMARY"
