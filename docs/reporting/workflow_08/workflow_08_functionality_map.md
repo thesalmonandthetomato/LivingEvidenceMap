@@ -1,5 +1,11 @@
 # Workflow 08: Human adjudication and final canonical assembly
 
+## October 2026 release status (24 October 2026)
+
+This document retains historical implementation and validation details below. References labelled **current production state** with dates in early October 2026 are historical snapshots, not the authoritative status of the completed 19 October monthly search update. For the latest release, use the registered stage pointers, their checksums, and `docs/current_run/current_run_status.json` rather than the older counts and run IDs quoted below. The accepted October release concluded with **22,923 included records** after W08; those are final W08 counts, not the earlier W04 retained total. Documentation changes do not modify scientific inputs, execution or provenance.
+
+The October W08 authoritative pointer is `docs/workflow08/zenodo/run-40028381004.json`, and the verified final canonical contains **22,923 included** and **27,644 excluded** records. Downstream reporting must validate the pointer and canonical checksum and preserve human adjudication overlays.
+
 ## Purpose
 
 Workflow 08 is the final decision and assembly stage before reporting. It combines the validated automated states from Workflows 03-07, applies deterministic final-routing rules, reuses compatible prior adjudications, sends only genuinely unresolved current issues to human review, and produces the definitive included-only canonical evidence base plus a separate exclusions register.
