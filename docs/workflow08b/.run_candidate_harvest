@@ -1,2 +1,3 @@
 Retrieve Lens bibliographies for all cited/citing candidate IDs from complete seed checkpoint 23627320; archive restricted state; do not hand off to W01.
 Retry after correcting R parse error, checkpoint 23627366.
+Resume candidate retrieval after enforced R parse preflight, checkpoint 23627417.
