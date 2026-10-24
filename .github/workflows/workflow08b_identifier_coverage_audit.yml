@@ -27,6 +27,7 @@ jobs:
         run: |
           parse(file='scripts/workflow08b/crosswalk_identifiers.R')
           parse(file='scripts/workflow08b/select_api_trial.R')
+          parse(file='scripts/workflow08b/lens_relationship_smoke.R')
           parse(file='scripts/updater/workflow_10_restore_canonical_from_zenodo.R')
       - name: Restore authoritative W08 canonical and verify checksum
         env:
@@ -67,6 +68,17 @@ jobs:
             "$RUNNER_TEMP/w08b/audit/seed_identifier_crosswalk.csv" \
             "$RUNNER_TEMP/w08b/trial"
           Rscript -e 'z<-jsonlite::fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"w08b/trial/trial_summary.json"));stopifnot(z$total<=12L,!z$provider_queries_authorised)'
+      - name: Lens one-seed citation-field smoke request
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$LENS_API_TOKEN"
+          Rscript scripts/workflow08b/lens_relationship_smoke.R \
+            "$RUNNER_TEMP/w08b/trial/private_trial_seeds.csv" \
+            "$RUNNER_TEMP/w08b/trial/lens_smoke_summary.json"
+          cat "$RUNNER_TEMP/w08b/trial/lens_smoke_summary.json"
       - name: Report aggregate coverage only
         shell: bash
         run: |
