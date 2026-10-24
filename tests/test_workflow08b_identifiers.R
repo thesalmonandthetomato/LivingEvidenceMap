@@ -14,7 +14,8 @@ x<-list(
   record("c",list(manifestation("scopus","s-1")),"https://doi.org/10.1234/C"),
   record("d",list(manifestation("wos","w-1"))),
   record("e",list(manifestation("lens","l-1",list(lens_id="l-1")),
-                   manifestation("lens","l-2",list(lens_id="l-2"))))
+                   manifestation("lens","l-2",list(lens_id="l-2")))),
+  record("f",list(), "10.1234/f")
 )
 input<-file.path(tmp,"input.jsonl");out<-file.path(tmp,"output")
 writeLines(vapply(x,function(v)jsonlite::toJSON(v,auto_unbox=TRUE,null="null"),character(1)),input)
@@ -22,9 +23,10 @@ status<-system2(file.path(R.home("bin"),"Rscript"),
   c("scripts/workflow08b/audit_identifiers.R",shQuote(input),shQuote(out)))
 stopifnot(status==0L)
 d<-read.csv(file.path(out,"seed_identifier_audit.csv"),stringsAsFactors=FALSE)
-stopifnot(nrow(d)==5L,!anyDuplicated(d$record_id))
+stopifnot(nrow(d)==6L,!anyDuplicated(d$record_id))
 r<-setNames(d$preferred_route,d$record_id)
 stopifnot(r[["a"]]=="lens",r[["b"]]=="openalex",r[["c"]]=="lens_doi_lookup",
-          r[["d"]]=="unresolved",r[["e"]]=="identity_conflict")
+          r[["d"]]=="unresolved",r[["e"]]=="identity_conflict",
+          r[["f"]]=="manifestations_missing")
 stopifnot(d$openalex_id[d$record_id=="a"]=="W123")
 cat("PASS: W08b identifier routes and ambiguity quarantine\n")
