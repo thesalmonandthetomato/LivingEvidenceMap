@@ -1,2 +1,3 @@
 Test OpenAlex fallback on five eligible seeds from checkpoint 23626701, archive all state.
 Process next 100 eligible OpenAlex fallback seeds from restricted checkpoint 23626743 and archive edge/state diagnostics.
+Resume 100 OpenAlex fallback seeds from 23626881; mark missing works not_found and continue.
