@@ -22,3 +22,4 @@ W09 retry after final-canonical annotation reconciliation; 2026-10-19.
 W09 recovery after removing historical W08 run-ID pin; 2026-10-24.
 W09 retry after correcting W01 delta pointer github_run_id field; 2026-10-24.
 Regenerate W09 flow diagram with compact EBSCO display labels; 2026-10-24.
+Regenerate using corrected visualisations/07_flow_diagram.R source renderer; 2026-10-24.
