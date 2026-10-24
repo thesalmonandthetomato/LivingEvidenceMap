@@ -34,7 +34,7 @@ todo<-vapply(seq_len(nrow(d)),function(i){
 },logical(1))
 d<-d[todo,,drop=FALSE]
 if(anyDuplicated(d$lens_id))stop("Multiple seed identities share Lens ID; resolve before bulk discovery")
-chunks<-split(seq_len(nrow(d)),ceiling(seq_len(nrow(d))/500L))
+chunks<-split(seq_len(nrow(d)),ceiling(seq_len(nrow(d))/400L))
 if(length(chunks)>max_batches)chunks<-chunks[seq_len(max_batches)]
 get_ids<-function(x){
  if(is.null(x))return(character())
@@ -57,7 +57,7 @@ for(indices in chunks){
  ids<-as.character(batch$lens_id)
  # citationchaser models this as query.terms.lens_id = array of IDs;
  # including six relationship fields, not full candidate bibliographies.
- payload<-list(query=list(terms=list(lens_id=as.list(ids))),size=1000L,
+ payload<-list(query=list(terms=list(lens_id=as.list(ids))),size=500L,
   include=c("lens_id","references","references_count","references_resolved_count",
             "scholarly_citations","scholarly_citations_count"))
  resp<-tryCatch(request("https://api.lens.org/scholarly/search") |>
@@ -68,7 +68,7 @@ for(indices in chunks){
  if(inherits(resp,"error")){halt<-paste0("transport_error: ",conditionMessage(resp));break}
  code<-resp_status(resp)
  if(code!=200L){
-  failures<-c(failures,code);halt<-paste0("Lens HTTP ",code)
+  failures<-c(failures,code);halt<-paste0("Lens HTTP ",code,"; response=",substr(resp_body_string(resp),1L,500L))
   # A batch HTTP failure must not be misattributed to 500 individual seeds.
   break
  }
