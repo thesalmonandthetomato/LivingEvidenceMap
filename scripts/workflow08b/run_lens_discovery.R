@@ -60,7 +60,10 @@ for(i in seq_len(nrow(s))){
   body<-resp_body_json(response,simplifyVector=FALSE)
   if(length(body$data)==1L&&identical(as.character(body$data[[1L]]$lens_id),lid)){
     rec<-body$data[[1L]];back<-get_ids(rec$references);forward<-get_ids(rec$scholarly_citations)
-    bc<-as.integer(rec$references_count);fc<-as.integer(rec$scholarly_citations_count)
+    # Lens may omit a count for a direction with no returned relationships.
+    # Only infer zero when both the count and corresponding list are absent.
+    bc<-if(is.null(rec$references_count) && is.null(rec$references)) 0L else as.integer(rec$references_count)
+    fc<-if(is.null(rec$scholarly_citations_count) && is.null(rec$scholarly_citations)) 0L else as.integer(rec$scholarly_citations_count)
     if(length(bc)==1L&&length(fc)==1L&&!is.na(bc)&&!is.na(fc)&&
        length(back)>=bc&&length(forward)>=fc)status<-"complete"
     else error_text<-"Citation ID counts do not match Lens totals; no completion claimed"
