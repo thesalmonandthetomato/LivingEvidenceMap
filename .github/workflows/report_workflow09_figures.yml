@@ -325,6 +325,7 @@ jobs:
 
       - name: Render manuscript figures from authoritative pipeline data
         env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           CANONICAL_JSONL: ${{ github.workspace }}/workflow08_reporting_state/living_evidence_map_canonical_final.jsonl
           W09_INPUT_DIR: ${{ github.workspace }}/docs/reporting/workflow_09_inputs/current
         shell: bash
