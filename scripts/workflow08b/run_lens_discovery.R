@@ -6,7 +6,7 @@ suppressPackageStartupMessages({library(jsonlite);library(httr2)})
 args<-commandArgs(trailingOnly=TRUE)
 if(length(args)<2L||length(args)>4L)stop("Usage: run_lens_discovery.R crosswalk.csv output_dir [max_requests] [update_id]")
 input<-args[[1L]];out<-args[[2L]]
-limit<-if(length(args)==3L)as.integer(args[[3L]])else 10L
+limit<-if(length(args)>=3L)as.integer(args[[3L]])else 10L
 update_id<-if(length(args)==4L)as.character(args[[4L]])else ""
 if(nzchar(update_id)&&!grepl("^[A-Za-z0-9._-]+$",update_id))stop("Invalid update_id")
 if(is.na(limit)||limit<1L||limit>100L)stop("max_requests must be 1..100 for isolated development")
@@ -28,6 +28,10 @@ if(file.exists(ledger)){
 s<-d[d$preferred_route=="lens" & !d$identifier_conflict & nzchar(d$lens_id),,drop=FALSE]
 s<-s[order(s$record_id),,drop=FALSE]
 selected<-0L
+halt_reason<-NULL
+http_codes<-integer()
+# A 429/402/403 response can reflect quota or authorisation rather than an
+# individual seed problem. Stop immediately, retaining already recovered state.
 now<-function()format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
 get_ids<-function(xs){
  if(is.null(xs))return(character())
@@ -58,7 +62,14 @@ for(i in seq_len(nrow(s))){
  status<-"incomplete";back<-character();forward<-character();bc<-NA_integer_;fc<-NA_integer_
  error_text<-NULL
  if(inherits(response,"error"))error_text<-conditionMessage(response)
- else if(resp_status(response)!=200L)error_text<-paste0("Lens HTTP ",resp_status(response))
+ else if(resp_status(response)!=200L){
+   code<-as.integer(resp_status(response))
+   http_codes<-c(http_codes,code)
+   error_text<-paste0("Lens HTTP ",code)
+   if(code%in%c(402L,403L,429L)){
+     halt_reason<-paste0("provider_hard_stop_http_",code)
+   }
+ }
  else{
   body<-resp_body_json(response,simplifyVector=FALSE)
   if(length(body$data)==1L&&identical(as.character(body$data[[1L]]$lens_id),lid)){
@@ -97,6 +108,7 @@ for(i in seq_len(nrow(s))){
     last_checked_utc=now(),error=error_text)
  con<-file(ledger,"at");writeLines(toJSON(x,auto_unbox=TRUE,null="null"),con);close(con)
  existing[[id]]<-x
+ if(!is.null(halt_reason))break
 }
 # Reconcile append-only edge journal by writing an explicitly labelled merged view.
 if(file.exists(edgefile)&&file.info(edgefile)$size>0){
@@ -105,6 +117,8 @@ if(file.exists(edgefile)&&file.info(edgefile)$size>0){
  if(code!=0L)stop("Citation edge merging failed")
 }
 summary<-list(schema="workflow08b-lens-discovery-dev-v1",requests_this_execution=selected,
+ halted_early=!is.null(halt_reason),halt_reason=halt_reason,
+ http_status_counts=as.list(table(http_codes)),
  complete_seeds=sum(vapply(existing,function(x)identical(x$status,"complete"),logical(1))),
  incomplete_seeds=sum(vapply(existing,function(x)!identical(x$status,"complete"),logical(1))),
  restricted_to_lens_id_seeds=TRUE,openalex_not_queried=TRUE,
