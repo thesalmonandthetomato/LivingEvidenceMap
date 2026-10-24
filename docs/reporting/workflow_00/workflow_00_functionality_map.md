@@ -1,5 +1,11 @@
 # Workflow 00: Search orchestration, provenance and archival
 
+## October 2026 release status (24 October 2026)
+
+This document retains historical implementation and validation details below. References labelled **current production state** with dates in early October 2026 are historical snapshots, not the authoritative status of the completed 19 October monthly search update. For the latest release, use the registered stage pointers, their checksums, and `docs/current_run/current_run_status.json` rather than the older counts and run IDs quoted below. The accepted October release concluded with **22,923 included records** after W08; those are final W08 counts, not the earlier W04 retained total. Documentation changes do not modify scientific inputs, execution or provenance.
+
+W00's October monthly search completed on **19 October 2026**; CAB Abstracts and ProQuest/PQD&T enter through the separately registered manual RIS pathway. Its orchestration and monthly scheduling are separate from the W01 deduplication update machinery.
+
 ## Current production state (4 October 2026)
 
 The accepted API baseline state remains the checksum-locked five-source state for Lens, Scopus, OpenAlex, AGRICOLA and Web of Science searched on 23 September 2026. The current pipeline update additionally incorporated two independently archived manual RIS searches: CAB Abstracts (26,816 records; searched 30 September 2026) and ProQuest Dissertations & Theses Global (1,574 unique records; searched 30 September 2026). These manual sources have completed W00 ingestion and have progressed through W01-W08 in the current release.
