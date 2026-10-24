@@ -3,6 +3,7 @@
 # All W01 canonical records are scanned, NOT only W08 included records.
 # Usage: Rscript scripts/workflow08b/filter_existing_w01.R <w01/canonical/records.jsonl> <provider_candidate_ids.csv> <output-dir>
 suppressPackageStartupMessages(library(jsonlite))
+`%||%`<-function(x,y)if(is.null(x))y else x
 a<-commandArgs(trailingOnly=TRUE)
 if(length(a)!=3L)stop("Usage: filter_existing_w01.R w01.jsonl provider_candidate_ids.csv output-dir")
 if(!file.exists(a[[1]])||!file.exists(a[[2]]))stop("Missing verified W01 state or candidate register")
@@ -51,7 +52,6 @@ repeat{
   }
  }
 }
-`%||%`<-function(x,y)if(is.null(x))y else x
 get_owner<-function(env,key)if(nzchar(key)&&exists(key,envir=env,inherits=FALSE))get(key,envir=env,inherits=FALSE)else ""
 candidates$existing_w01_record_id<-vapply(seq_len(nrow(candidates)),function(i){
  p<-candidates$provider[[i]];k<-candidates$related_provider_id[[i]]
