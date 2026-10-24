@@ -175,13 +175,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W01 --run-id 39140209398 --pointer "$W01_POINTER"
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W01 --run-id "$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("W01_POINTER"));cat(x$source_github_run_id)')" --pointer "$W01_POINTER"
           Rscript scripts/reporting/refresh_workflow09_input_manifest.R
           Rscript -e '
             library(jsonlite)
             s <- fromJSON("docs/current_run/current_run_status.json",simplifyVector=FALSE)
             w <- fromJSON(Sys.getenv("W08_POINTER"),simplifyVector=FALSE)
-            if (!identical(as.character(w$source_github_run_id),"39166740853")) stop("Unexpected W08 authoritative pointer")
+            if (!identical(as.character(w$status),"published") || !nzchar(as.character(w$source_github_run_id)) || !identical(normalizePath(Sys.getenv("W08_POINTER"), mustWork=TRUE), normalizePath(sprintf("docs/workflow08/zenodo/run-%s.json", w$source_github_run_id), mustWork=TRUE))) stop("W08 authoritative pointer identity/status mismatch")
             s$workflow_runs$W08 <- as.character(w$source_github_run_id)
             writeLines(toJSON(s,auto_unbox=TRUE,pretty=TRUE,null="null"),"docs/current_run/current_run_status.json")
           '
