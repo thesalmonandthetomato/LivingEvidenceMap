@@ -28,7 +28,7 @@ rows<-lapply(seq_len(nrow(p)),function(i){
  m<-meta[[id]]
  known<-!is.na(z$existing_w01_record_id[[1]]) && nzchar(z$existing_w01_record_id[[1]])
  doi<-if(is.null(m))"" else normdoi(m$doi)
- filter_status<-lookup[[id]] %||% "metadata_unavailable"
+ filter_status<-if(id %in% names(lookup)) as.character(lookup[[id]]) else "metadata_unavailable"
  state<-if(known)"already_in_w01_provider_id" else
   if(is.null(m))"metadata_unavailable" else
   if(!nzchar(doi))"doi_missing_require_further_identity_check" else
