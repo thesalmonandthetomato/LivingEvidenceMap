@@ -9,3 +9,4 @@ Validate candidate metadata retrieval/reconciliation and DOI quarantines.
 Validate historical DOI crosscheck including previously excluded W01 works.
 Retry historical DOI regression after identity and NA-safe indexing repair.
 Validate integrated offline post-processing execution and W01 safety gate.
+Retry integrated regression after missing-strategy-key reconciliation fix.
