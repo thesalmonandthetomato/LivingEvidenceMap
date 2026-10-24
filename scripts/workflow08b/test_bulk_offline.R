@@ -8,6 +8,8 @@ parse(file="scripts/workflow08b/resolve_lens_doi_bulk.R")
 parse(file="scripts/workflow08b/apply_lens_doi_resolution.R")
 parse(file="scripts/workflow08b/filter_original_strategy.R")
 parse(file="scripts/workflow08b/run_openalex_fallback.R")
+parse(file="scripts/workflow08b/retrieve_lens_candidates_bulk.R")
+parse(file="scripts/workflow08b/reconcile_lens_candidates.R")
 root<-tempfile("w08b-regression-");dir.create(root)
 one<-list(identity=list(record_id="work-one"),canonical=list(doi="10.1000/one"),
  manifestations=list(list(source="lens",source_record_id="111-111-111-111-111",
@@ -48,3 +50,24 @@ stopifnot(exit==0L)
 v<-read.csv(filtered,stringsAsFactors=FALSE)
 stopifnot(identical(v$status,c("original_strategy_match","not_matched","metadata_incomplete")))
 cat("PASS: bulk DOI parser and original search-strategy filter regression\\n")
+
+# Cross-field integration check: known W01, original-search and missing DOI.
+pre<-file.path(root,"precheck.csv")
+write.csv(data.frame(provider=rep("lens",3),
+ related_provider_id=c("111","222","333"),
+ existing_w01_record_id=c("work-old","","")),pre,row.names=FALSE)
+metadata2<-file.path(root,"metadata2.jsonl")
+writeLines(c(
+ jsonlite::toJSON(list(candidate_key="lens:111",doi="10.1/old"),auto_unbox=TRUE),
+ jsonlite::toJSON(list(candidate_key="lens:222",doi="10.1/new"),auto_unbox=TRUE),
+ jsonlite::toJSON(list(candidate_key="lens:333",title="Not indexed"),auto_unbox=TRUE)),metadata2)
+screen<-file.path(root,"screen.csv")
+write.csv(data.frame(candidate_key=c("lens:111","lens:222","lens:333"),
+ status=c("original_strategy_match","not_matched","metadata_incomplete")),screen,row.names=FALSE)
+out2<-file.path(root,"reconciled")
+stopifnot(system2("Rscript",c("scripts/workflow08b/reconcile_lens_candidates.R",
+ shQuote(pre),shQuote(metadata2),shQuote(screen),shQuote(out2)))==0L)
+resolved<-read.csv(file.path(out2,"reconciliation.csv"),stringsAsFactors=FALSE)
+stopifnot(identical(resolved$reconciliation_status,c(
+ "already_in_w01_provider_id","pending_doi_crosscheck","doi_missing_require_further_identity_check")))
+cat("PASS: metadata retrieval parser and candidate reconciliation quarantine\n")
