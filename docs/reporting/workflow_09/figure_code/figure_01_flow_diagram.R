@@ -186,7 +186,13 @@ source_layout <- source_meta |>
     column = ((item - 1L) %/% n_source_rows) + 1L,
     row = ((item - 1L) %% n_source_rows) + 1L,
     col_left = source_panel_left + 0.17 + (column - 1L) * source_col_width,
-    database_label = stringr::str_wrap(sub("^Ebsco[[:space:]]+", "", database), width = source_name_wrap),
+    database_display = dplyr::case_when(
+      database == "Ebsco Biological Agricultural Index" ~ "Biol. Agr. Index",
+      database == "Ebsco Political Science" ~ "Polit. Sci.",
+      database == "ProQuest/PQD&T" ~ "ProQuestD&T",
+      TRUE ~ sub("^Ebsco[[:space:]]+", "", database)
+    ),
+    database_label = stringr::str_wrap(database_display, width = source_name_wrap),
     name_x = col_left,
     hits_x = col_left + source_col_width * source_hits_x_share,
     date_x = col_left + source_col_width * source_date_x_share,
