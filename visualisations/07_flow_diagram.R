@@ -6,7 +6,7 @@
 # handoff under docs/reporting/workflow_09_inputs/current. W09 therefore does
 # not reconstruct W01 or restore W02 merely to draw the flow diagram.
 
-required <- c("dplyr", "ggplot2", "readr", "stringr", "here", "jsonlite")
+required <- c("dplyr", "ggplot2", "readr", "stringr", "here", "jsonlite", "httr2")
 missing <- required[!vapply(required, requireNamespace, logical(1), quietly = TRUE)]
 if (length(missing) > 0) stop("Install required packages: ", paste(missing, collapse = ", "))
 
@@ -16,6 +16,7 @@ library(readr)
 library(stringr)
 library(here)
 library(jsonlite)
+`%||%` <- function(x, y) if (is.null(x) || !length(x)) y else x
 
 out_dir <- here::here("visualisations")
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
@@ -70,6 +71,45 @@ source_meta <- read_csv(source_path, show_col_types = FALSE, progress = FALSE) |
 if (!nrow(source_meta) || any(!nzchar(source_meta$code)) || anyDuplicated(source_meta$code)) {
   stop("Invalid W01 source summary", call. = FALSE)
 }
+
+# Report latest completed searches while keeping cumulative W01 hit counts unchanged.
+# For manual sources, use the publication_date from the registered Zenodo record.
+status <- fromJSON("docs/current_run/current_run_status.json", simplifyVector = FALSE)
+latest_date <- as.character(status$search$search_date %||% "")
+latest_codes <- names(status$search$sources %||% list())
+if (!identical(as.character(status$progress$W00$status), "complete") ||
+    !grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", latest_date) ||
+    is.na(as.Date(latest_date))) stop("Incomplete W00 latest-search provenance", call. = FALSE)
+manual <- fromJSON("user_input/monthly_manual_ris.json", simplifyVector = FALSE)$sources
+if (!length(manual)) stop("Missing monthly manual Zenodo source registry", call. = FALSE)
+zenodo_date <- function(doi, code) {
+  id <- sub("^10[.]5281/zenodo[.]", "", as.character(doi))
+  if (!grepl("^[0-9]+$", id)) stop("Invalid Zenodo DOI for ", code, call. = FALSE)
+  req <- httr2::request(paste0("https://zenodo.org/api/records/", id)) |>
+    httr2::req_timeout(60)
+  token <- Sys.getenv("ZENODO_ACCESS_TOKEN", "")
+  if (nzchar(token)) req <- httr2::req_headers(req, Authorization = paste("Bearer", token))
+  z <- httr2::resp_body_json(httr2::req_perform(req), simplifyVector = FALSE)
+  actual_doi <- as.character(z$pids$doi$identifier %||% z$doi %||% "")
+  if (!identical(tolower(actual_doi), tolower(as.character(doi))))
+    stop("Zenodo DOI mismatch for ", code, call. = FALSE)
+  date <- as.character(z$metadata$publication_date %||% z$metadata$publicationdate %||% "")
+  if (!grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", date) || is.na(as.Date(date)))
+    stop("Invalid Zenodo publication date for ", code, call. = FALSE)
+  date
+}
+manual_dates <- vapply(names(manual), function(code) {
+  zenodo_date(manual[[code]]$zenodo_doi, code)
+}, character(1))
+missing_codes <- setdiff(source_meta$code, union(latest_codes, names(manual_dates)))
+if (length(missing_codes)) stop("Unregistered W09 source: ",
+                                 paste(missing_codes, collapse = ", "), call. = FALSE)
+source_meta$search_date <- vapply(source_meta$code, function(code) {
+  if (code %in% names(manual_dates)) manual_dates[[code]] else latest_date
+}, character(1))
+source_meta$search_date_display <- format(as.Date(source_meta$search_date), "%d-%m-%Y")
+cat("PASS: manual Zenodo publication dates: ",
+    paste(names(manual_dates), manual_dates, collapse = "; "), "\n")
 
 n_combined <- metric(w01, "source_manifestations")
 n_deduplicated <- metric(w01, "canonical_records")
