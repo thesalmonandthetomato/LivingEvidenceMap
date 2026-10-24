@@ -23,4 +23,4 @@ jobs:
       - name: Read archived errors without Lens API requests
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-        run: Rscript scripts/workflow08b/diagnose_checkpoint.R
+        run: Rscript scripts/workflow08b/diagnose_checkpoint.R 23624392
