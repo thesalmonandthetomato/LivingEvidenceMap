@@ -101,6 +101,8 @@ for(indices in chunks){
       backward_ids=if(refresh_back)back else character(),forward_ids=forward))
    completed<-completed+1L
   }
+  # Never replace an accepted complete status with an incomplete retry.
+  if(!identical(status,"complete")&&!is.null(old)&&identical(old$status,"complete"))next
   record_status(list(record_id=id,lens_id=lid,provider="lens",status=status,
    update_id=if(nzchar(update))update else NULL,
    reference_count=if(length(bc)==1L)bc else NULL,
