@@ -175,7 +175,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W01 --run-id "$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("W01_POINTER"));cat(x$source_github_run_id)')" --pointer "$W01_POINTER"
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W01 --run-id "$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("W01_POINTER"));id<-x$github_run_id;if(is.null(id)||!nzchar(as.character(id)))stop("W01 github_run_id missing from pointer");cat(id)')" --pointer "$W01_POINTER"
           Rscript scripts/reporting/refresh_workflow09_input_manifest.R
           Rscript -e '
             library(jsonlite)
