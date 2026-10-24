@@ -18,7 +18,7 @@ sentinel<-"033-262-857-738-715"
 payload<-list(query=list(bool=list(
  must=list(list(terms=list(lens_id=list(sentinel)))),
  must_not=list(list(query_string=list(query=topic)))
-)),include=c("lens_id"),size=1L)
+)),include=c("lens_id","title"),size=1L)
 response<-request("https://api.lens.org/scholarly/search") |>
  req_headers(Authorization=paste("Bearer",token),Accept="application/json",`Content-Type`="application/json") |>
  req_body_json(payload,auto_unbox=TRUE) |> req_timeout(90) |>
