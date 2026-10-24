@@ -11,6 +11,7 @@ parse(file="scripts/workflow08b/run_openalex_fallback.R")
 parse(file="scripts/workflow08b/retrieve_lens_candidates_bulk.R")
 parse(file="scripts/workflow08b/reconcile_lens_candidates.R")
 parse(file="scripts/workflow08b/index_w01_dois.R")
+parse(file="scripts/workflow08b/postprocess_candidates.R")
 root<-tempfile("w08b-regression-");dir.create(root)
 one<-list(identity=list(record_id="work-one"),canonical=list(doi="10.1000/one"),
  manifestations=list(list(source="lens",source_record_id="111-111-111-111-111",
@@ -92,3 +93,12 @@ stopifnot(system2("Rscript",c("scripts/workflow08b/reconcile_lens_candidates.R",
 verified<-read.csv(file.path(out3,"reconciliation.csv"),stringsAsFactors=FALSE)
 stopifnot(verified$reconciliation_status[[1]]=="already_in_w01_doi")
 cat("PASS: excluded W01 record resolved through historical DOI identity\n")
+
+# Exercise the complete offline postprocessing sequence in one call.
+post<-file.path(root,"postprocessing")
+stopifnot(system2("Rscript",c("scripts/workflow08b/postprocess_candidates.R",
+ shQuote(w01),shQuote(csv),shQuote(metadata),shQuote("user_input/workflow00_search_strategy.json"),
+ shQuote(post)))==0L)
+summary<-jsonlite::fromJSON(file.path(post,"postprocess_summary.json"))
+stopifnot(summary$input_provider_candidates==3L,!summary$automatic_W01_handoff)
+cat("PASS: integrated offline W08b postprocessing and W01 safety gate\n")
