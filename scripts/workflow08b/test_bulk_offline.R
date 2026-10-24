@@ -10,6 +10,7 @@ parse(file="scripts/workflow08b/filter_original_strategy.R")
 parse(file="scripts/workflow08b/run_openalex_fallback.R")
 parse(file="scripts/workflow08b/retrieve_lens_candidates_bulk.R")
 parse(file="scripts/workflow08b/reconcile_lens_candidates.R")
+parse(file="scripts/workflow08b/index_w01_dois.R")
 root<-tempfile("w08b-regression-");dir.create(root)
 one<-list(identity=list(record_id="work-one"),canonical=list(doi="10.1000/one"),
  manifestations=list(list(source="lens",source_record_id="111-111-111-111-111",
@@ -71,3 +72,23 @@ resolved<-read.csv(file.path(out2,"reconciliation.csv"),stringsAsFactors=FALSE)
 stopifnot(identical(resolved$reconciliation_status,c(
  "already_in_w01_provider_id","pending_doi_crosscheck","doi_missing_require_further_identity_check")))
 cat("PASS: metadata retrieval parser and candidate reconciliation quarantine\n")
+
+# Historical DOI index matches excluded studies and new DOI identities.
+idx<-file.path(root,"doi_index")
+stopifnot(system2("Rscript",c("scripts/workflow08b/index_w01_dois.R",
+ shQuote(w01),shQuote(idx)))==0L)
+hi<-read.csv(file.path(idx,"historical_doi_index.csv"),stringsAsFactors=FALSE)
+stopifnot(any(hi$doi=="10.1000/two" & hi$w01_record_ids=="work-excluded"))
+meta3<-file.path(root,"metadata3.jsonl")
+writeLines(jsonlite::toJSON(list(candidate_key="lens:222",doi="10.1000/two"),auto_unbox=TRUE),meta3)
+pre3<-file.path(root,"pre3.csv")
+write.csv(data.frame(provider="lens",related_provider_id="222",existing_w01_record_id=""),pre3,row.names=FALSE)
+scr3<-file.path(root,"scr3.csv")
+write.csv(data.frame(candidate_key="lens:222",status="not_matched"),scr3,row.names=FALSE)
+out3<-file.path(root,"out3")
+stopifnot(system2("Rscript",c("scripts/workflow08b/reconcile_lens_candidates.R",
+ shQuote(pre3),shQuote(meta3),shQuote(scr3),shQuote(out3),
+ shQuote(file.path(idx,"historical_doi_index.csv"))))==0L)
+verified<-read.csv(file.path(out3,"reconciliation.csv"),stringsAsFactors=FALSE)
+stopifnot(verified$reconciliation_status[[1]]=="already_in_w01_doi")
+cat("PASS: excluded W01 record resolved through historical DOI identity\n")
