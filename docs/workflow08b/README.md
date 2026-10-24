@@ -102,3 +102,9 @@ Rscript scripts/workflow08b/run_lens_discovery.R /private/seed_identifier_crossw
 - `merge_edges.R` now accepts an empty but valid edge journal as an explicit zero-citation result.
 
 **Not yet production-ready:** authoritative prior-month Zenodo pointer registry, monthly forward-edge delta reconciliation, DOI Lens lookup, OpenAlex fallback, licensed NOT-filtered candidate retrieval, cross-provider and W01 identity resolution, one-generation W01-Fast handoff, and Shiny/W09 publication integration. No production W00–W10 execution behaviour has been changed for W08b.
+
+## Bulk Lens retrieval correction
+
+The original per-seed runner was inefficient. As directed, the replacement `scripts/workflow08b/run_lens_bulk.R` follows `nealhaddaway/citationchaser`'s `R/get_refs.R` pattern: one `query.terms.lens_id` array containing **up to 500 distinct seed IDs**, with `size=500` and an explicit list of relationship fields. Returned works are mapped individually to seed record IDs, checked against relationship counts, and checkpointed at seed/edge level. HTTP errors are treated at **batch level**, not attributed to all 500 seeds. Incomplete/paginated responses fail closed, and previous finished seeds are not re-queried during the baseline. The old one-ID runner is retained only for compatibility, not intended for the full baseline.
+
+The bulk runner has been **committed but not yet executed**. It still needs full-corpus orchestration, a private persistent crosswalk and completion of DOI/OpenAlex fallback, candidate filtering, cross-provider identity reconciliation and W01 handoff. The earlier ten-seed and 100-seed checkpoints are still preserved; the latest is Zenodo 23624392.
