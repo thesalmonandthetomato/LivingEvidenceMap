@@ -31,7 +31,17 @@ ids<-ids[!vapply(ids,function(id){
 chunks<-split(seq_along(ids),ceiling(seq_along(ids)/500L))
 chunks<-head(chunks,limit)
 append<-function(path,x){f<-file(path,"at");on.exit(close(f));writeLines(toJSON(x,auto_unbox=TRUE,null="null"),f)}
-extract_doi<-function(z){\n ids<-z$external_ids %||% list()\n for(id in ids){\n  if(is.list(id)&&identical(tolower(as.character(id$type %||% "")),"doi")){\n   v<-as.character(id$value %||% "");if(length(v)&&nzchar(v[[1L]]))return(v[[1L]])\n  }\n }\n ""\n}\nstring<-function(x){z<-unlist(x,use.names=FALSE);if(!length(z))return("");as.character(z[[1]])}
+extract_doi<-function(z){
+ ids<-z$external_ids %||% list()
+ for(id in ids){
+  if(is.list(id)&&identical(tolower(as.character(id$type %||% "")),"doi")){
+   v<-as.character(id$value %||% "")
+   if(length(v)&&nzchar(v[[1L]]))return(v[[1L]])
+  }
+ }
+ ""
+}
+string<-function(x){z<-unlist(x,use.names=FALSE);if(!length(z))return("");as.character(z[[1]])}
 doi_norm<-function(x){z<-tolower(trimws(string(x)));z<-sub("^https?://(dx[.])?doi[.]org/","",z);sub("^doi:[[:space:]]*","",z)}
 extract_keywords<-function(z){
  x<-z$keywords %||% z$keyword %||% list()
