@@ -11,9 +11,9 @@ writeLines(vapply(cases,function(x)toJSON(x,auto_unbox=TRUE),character(1)),input
 code<-system2(file.path(R.home("bin"),"Rscript"),c("scripts/workflow08b/merge_edges.R",shQuote(input),shQuote(out)))
 stopifnot(code==0L)
 x<-fromJSON(file.path(out,"summary.json"))
-stopifnot(x$raw_edges==9,x$distinct_direction_edges==8,
- x$distinct_seed_candidate_pairs==6,x$distinct_provider_candidate_ids==6,
+stopifnot(x$raw_edges==9,x$distinct_direction_edges==9,
+ x$distinct_seed_candidate_pairs==7,x$distinct_provider_candidate_ids==6,
  x$pairs_both_directions==2,!x$candidate_bibliography_downloaded)
 d<-read.csv(file.path(out,"seed_candidate_direction.csv"),stringsAsFactors=FALSE)
-stopifnot(nrow(d)==6,sum(d$direction=="both")==2)
+stopifnot(nrow(d)==7,sum(d$direction=="both")==2)
 cat("PASS: W08b cross-seed, cross-direction, provider-specific edge deduplication\n")
