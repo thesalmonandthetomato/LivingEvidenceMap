@@ -78,3 +78,15 @@ No production stage, trigger or upstream scientific data should be changed by th
 ## Identifier audit finding (24 October 2026)
 
 GitHub Actions W08b audit run 40099757804 **passed checksum and record-count verification**, but is **not** a provider coverage PASS: its 22,923 W08 included records all have no `manifestations` array in the final W08 JSONL. A total of 15,968 have canonical DOI; Lens/OpenAlex ID coverage from this file alone is zero. Accordingly, do not start citation API tests or treat `manifestations_missing` as permanent unresolved identity. The audit must recover source identifiers from the authoritative restored W01 canonical source-manifestation data, then join by stable canonical `identity.record_id`, requiring exactly one match per included W08 ID and retaining W08 canonical DOI as an independent fallback. Use the existing checksum-verifying W01 baseline-plus-delta restore machinery; never infer provider IDs from unrelated fields or fetch all W00 records to guess identities. The W08 checksum remains `5be8c3e2f236650e13550156f4851220c24add4ff58f81e16d2bb94bf6bd61f1`. Existing `audit_identifiers.R` is a structural diagnostic, not yet the production W08b identifier extractor.
+
+## Implementation progress: checkpointed Lens discovery (24 October)
+
+Validated: `test_workflow08b_edges.yml` completed successfully in run 40110927027; separate Lens API test retrieved all 79 backward and 38 forward IDs from its single seed.
+
+A new isolated R entry point, `scripts/workflow08b/run_lens_discovery.R`, now reads the verified crosswalk CSV and retrieves both directions for bounded Lens-ID seeds, checks identifiers against Lens reported counts, retains append-only local checkpoints, and invokes `merge_edges.R` for deduplicated provider-specific IDs. No GitHub Action has been added for this component; do not repeat long W01 reconstruction just to test it. Example manual invocation in an environment with `LENS_API_TOKEN` and a verified private crosswalk:
+
+```sh
+Rscript scripts/workflow08b/run_lens_discovery.R /private/seed_identifier_crosswalk.csv /private/w08b-state 10
+```
+
+**Not ready for monthly production:** This manual runner only processes direct Lens-ID seeds. It does not yet handle DOI-based Lens resolution, OpenAlex fallback, comparing fresh monthly forward lists against historical lists, reference-count-triggered backward refresh, permanent Zenodo registration, cross-provider identity resolution, NOT-filtered candidate bibliographic retrieval, or W01/W09 orchestration. Existing output folders must remain private. It is not automatically scheduled or triggered.
