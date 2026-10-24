@@ -75,9 +75,16 @@ for(indices in chunks){
  body<-resp_body_json(resp,simplifyVector=FALSE)
  records<-body$data %||% list()
  actual<-vapply(records,function(x)as.character(x$lens_id %||% ""),character(1))
- if(anyDuplicated(actual)||any(!actual%in%ids)){halt<-"Ambiguous bulk result identities";break}
+ if(anyDuplicated(actual)||any(!actual%in%ids)||any(!nzchar(actual))){
+  halt<-paste0("Ambiguous bulk result identities: requested=",length(ids),
+   "; returned=",length(actual),
+   "; duplicates=",sum(duplicated(actual)),
+   "; unexpected=",sum(!actual%in%ids),
+   "; missing_identity=",sum(!nzchar(actual)))
+  break
+ }
  if(as.integer(body$total %||% length(records))>length(records)){
-  halt<-"Bulk result pagination required; refusing partial completion";break
+  halt<-paste0("Bulk result pagination required: requested=",length(ids),"; returned=",length(records),"; total=",as.integer(body$total));break
  }
  lookup<-setNames(seq_along(actual),actual)
  for(i in seq_len(nrow(batch))){
