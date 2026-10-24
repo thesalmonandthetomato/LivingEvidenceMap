@@ -3,6 +3,7 @@
 # This is a local verification layer, NOT a substitute for provider-side NOT
 # filtering. Required metadata: title, abstract, keywords, DOI, Lens/OpenAlex ID.
 suppressPackageStartupMessages(library(jsonlite))
+`%||%`<-function(x,y)if(is.null(x))y else x
 a<-commandArgs(trailingOnly=TRUE)
 if(length(a)!=4L)stop("Usage: filter_original_strategy.R candidates.jsonl strategy.json output.csv audit.json")
 cfg<-fromJSON(a[[2]],simplifyVector=FALSE)
