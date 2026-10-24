@@ -1,0 +1,91 @@
+name: W08b bounded Lens discovery sample
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - docs/workflow08b/.run_lens_sample
+permissions:
+  contents: read
+jobs:
+  sample:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install isolated dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2','data.table'))
+      - name: Restore verified historical W08b checkpoint
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/restore_discovery.R 23623623 "$RUNNER_TEMP/w08b-sample"
+      - name: Restore authoritative W08 and W01 sources
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_10_restore_canonical_from_zenodo.R \
+            --pointer docs/workflow08/zenodo/run-40028381004.json \
+            --output "$RUNNER_TEMP/w08b-canonical.jsonl"
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer docs/deduplication/zenodo/run-39990028078.json \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root "$RUNNER_TEMP/w08b-w01"
+      - name: Select independent representative spread
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/crosswalk_identifiers.R \
+            "$RUNNER_TEMP/w08b-canonical.jsonl" \
+            "$RUNNER_TEMP/w08b-w01/canonical/records.jsonl" \
+            "$RUNNER_TEMP/w08b-crosswalk"
+          Rscript scripts/workflow08b/select_lens_sample.R \
+            "$RUNNER_TEMP/w08b-crosswalk/seed_identifier_crosswalk.csv" \
+            "$RUNNER_TEMP/w08b-sample/lens_seed_status.jsonl" 100 \
+            "$RUNNER_TEMP/w08b-sample/new_sample_crosswalk.csv"
+          cp "$RUNNER_TEMP/w08b-crosswalk/seed_identifier_crosswalk.csv" \
+            "$RUNNER_TEMP/w08b-sample/identity_crosswalk.csv"
+          cp "$RUNNER_TEMP/w08b-crosswalk/summary.json" \
+            "$RUNNER_TEMP/w08b-sample/identity_crosswalk_summary.json"
+      - name: Run at most 100 additional Lens requests
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/run_lens_discovery.R \
+            "$RUNNER_TEMP/w08b-sample/new_sample_crosswalk.csv" \
+            "$RUNNER_TEMP/w08b-sample" 100
+          cat "$RUNNER_TEMP/w08b-sample/discovery_summary.json"
+      - name: Record observational candidate counts
+        shell: Rscript {0}
+        run: |
+          root<-file.path(Sys.getenv("RUNNER_TEMP"),"w08b-sample")
+          status<-jsonlite::fromJSON(file.path(root,"discovery_summary.json"))
+          edges<-utils::read.csv(file.path(root,"merged","citation_edges.csv"),stringsAsFactors=FALSE)
+          previous<-jsonlite::fromJSON(file.path(root,"identity_crosswalk_summary.json"))
+          cat("W08b capped sample: 100 additional seed requests; total completed=",status$complete_seeds,
+              "; incomplete=",status$incomplete_seeds,"; unique provider-level candidate IDs=",
+              length(unique(edges$related_provider_id)),"\n",sep="")
+          cat("This is NOT a count of novel W01 records or records requiring screening.\n")
+      - name: Archive private source crosswalk and discovery checkpoint
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/archive_discovery.R \
+            "$RUNNER_TEMP/w08b-sample" "$GITHUB_RUN_ID" \
+            "$RUNNER_TEMP/w08b-sample-receipt.json"
+          cat "$RUNNER_TEMP/w08b-sample-receipt.json"
