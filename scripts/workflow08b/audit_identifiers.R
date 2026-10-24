@@ -31,7 +31,8 @@ repeat {
   for(line in lines) {
     if(!nzchar(trimws(line))) next
     x<-fromJSON(line,simplifyVector=FALSE); mans<-x$manifestations
-    if(is.null(mans)||!length(mans)) stop("Canonical record missing manifestations")
+    missing_manifestations <- is.null(mans) || !length(mans)
+    if(missing_manifestations) mans <- list()
     id<-scalar(x$identity$record_id)
     if(!nzchar(id)) stop("Blank record_id")
     sources<-vapply(mans,function(m)scalar(m$source),character(1))
@@ -46,21 +47,22 @@ repeat {
     }
     lens<-pick(lens);oa<-pick(oa);doi<-pick(dois)
     ambiguous <- grepl("|",paste(lens,oa,doi),fixed=TRUE)
-    provider<-if(ambiguous) "identity_conflict" else if(nzchar(lens)) "lens" else if(nzchar(oa)) "openalex" else if(nzchar(doi)) "lens_doi_lookup" else "unresolved"
+    provider<-if(ambiguous) "identity_conflict" else if(missing_manifestations) "manifestations_missing" else if(nzchar(lens)) "lens" else if(nzchar(oa)) "openalex" else if(nzchar(doi)) "lens_doi_lookup" else "unresolved"
     i<-i+1L
     rows[[i]]<-data.frame(record_id=id,lens_id=lens,openalex_id=oa,doi=doi,
                           preferred_route=provider,identifier_conflict=ambiguous,
-                          manifestation_count=length(mans),stringsAsFactors=FALSE)
+                          manifestation_count=length(mans),manifestations_missing=missing_manifestations,stringsAsFactors=FALSE)
   }
 }
 if(!length(rows)) stop("Empty canonical")
 df<-do.call(rbind,rows)
 if(anyDuplicated(df$record_id)) stop("Duplicate W08 canonical record IDs")
 write.csv(df,file.path(out,"seed_identifier_audit.csv"),row.names=FALSE,quote=TRUE)
-routes<-as.list(table(factor(df$preferred_route,levels=c("lens","openalex","lens_doi_lookup","unresolved","identity_conflict"))))
-names(routes)<-c("lens","openalex","lens_doi_lookup","unresolved","identity_conflict")
+routes<-as.list(table(factor(df$preferred_route,levels=c("lens","openalex","lens_doi_lookup","unresolved","identity_conflict","manifestations_missing"))))
+names(routes)<-c("lens","openalex","lens_doi_lookup","unresolved","identity_conflict","manifestations_missing")
 summary<-list(schema="workflow08b-identifier-audit-v1",records=nrow(df),
               routes=routes,ambiguous_identifiers=sum(df$identifier_conflict),
+              missing_manifestation_records=sum(df$manifestations_missing),
               has_lens=sum(nzchar(df$lens_id)),has_openalex=sum(nzchar(df$openalex_id)),
               has_doi=sum(nzchar(df$doi)))
 writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE),file.path(out,"summary.json"))
