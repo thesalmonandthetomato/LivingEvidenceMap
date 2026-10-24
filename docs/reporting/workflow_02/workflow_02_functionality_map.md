@@ -1,5 +1,11 @@
 # Workflow 02: Metadata enrichment and repair
 
+## October 2026 release status (24 October 2026)
+
+This document retains historical implementation and validation details below. References labelled **current production state** with dates in early October 2026 are historical snapshots, not the authoritative status of the completed 19 October monthly search update. For the latest release, use the registered stage pointers, their checksums, and `docs/current_run/current_run_status.json` rather than the older counts and run IDs quoted below. The accepted October release concluded with **22,923 included records** after W08; those are final W08 counts, not the earlier W04 retained total. Documentation changes do not modify scientific inputs, execution or provenance.
+
+The accepted W02 update is run **40000668150**, with lean canonical pointer `docs/compaction/zenodo/run-40000668150.json`. Earlier full-batch enrichment figures in the historical sections below should not be cited as the October result.
+
 ## Purpose
 
 Workflow 02 enriches the authoritative canonical records produced by Workflow 01 when a DOI is present but the canonical title and/or abstract remains missing. It preserves Workflow 01 identity and existing populated metadata, accepts only provider metadata that pass deterministic identity and title-consistency checks, quarantines conflicting provider metadata for human review, and stores enrichment as a sparse patch rather than duplicating the full canonical corpus.
