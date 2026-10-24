@@ -26,17 +26,17 @@ jobs:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
-          Rscript scripts/workflow08b/restore_discovery.R 23626701 "$RUNNER_TEMP/w08b"
+          Rscript scripts/workflow08b/restore_discovery.R 23626743 "$RUNNER_TEMP/w08b"
           test -s "$RUNNER_TEMP/w08b/identity_crosswalk_resolved.csv"
           Rscript -e 'x<-read.csv(file.path(Sys.getenv("RUNNER_TEMP"),"w08b/identity_crosswalk_resolved.csv"),stringsAsFactors=FALSE);stopifnot(nrow(x)==22923L,!anyDuplicated(x$record_id))'
-      - name: OpenAlex fallback, checkpointed first five seeds
+      - name: OpenAlex fallback, checkpointed next 100 seeds
         id: fallback
         continue-on-error: true
         env:
           OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
         run: |
           set -euo pipefail
-          Rscript scripts/workflow08b/run_openalex_fallback.R "$RUNNER_TEMP/w08b/identity_crosswalk_resolved.csv" "$RUNNER_TEMP/w08b" 5
+          Rscript scripts/workflow08b/run_openalex_fallback.R "$RUNNER_TEMP/w08b/identity_crosswalk_resolved.csv" "$RUNNER_TEMP/w08b" 100
       - name: Archive every outcome to restricted Zenodo
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
