@@ -137,6 +137,27 @@ n_w04_retained_final <- n_final_included
 n_downstream_excluded <- n_post_w04_excluded
 n_final_excluded_after_retractions <- n_w04 + n_downstream_excluded
 
+# Reconcile final exclusions using the authoritative W08 record-level ledger.
+# W04 interim screening totals remain provenance, not the final flow population.
+exclusion_file <- Sys.getenv("W08_EXCLUSIONS_CSV",
+  unset = "workflow08_reporting_state/workflow08_excluded_records.csv")
+if (!file.exists(exclusion_file)) stop("Final W08 exclusion ledger missing: ", exclusion_file)
+w08_exclusions <- read.csv(exclusion_file, stringsAsFactors = FALSE, check.names = FALSE)
+if (!all(c("record_id","exclusion_stage","exclusion_reason") %in% names(w08_exclusions)))
+  stop("W08 exclusion ledger lacks required attribution fields")
+if (nrow(w08_exclusions) != n_excluded ||
+    anyDuplicated(w08_exclusions$record_id))
+  stop("W08 excluded-record ledger does not reconcile to final W08 population")
+post <- w08_exclusions[!w08_exclusions$exclusion_stage %in% c("workflow03","workflow04"),,drop=FALSE]
+if(nrow(post) != n_post_w04_excluded)
+  stop("W08 post-W04 exclusions do not reconcile to the screening stage")
+n_species_excluded_final <- sum(post$exclusion_reason %in%
+  c("species_none_deterministic_exclusion","species_none_human_exclusion"))
+n_late_excluded_final <- sum(post$exclusion_stage == "workflow07_late")
+n_review_other_excluded_final <- nrow(post) - n_species_excluded_final - n_late_excluded_final
+if(n_review_other_excluded_final < 0L) stop("W08 exclusion attribution is inconsistent")
+
+
 stopifnot(
   sum(source_meta$hits) == n_combined,
   n_combined - n_deduplicated == n_duplicates_removed,
@@ -279,9 +300,13 @@ boxes <- bind_rows(
 
   box("screened", main_x, 6.48, process_box_w, 0.76, paste0("Records screened at title and abstract\nn = ", fmt(n_screened_ta)), "screen"),
   box("excluded_ta", side_x, 6.48, process_box_w, 0.76, paste0("Records excluded at title and abstract\nn = ", fmt(n_w04)), "exclude"),
-  box("retained", main_x, 5.38, process_box_w, 0.76, paste0("Records retained after title and abstract\nn = ", fmt(n_w04_retained)), "retain"),
+  box("retained", main_x, 5.38, process_box_w, 0.76, paste0("Ultimately retained after review\nn = ", fmt(n_w04_retained_final)), "retain"),
 
-  box("species", main_x, 4.18, process_box_w, 0.76, paste0("Species annotation\nn = ", fmt(n_final_included)), "annotate"),
+  box("species", main_x, 4.18, process_box_w, 0.76, paste0("Species eligible after final review\nn = ", fmt(n_final_included)), "annotate"),
+  box("post_screening_exclusions", side_x, 4.18, process_box_w, 0.76,
+      paste0("Additional eligibility exclusions\\nn = ", fmt(n_post_w04_excluded),
+        " (species ", fmt(n_species_excluded_final), ", late ", fmt(n_late_excluded_final),
+        ", review ", fmt(n_review_other_excluded_final), ")"), "exclude"),
   box("geography", main_x, 3.13, process_box_w, 0.76, paste0("Records with geography annotation\nn = ", fmt(n_geography_coded)), "annotate"),
   box("geo_uncoded", side_x, 3.13, process_box_w, 0.76, paste0("Included but uncoded for geography\nn = ", fmt(n_geography_uncoded)), "result"),
   box("topic", main_x, 2.08, process_box_w, 0.76, paste0("Records with topic annotation\nn = ", fmt(n_topic_coded)), "annotate"),
@@ -302,10 +327,10 @@ main_arrows <- bind_rows(
 )
 
 side_connectors <- data.frame(
-  x = rep(main_x + process_box_w / 2, 5),
-  y = c(9.78, 7.58, 6.48, 3.13, 2.08),
-  xend = rep(side_x - process_box_w / 2, 5),
-  yend = c(9.78, 7.58, 6.48, 3.13, 2.08)
+  x = rep(main_x + process_box_w / 2, 6),
+  y = c(9.78, 7.58, 6.48, 4.18, 3.13, 2.08),
+  xend = rep(side_x - process_box_w / 2, 6),
+  yend = c(9.78, 7.58, 6.48, 4.18, 3.13, 2.08)
 )
 
 search_phase_bottom <- 10.42
