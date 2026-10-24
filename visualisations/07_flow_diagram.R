@@ -551,6 +551,18 @@ counts <- list(
   )
 )
 
+# The public exclusion summary is derived from final W08 dispositions, not
+# provisional stage counts. Individual excluded bibliographic records remain
+# in the restricted W08 archive.
+exclusion_summary <- as.data.frame(table(
+  exclusion_stage = w08_exclusions$exclusion_stage,
+  exclusion_reason = w08_exclusions$exclusion_reason
+), stringsAsFactors = FALSE)
+exclusion_summary <- exclusion_summary[exclusion_summary$Freq > 0L,,drop=FALSE]
+names(exclusion_summary)[names(exclusion_summary)=="Freq"] <- "records"
+stopifnot(sum(exclusion_summary$records)==n_excluded)
+readr::write_csv(exclusion_summary,file.path(out_dir,"figure_07_exclusions_by_reason.csv"))
+
 write_json(
   counts,
   file.path(out_dir, "figure_07_flow_diagram_counts.json"),
@@ -592,7 +604,7 @@ readr::write_csv(
       n_w03,
       n_screened_ta,
       n_w04,
-      n_w04_retained,
+      n_w04_retained_final,
       n_species_none,
       n_w07_late,
       n_w08_other_exclusions,
