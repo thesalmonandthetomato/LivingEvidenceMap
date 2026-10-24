@@ -12,7 +12,7 @@ s<-d[d$preferred_route=="lens" & !d$identifier_conflict & nzchar(d$lens_id),,dro
 if(!nrow(s))stop("No unambiguous Lens seed")
 id<-s$lens_id[[1L]]
 if(grepl("|",id,fixed=TRUE))stop("Conflicting Lens IDs must not be queried")
-fields<-c("lens_id","reference_count","referenced_by_count","references","referenced_by")
+fields<-c("lens_id","references_count","references_resolved_count","scholarly_citations_count","references","scholarly_citations")
 payload<-list(query=list(terms=list(lens_id=list(id))),include=fields,size=1L)
 req<-request("https://api.lens.org/scholarly/search") |>
  req_headers(Authorization=paste("Bearer",token),Accept="application/json",`Content-Type`="application/json") |>
@@ -31,10 +31,10 @@ if(n==1L && !identical(as.character(body$data[[1L]]$lens_id),id))
 record<-if(n)body$data[[1L]] else list()
 result<-list(schema="workflow08b-lens-smoke-v1",query_count=1L,
              expected_max_records=1L,matched_records=n,
-             reference_count=record$reference_count %||% NULL,
-             referenced_by_count=record$referenced_by_count %||% NULL,
+             reference_count=record$references_count %||% NULL,
+             referenced_by_count=record$scholarly_citations_count %||% NULL,
              has_references_field=!is.null(record$references),
-             has_referenced_by_field=!is.null(record$referenced_by),
+             has_referenced_by_field=!is.null(record$scholarly_citations),
              no_candidate_downloads=TRUE)
 dir.create(dirname(a[[2L]]),recursive=TRUE,showWarnings=FALSE)
 writeLines(toJSON(result,auto_unbox=TRUE,pretty=TRUE,null="null"),a[[2L]])
