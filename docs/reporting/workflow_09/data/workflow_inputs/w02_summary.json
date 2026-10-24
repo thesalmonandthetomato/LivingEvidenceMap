@@ -1,16 +1,16 @@
 {
   "schema": "living-evidence-map-workflow09-stage-summary-v1",
   "stage": "W02",
-  "source_run_id": "39144383368",
-  "update_id": "w00-run-39127932051",
-  "generated_at_utc": "2026-10-18T16:48:08Z",
-  "pointer_path": "docs/enrichment/zenodo/run-39144383368.json",
-  "pointer_sha256": "c43ac56c8576d81bcc65f9e65112f32f446c9554c4bfb0c722ed7c817346e834",
+  "source_run_id": "40000668150",
+  "update_id": "w00-run-39298022062",
+  "generated_at_utc": "2026-10-23T18:50:08Z",
+  "pointer_path": "docs/enrichment/zenodo/run-40000668150.json",
+  "pointer_sha256": "275337c1cc0d70ac14327c9b733ecf21b607f3bdeb3a11b5c844d694a04a8d42",
   "status": "complete",
   "metrics": {
     "enriched_records": 2113,
     "cumulative_patch_records": 3340,
-    "upstream_workflow01_canonical_sha256": "3b515dfbf5a3ca56d7091fcd70788ed93d7edf4e3d00698ec4d486c7b0fd80b0",
-    "final_enriched_sha256": "3be9e0a884a4f498ed0622efaf6aeebd7622b4a37e900b81c5df40141534d5a1"
+    "upstream_workflow01_canonical_sha256": "4eb0ce57c54887c8f1fec607996c65cace6c57f3ffca65e78dced42a1029e14e",
+    "final_enriched_sha256": "acf87d3c3cf76041511a259c492092c528598ba8560ae6586ff3d0f4a968ef76"
   }
 }

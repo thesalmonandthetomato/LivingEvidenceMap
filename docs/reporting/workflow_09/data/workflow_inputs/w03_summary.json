@@ -1,14 +1,14 @@
 {
   "schema": "living-evidence-map-workflow09-stage-summary-v1",
   "stage": "W03",
-  "source_run_id": "39147451019",
-  "update_id": "w00-run-39127932051",
-  "generated_at_utc": "2026-10-18T17:17:53Z",
-  "pointer_path": "docs/publication_status/zenodo/run-39147451019.json",
-  "pointer_sha256": "eca23e11ed774c17e676420ff672965667efef15075cde6f8de04ba3edfb727a",
+  "source_run_id": "40015813902",
+  "update_id": "w00-run-39298022062",
+  "generated_at_utc": "2026-10-23T20:25:37Z",
+  "pointer_path": "docs/publication_status/zenodo/run-40015813902.json",
+  "pointer_sha256": "8db3bd7136bc94e1e66f77b037eace29d6cb40cb868491f70a41a780910d6512",
   "status": "complete",
   "metrics": {
-    "records": 50551,
+    "records": 50567,
     "retraction_exclusions": 13,
     "status_counts": {
       "retracted": 12,
@@ -16,7 +16,7 @@
       "expression_of_concern": 0,
       "warning": 0,
       "corrected": 103,
-      "normal": 50435
+      "normal": 50451
     }
   }
 }
