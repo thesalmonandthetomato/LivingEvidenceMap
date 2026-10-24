@@ -1,0 +1,49 @@
+name: W08b resume restricted citation discovery
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - docs/workflow08b/.run_resume_checkpoint
+permissions:
+  contents: read
+jobs:
+  resume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install minimal R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','httr2','digest'))
+      - name: Restore restricted checkpoint 23623250
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/restore_discovery.R 23623250 "$RUNNER_TEMP/w08b-resume"
+      - name: Retry only incomplete Lens seeds and preserve completed edges
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/run_lens_discovery.R \
+            "$RUNNER_TEMP/w08b-resume/checkpoint_seed_crosswalk.csv" \
+            "$RUNNER_TEMP/w08b-resume" 4
+          cat "$RUNNER_TEMP/w08b-resume/discovery_summary.json"
+      - name: Publish new restricted checkpoint with full combined state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/archive_discovery.R \
+            "$RUNNER_TEMP/w08b-resume" "$GITHUB_RUN_ID" \
+            "$RUNNER_TEMP/w08b-resume-receipt.json"
+          Rscript -e 'x<-jsonlite::fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"w08b-resume-receipt.json"));cat("Saved restricted W08b checkpoint:",x$zenodo_record_id,"; complete:",x$complete,"; incomplete:",x$incomplete,"\\n")'
