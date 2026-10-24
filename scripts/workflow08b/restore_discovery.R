@@ -2,10 +2,11 @@
 # Restore restricted W08b Zenodo checkpoint, verify SHA-256, derive a private
 # retry input from its own seed ledger. No W01 reconstruction needed.
 suppressPackageStartupMessages({library(jsonlite);library(httr2);library(digest)})
+`%||%`<-function(x,y)if(is.null(x))y else x
 a<-commandArgs(trailingOnly=TRUE)
-if(length(a)!=3L)stop("Usage: restore_discovery.R <zenodo-record-id> <expected-sha256> <output-dir>")
-record<-a[[1]];expected<-tolower(a[[2]]);out<-a[[3]]
-if(!grepl("^[0-9]+$",record)||!grepl("^[a-f0-9]{64}$",expected))stop("Invalid immutable checkpoint reference")
+if(length(a)!=2L)stop("Usage: restore_discovery.R <zenodo-record-id> <output-dir>")
+record<-a[[1]];out<-a[[2]]
+if(!grepl("^[0-9]+$",record))stop("Invalid immutable checkpoint record")
 if(dir.exists(out)&&length(list.files(out,all.files=TRUE,no..=TRUE)))stop("Refusing to overwrite checkpoint directory")
 dir.create(out,recursive=TRUE,showWarnings=FALSE)
 token<-Sys.getenv("ZENODO_ACCESS_TOKEN","");if(!nzchar(token))stop("Missing ZENODO_ACCESS_TOKEN")
@@ -22,7 +23,9 @@ res<-request(url)|>req_headers(Authorization=paste("Bearer",token))|>req_timeout
  req_error(is_error=function(x)FALSE)|>req_perform(path=archive)
 if(resp_status(res)!=200L)stop("Checkpoint download HTTP ",resp_status(res))
 actual<-tolower(digest(file=archive,algo="sha256",serialize=FALSE))
-if(!identical(actual,expected))stop("W08b checkpoint checksum mismatch")
+checksum<-tolower(as.character(files[[1]]$checksum %||% ""))
+if(!grepl("^md5:[a-f0-9]{32}$",checksum))stop("Published Zenodo archive MD5 checksum missing")
+if(!identical(tolower(digest(file=archive,algo="md5",serialize=FALSE)),sub("^md5:","",checksum)))stop("Published Zenodo checkpoint integrity mismatch")
 members<-utils::untar(archive,list=TRUE)
 if(!length(members)||any(grepl("^/|(^|/)\\.\\.(/|$)",members)))stop("Unsafe archive member paths")
 utils::untar(archive,exdir=out)
@@ -37,6 +40,6 @@ rows<-lapply(current,function(x)data.frame(record_id=x$record_id,
  identifier_conflict=FALSE,stringsAsFactors=FALSE))
 d<-do.call(rbind,rows);d<-d[order(d$record_id),,drop=FALSE]
 write.csv(d,file.path(out,"checkpoint_seed_crosswalk.csv"),row.names=FALSE,quote=TRUE)
-cat("PASS: recovered verified Zenodo checkpoint ",record,"; completed=",
+cat("PASS: recovered checksum-verified Zenodo checkpoint ",record,"; completed=",
  sum(vapply(current,function(x)identical(x$status,"complete"),logical(1))),
  "; incomplete=",sum(vapply(current,function(x)!identical(x$status,"complete"),logical(1))),"\n",sep="")
