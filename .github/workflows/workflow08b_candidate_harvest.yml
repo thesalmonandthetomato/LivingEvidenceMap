@@ -26,7 +26,7 @@ jobs:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
-          Rscript scripts/workflow08b/restore_discovery.R 23627320 "$RUNNER_TEMP/w08b"
+          Rscript scripts/workflow08b/restore_discovery.R 23627366 "$RUNNER_TEMP/w08b"
           test -s "$RUNNER_TEMP/w08b/merged/provider_candidate_ids.csv"
           Rscript -e 'd<-read.csv(file.path(Sys.getenv("RUNNER_TEMP"),"w08b/merged/provider_candidate_ids.csv"));stopifnot(all(c("provider","related_provider_id")%in%names(d)));cat("Candidate register: ",nrow(d)," provider IDs\\n",sep="")'
       - name: Harvest Lens candidate bibliographies, max 500 IDs per Lens request
@@ -44,7 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           Rscript scripts/workflow08b/archive_discovery.R "$RUNNER_TEMP/w08b" "$GITHUB_RUN_ID" "$RUNNER_TEMP/w08b-receipt.json"
-          cat "$RUNNER_TEMP/w08b/candidate_retrieval_summary.json"
+          if test -s "$RUNNER_TEMP/w08b/candidate_retrieval_summary.json"; then cat "$RUNNER_TEMP/w08b/candidate_retrieval_summary.json"; else echo "Candidate summary unavailable; archived failed run checkpoint"; fi
           cat "$RUNNER_TEMP/w08b-receipt.json"
       - name: Fail after archival on candidate retrieval errors
         if: steps.harvest.outcome == 'failure'
