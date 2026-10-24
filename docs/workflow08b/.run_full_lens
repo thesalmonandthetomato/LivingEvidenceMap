@@ -1,3 +1,4 @@
 Initial full Lens-ID citation discovery using archived checkpoint 23625457, 500 seeds per request, fail closed and archive state.
 Retry full Lens batch with explicit identity mismatch counts from restricted checkpoint 23625554.
 Resume Lens full discovery with complete page and quarantined unexpected identifiers, checkpoint 23625645.
+Resume with supported Lens 500 response cap and 400 submitted IDs per batch, checkpoint 23625747.
