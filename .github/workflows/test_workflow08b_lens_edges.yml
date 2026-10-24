@@ -1,0 +1,31 @@
+name: W08b Lens citation edge extraction smoke
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - docs/workflow08b/.run_lens_edges_smoke
+permissions:
+  contents: read
+jobs:
+  edge-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install minimal R libraries
+        shell: Rscript {0}
+        run: install.packages(c('httr2','jsonlite'))
+      - name: Extract one seed relationship identifiers
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/w08b"
+          Rscript scripts/workflow08b/lens_edges_smoke.R "$RUNNER_TEMP/w08b/lens_edges_summary.json"
+          cat "$RUNNER_TEMP/w08b/lens_edges_summary.json"
