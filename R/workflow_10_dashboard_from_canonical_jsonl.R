@@ -215,10 +215,18 @@ searched_sources <- names((run_status$search %||% list())$sources %||% list())
 if(!length(searched_sources) || any(!nzchar(searched_sources)) || anyDuplicated(searched_sources)) {
   stopf("Current-run registry has no valid searched source list")
 }
-if(!all(source_codes %in% searched_sources)) {
-  stopf("W09 source ledger contains sources absent from current-run registry")
+manual_path <- "user_input/monthly_manual_ris.json"
+manual_sources <- character()
+if(file.exists(manual_path)) {
+  manual_cfg <- fromJSON(manual_path,simplifyVector=FALSE)
+  manual_sources <- names(manual_cfg$sources %||% list())
+  if(any(!nzchar(manual_sources)) || anyDuplicated(manual_sources)) stopf("Manual RIS source registry is invalid")
 }
-database_n <- length(union(source_codes,searched_sources))
+registered_sources <- union(searched_sources,manual_sources)
+if(!all(source_codes %in% registered_sources)) {
+  stopf("W09 source ledger contains unregistered sources: %s",paste(setdiff(source_codes,registered_sources),collapse=", "))
+}
+database_n <- length(union(source_codes,registered_sources))
 search_results_n<-as.integer(flow_c$combined_search_results%||%NA_integer_)
 unique_records_n<-as.integer(flow_c$deduplicated_records%||%NA_integer_)
 screened_n<-as.integer(flow_c$title_abstract_screened%||%NA_integer_)
