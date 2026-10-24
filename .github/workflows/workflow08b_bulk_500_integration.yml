@@ -1,0 +1,64 @@
+name: W08b 500-ID Lens bulk integration
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths:
+      - docs/workflow08b/.run_500_bulk
+permissions:
+  contents: read
+jobs:
+  bulk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','httr2','digest'))
+      - name: Restore existing checksum-verified Lens checkpoint and identifier crosswalk
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/restore_discovery.R 23624392 "$RUNNER_TEMP/w08b"
+          test -s "$RUNNER_TEMP/w08b/identity_crosswalk.csv"
+          Rscript -e 'x<-read.csv(file.path(Sys.getenv("RUNNER_TEMP"),"w08b/identity_crosswalk.csv"),stringsAsFactors=FALSE);stopifnot(nrow(x)==22923L,!anyDuplicated(x$record_id))'
+      - name: Run one 500-seed Lens bulk request, preserving existing completed records
+        id: discover
+        continue-on-error: true
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/run_lens_bulk.R \
+            "$RUNNER_TEMP/w08b/identity_crosswalk.csv" "$RUNNER_TEMP/w08b" 1
+      - name: Inspect checkpoint and report counts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$RUNNER_TEMP/w08b/discovery_summary.json"
+          cat "$RUNNER_TEMP/w08b/discovery_summary.json"
+      - name: Archive every outcome to restricted Zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/archive_discovery.R \
+            "$RUNNER_TEMP/w08b" "$GITHUB_RUN_ID" "$RUNNER_TEMP/w08b-receipt.json"
+          cat "$RUNNER_TEMP/w08b-receipt.json"
+      - name: Fail on Lens bulk errors after preserving checkpoint
+        if: steps.discover.outcome == 'failure'
+        shell: bash
+        run: |
+          echo 'Bulk provider call failed or response was incomplete; restricted checkpoint archived.'
+          exit 1
