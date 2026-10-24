@@ -68,22 +68,23 @@ attempted<-0L;completed<-0L;halt<-NULL
 for(ix in chunks){
  batch<-ids[ix]
  payload<-list(query=list(terms=list(lens_id=as.list(batch))),
-  include=c("lens_id","title","abstract","keyword","doi","external_ids","year_published"),
-  size=length(batch))
+  size=500L)
  result<-tryCatch(request("https://api.lens.org/scholarly/search") |>
   req_headers(Authorization=paste("Bearer",token),Accept="application/json") |>
   req_body_json(payload,auto_unbox=TRUE) |> req_timeout(180) |>
   req_error(is_error=function(x)FALSE) |> req_perform(),error=identity)
  attempted<-attempted+1L
  if(inherits(result,"error")){halt<-paste("Lens transport:",conditionMessage(result));break}
- if(resp_status(result)!=200L){halt<-paste("Lens HTTP",resp_status(result));break}
+ if(resp_status(result)!=200L){halt<-paste("Lens HTTP",resp_status(result),substr(resp_body_string(result),1L,350L));break}
  body<-resp_body_json(result,simplifyVector=FALSE)
  records<-body$data %||% list()
  got<-vapply(records,function(z)string(z$lens_id),character(1))
  if(anyDuplicated(got)||any(!nzchar(got))||as.integer(body$total %||% length(records))>length(records)){
   halt<-"Ambiguous or truncated candidate metadata batch";break
  }
- if(any(!got%in%batch))message("Quarantining ",sum(!got%in%batch)," unrequested Lens candidates")\n records<-records[got%in%batch];got<-got[got%in%batch]\n byid<-setNames(seq_along(got),got)
+ if(any(!got%in%batch))message("Quarantining ",sum(!got%in%batch)," unrequested Lens candidates")
+ records<-records[got%in%batch];got<-got[got%in%batch]
+ byid<-setNames(seq_along(got),got)
  for(id in batch){
   if(!id%in%names(byid)){
    append(ledger,list(lens_id=id,status="incomplete",provider="lens",error="Seed absent from bulk response"))
