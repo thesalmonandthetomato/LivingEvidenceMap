@@ -25,7 +25,7 @@ if(file.exists(ledger))for(line in readLines(ledger,warn=FALSE)){
 }
 keep<-vapply(seq_len(nrow(d)),function(i){
  z<-old[[d$record_id[[i]]]]
- is.null(z)||!identical(z$status,"complete")||
+ is.null(z)||!(z$status%in%c("complete","not_found"))||
  (nzchar(update)&&!identical(as.character(z$update_id %||% ""),update))
 },logical(1))
 d<-head(d[keep,,drop=FALSE],limit)
@@ -40,11 +40,12 @@ query<-function(url,params=list()){
  if(length(params))r<-do.call(req_url_query,c(list(r),params))
  v<-tryCatch(req_perform(req_error(r,is_error=function(x)FALSE)),error=identity)
  if(inherits(v,"error"))stop(conditionMessage(v))
- if(resp_status(v)!=200L)stop("OpenAlex HTTP ",resp_status(v))
+ if(resp_status(v)==404L)stop("openalex_not_found")
+ if(resp_status(v)!=200L)stop("OpenAlex HTTP ",resp_status(v),": ",substr(resp_body_string(v),1L,200L))
  resp_body_json(v,simplifyVector=FALSE)
 }
 append<-function(path,z){con<-file(path,"at");on.exit(close(con));writeLines(toJSON(z,auto_unbox=TRUE,null="null"),con)}
-complete<-0L;halt<-NULL;requests<-0L
+complete<-0L;not_found<-0L;halt<-NULL;requests<-0L
 for(i in seq_len(nrow(d))){
  id<-d$record_id[[i]];oa<-normal(d$openalex_id[[i]])
  prior<-old[[id]]
@@ -73,6 +74,12 @@ for(i in seq_len(nrow(d))){
   if(length(forward)<expected)stop("OpenAlex citation count exceeds returned IDs")
   list(back=back,forward=forward,bc=bc,fc=expected)
  },error=identity)
+ if(inherits(result,"error")&&identical(conditionMessage(result),"openalex_not_found")){
+  append(ledger,list(record_id=id,openalex_id=oa,provider="openalex",status="not_found",
+   update_id=if(nzchar(update))update else NULL,last_checked_utc=now(),error="OpenAlex work not found"))
+  old[[id]]<-list(status="not_found");not_found<-not_found+1L
+  next
+ }
  if(inherits(result,"error")){
   halt<-conditionMessage(result)
   append(ledger,list(record_id=id,openalex_id=oa,provider="openalex",status="incomplete",
@@ -95,7 +102,7 @@ if(file.exists(edges)&&file.info(edges)$size>0){
  if(exit!=0L)stop("OpenAlex edge merge failed")
 }
 summary<-list(schema="workflow08b-openalex-fallback-v1",completed_this_run=complete,
-  requests_this_run=requests,halted=!is.null(halt),halt_reason=halt,
+  requests_this_run=requests,not_found_this_run=not_found,halted=!is.null(halt),halt_reason=halt,
   lens_fallback_only=TRUE,w01_handoff_authorised=FALSE)
 writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null="null"),file.path(out,"openalex_summary.json"))
 cat("W08b OpenAlex fallback: completed=",complete," requests=",requests," halted=",!is.null(halt),"\n",sep="")
