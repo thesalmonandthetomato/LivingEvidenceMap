@@ -3,7 +3,7 @@
   "update_id": "w00-run-39298022062",
   "branch": "workflow01-final-architecture",
   "started_at_utc": "2026-10-19T18:03:02Z",
-  "last_updated_at_utc": "2026-10-24T11:35:17Z",
+  "last_updated_at_utc": "2026-10-24T18:34:11Z",
   "baseline": {
     "release_update_id": "w00-run-39127932051",
     "workflow01_source_run_id": "39140209398",
@@ -177,11 +177,12 @@
       "status": "complete"
     },
     "W10": {
-      "status": "complete"
+      "status": "active"
     },
-    "current_stage": "W10",
-    "completed_through": 11,
-    "status_label": "Current update complete"
+    "current_stage": "W09",
+    "completed_through": 10,
+    "active_position": 11,
+    "status_label": "Report complete; awaiting dashboard build"
   },
   "workflow_runs": {
     "W00": "39298022062",
@@ -193,7 +194,7 @@
     "W06": "40028381004",
     "W07": "40028381004",
     "W08": "40028381004",
-    "W09": "40088055836",
+    "W09": "40120191925",
     "W10": "40088900934"
   }
 }
