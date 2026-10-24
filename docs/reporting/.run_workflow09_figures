@@ -20,3 +20,4 @@ rerun W09 after widening database search panel and restoring radial topic info p
 W09 retry requested after compact provenance preflight fix, 2026-10-19.
 W09 retry after final-canonical annotation reconciliation; 2026-10-19.
 W09 recovery after removing historical W08 run-ID pin; 2026-10-24.
+W09 retry after correcting W01 delta pointer github_run_id field; 2026-10-24.
