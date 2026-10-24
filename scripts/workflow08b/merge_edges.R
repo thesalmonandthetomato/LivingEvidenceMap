@@ -26,7 +26,24 @@ repeat{
   }
  }
 }
-if(!length(rows))stop("No citation edges; preserve empty result explicitly in a separate status register")
+if(!length(rows)){
+  # A fully checked seed with zero citations is valid, not an error.
+  write.csv(data.frame(seed_record_id=character(),provider=character(),
+    related_provider_id=character(),direction=character()),
+    file.path(out,"citation_edges.csv"),row.names=FALSE)
+  write.csv(data.frame(provider=character(),related_provider_id=character()),
+    file.path(out,"provider_candidate_ids.csv"),row.names=FALSE)
+  write.csv(data.frame(seed_record_id=character(),provider=character(),
+    related_provider_id=character(),direction=character()),
+    file.path(out,"seed_candidate_direction.csv"),row.names=FALSE)
+  writeLines(toJSON(list(schema="workflow08b-edges-v1",raw_edges=0L,
+    distinct_direction_edges=0L,distinct_seed_candidate_pairs=0L,
+    distinct_provider_candidate_ids=0L,pairs_both_directions=0L,
+    candidate_bibliography_downloaded=FALSE),auto_unbox=TRUE,pretty=TRUE),
+    file.path(out,"summary.json"))
+  cat("PASS: zero citation edges retained as a valid empty register\\n")
+  quit(save="no",status=0L)
+}
 d<-unique(do.call(rbind,rows))
 d<-d[order(d$seed_record_id,d$provider,d$related_provider_id,d$direction),,drop=FALSE]
 write.csv(d,file.path(out,"citation_edges.csv"),row.names=FALSE)
