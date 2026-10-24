@@ -2,3 +2,4 @@ Test OpenAlex fallback on five eligible seeds from checkpoint 23626701, archive 
 Process next 100 eligible OpenAlex fallback seeds from restricted checkpoint 23626743 and archive edge/state diagnostics.
 Resume 100 OpenAlex fallback seeds from 23626881; mark missing works not_found and continue.
 Continue OpenAlex fallback for up to 500 remaining eligible seeds using checkpoint 23627018, preserving journal and citation edges.
+Continue up to 500 eligible OpenAlex seeds from checkpoint 23627149 with existing state preserved.
