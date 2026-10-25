@@ -39,7 +39,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "${{ github.event_name }}" == "push" ]]; then
-            Rscript -e 'library(jsonlite);z<-fromJSON("docs/workflow08b/.run_export_decisions");stopifnot(grepl("^[A-Za-z0-9._-]{5,160}$",z$batch_id),grepl("^[0-9a-f]{64}$",z$queue_sha256));cat(paste0("W08B_BATCH_ID=",z$batch_id,"\\nW08B_QUEUE_SHA=",z$queue_sha256,"\\n"),file=Sys.getenv("GITHUB_ENV"),append=TRUE)'
+            Rscript -e 'library(jsonlite);z<-fromJSON("docs/workflow08b/.run_export_decisions");stopifnot(grepl("^[A-Za-z0-9._-]{5,160}$",z$batch_id),grepl("^[0-9a-f]{64}$",z$queue_sha256));cat(paste0("W08B_BATCH_ID=",z$batch_id,"\nW08B_QUEUE_SHA=",z$queue_sha256,"\n"),file=Sys.getenv("GITHUB_ENV"),append=TRUE)'
           else
             echo "W08B_BATCH_ID=$INPUT_BATCH_ID" >> "$GITHUB_ENV"
             echo "W08B_QUEUE_SHA=$INPUT_QUEUE_SHA" >> "$GITHUB_ENV"
