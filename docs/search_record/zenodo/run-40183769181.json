@@ -1,0 +1,51 @@
+{
+  "status": "published",
+  "github_run_id": "40183769181",
+  "github_run_url": "https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/40183769181",
+  "run_type": "citation_chasing",
+  "search_version": "v2",
+  "sources": ["lens", "openalex"],
+  "handoff_sources": {
+    "lens": {
+      "tree_sha256": "64ab78a60ae0aa43a166e847dd11c3e15f90deae407ec3ddcc62980e55a6f1b4"
+    },
+    "openalex": {
+      "tree_sha256": "f151e2c6872943049f2b0df4a8254cd2cb3f02c45288728b6ab270fd1b4e8a54"
+    }
+  },
+  "zenodo_record_id": "23639325",
+  "zenodo_deposition_id": "23639325",
+  "doi": "10.5281/zenodo.23639325",
+  "record_url": "https://zenodo.org/records/23639325",
+  "title": "Living Evidence Map search archive | citation_chasing | Workflow 00 run 40183769181",
+  "visibility": "restricted",
+  "total_bytes": 33928269,
+  "archive_files": [
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-40183769181_lens-harvest.tar.gz",
+      "bytes": 25370056,
+      "sha256": "995d39ea762c6eacf048445a0a70a1f9536e4a418a4f548f08e653c1cf31b10f",
+      "zenodo_checksum": "md5:534ee96b8ddf5707d0317dfafab168c0"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-40183769181_openalex-harvest.tar.gz",
+      "bytes": 6487560,
+      "sha256": "1ef6639236abe4bf78d2ff41bc101d012f1ec643fc555dcb55df7aa2cb38fabd",
+      "zenodo_checksum": "md5:760f7ce93a63d5d28eca274637a3a928"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-40183769181_search-documentation.tar.gz",
+      "bytes": 2069143,
+      "sha256": "5c13d00684ac7d35c4ee3b08edf9b812b9337714c4bbb067eb56f187a3e16f7d",
+      "zenodo_checksum": "md5:db07aa19345d60dc28683c5f08c773d5"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-40183769181_manifest.json",
+      "bytes": 1510,
+      "sha256": "3b1514e5fe48d4bcc3616c6a7e781fad38e682d48b93e569bb23157647ea9478",
+      "zenodo_checksum": "md5:a169e0e51acff4cb4898fd2495298ec9"
+    }
+  ],
+  "manifest_sha256": "3b1514e5fe48d4bcc3616c6a7e781fad38e682d48b93e569bb23157647ea9478",
+  "published_at_utc": "2026-10-25T10:15:08Z"
+}
