@@ -137,7 +137,11 @@ jobs:
             --pointer-dir docs/deduplication/zenodo
           POINTER="docs/deduplication/zenodo/run-$GITHUB_RUN_ID.json"
           test -s "$POINTER"
-          git add docs/deduplication/zenodo_registry.csv "$POINTER"
+          # Report authoritative W01 completion before launching W02.
+          # The current-run status listener syncs the updated status to Shiny.
+          Rscript scripts/updater/workflow_current_run_status_observer.R \
+            --force-stage W01 --pointer "$POINTER" --stage-status complete
+          git add docs/deduplication/zenodo_registry.csv "$POINTER" docs/current_run/current_run_status.json
           git commit -m "W08b: publish W01-compatible incremental handoff $GITHUB_RUN_ID"
           git pull --rebase origin workflow01-final-architecture
           git push origin HEAD:workflow01-final-architecture
