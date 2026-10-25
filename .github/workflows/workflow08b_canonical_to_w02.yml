@@ -44,13 +44,6 @@ jobs:
             W08B_PREV_W01=z$previous_w01_pointer,W08B_PREV_W02=z$previous_w02_pointer)
           cat(paste0(names(fields),'=',unname(fields),'\n'),
               file=Sys.getenv('GITHUB_ENV'),append=TRUE,sep='')
-      - name: Restore published W01 baseline and delta lineage once
-        env:
-          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-        run: |
-          Rscript scripts/updater/workflow_01_restore_current_state.R \
-            --pointer "$W08B_PREV_W01" --pointer-dir docs/deduplication/zenodo \
-            --output-root "$RUNNER_TEMP/w01_previous"
       - name: Retrieve existing W08b deterministic and bibliography artifacts
         env:
           GH_TOKEN: ${{ github.token }}
@@ -70,6 +63,25 @@ jobs:
         run: |
           Rscript scripts/workflow08b/restore_review_export.R \
             "$W08B_REVIEW_ZENODO" "$W08B_QUEUE_SHA" "$RUNNER_TEMP/w08b_review"
+      - name: Preflight exported repair schema before costly historical restoration
+        shell: Rscript {0}
+        run: |
+          library(data.table)
+          p<-file.path(Sys.getenv("RUNNER_TEMP"),"w08b_review","abstract_repairs.csv")
+          z<-if(file.exists(p)&&file.info(p)$size>0) fread(p,colClasses="character",na.strings=c("","NA")) else data.table()
+          cat("Review repair export columns:",paste(names(z),collapse=","),"rows:",nrow(z),"\n")
+          if(nrow(z)>0L && !all(c("source_kind","source_record_id","action","value") %in% names(z))) {
+            vals<-as.character(unlist(z,use.names=FALSE))
+            if(any(!is.na(vals)&nzchar(trimws(vals))))
+              stop("Non-empty abstract repair export has unrecognised columns")
+          }
+      - name: Restore published W01 baseline and delta lineage once
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer "$W08B_PREV_W01" --pointer-dir docs/deduplication/zenodo \
+            --output-root "$RUNNER_TEMP/w01_previous"
       - name: Apply existing W08b classifications and human decisions to W01 map
         run: |
           Rscript scripts/workflow08b/prepare_w01_incremental.R \
