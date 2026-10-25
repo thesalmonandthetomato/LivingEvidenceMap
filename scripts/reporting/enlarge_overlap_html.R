@@ -28,7 +28,10 @@ injection<-paste0(
 'img.parentNode.insertBefore(frame,img);frame.appendChild(img);',
 '}});',
 '</script>')
-if(grepl("</head>",x,fixed=TRUE))x<-sub("</head>",paste0(injection,"\n</head>"),x,fixed=TRUE)
-else stop("Expected HTML head closing tag")
+if (grepl("</head>", x, fixed=TRUE)) {
+  x <- sub("</head>", paste0(injection, "\n</head>"), x, fixed=TRUE)
+} else {
+  stop("Expected HTML head closing tag")
+}
 writeLines(x,path,useBytes=TRUE)
 cat("PASS: W10 Figure 3 scrollable enhancement inserted\n")
