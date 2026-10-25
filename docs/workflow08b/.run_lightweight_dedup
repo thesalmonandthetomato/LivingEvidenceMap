@@ -1,1 +1,1 @@
-2026-10-25 independent citation-chasing dedup with normalised abstract, DOI, ID, title and historical W01 comparison
+2026-10-25 rerun isolated W08b exact ID DOI normalised title and abstract dedup after correcting data.table identity key
