@@ -33,11 +33,22 @@ for(i in seq_along(chunks)){
  q<-list(bool=list(must=list(list(terms=list(lens_id=as.list(batch)))),
                    must_not=list(list(query_string=list(query=topic)))))
  payload<-list(query=q,size=1L)
- res<-tryCatch(request("https://api.lens.org/scholarly/search")|>
-  req_headers(Authorization=paste("Bearer",token),Accept="application/json")|>
-  req_body_json(payload,auto_unbox=TRUE)|>req_timeout(180)|>
-  req_error(is_error=function(x)FALSE)|>req_perform(),error=identity)
- if(inherits(res,"error"))stop("Lens transport: ",conditionMessage(res))
+ res<-NULL
+ for(attempt in seq_len(5L)){
+  # Lens permits 50 requests/minute; remain comfortably below this ceiling.
+  Sys.sleep(1.5)
+  res<-tryCatch(request("https://api.lens.org/scholarly/search")|>
+   req_headers(Authorization=paste("Bearer",token),Accept="application/json")|>
+   req_body_json(payload,auto_unbox=TRUE)|>req_timeout(180)|>
+   req_error(is_error=function(x)FALSE)|>req_perform(),error=identity)
+  if(inherits(res,"error"))stop("Lens transport: ",conditionMessage(res))
+  if(resp_status(res)==429L){
+   message("Lens rate limited; retrying batch ",i," after cooling interval")
+   Sys.sleep(65)
+   next
+  }
+  break
+ }
  if(resp_status(res)!=200L)stop("Lens HTTP ",resp_status(res),": ",substr(resp_body_string(res),1L,600))
  obj<-resp_body_json(res,simplifyVector=FALSE)
  n<-as.integer(obj$total)
