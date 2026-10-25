@@ -45,7 +45,7 @@ env:
 jobs:
   search:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
     steps:
       - name: Resolve implementation branch
         id: impl
