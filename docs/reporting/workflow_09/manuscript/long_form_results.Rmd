@@ -7,7 +7,7 @@ output:
     toc: true
     toc_float: true
 header-includes:
-  - '<style>.figcaption { margin-bottom: 1.5em; } .w09-overlap-scroll { max-height: 680px; max-height: min(70vh, 680px); overflow: auto; overscroll-behavior: contain; border: 1px solid #dedede; padding: 8px; margin-bottom: 1em; } .w09-overlap-scroll img { width: 200% !important; max-width: none !important; height: auto !important; } </style>'
+  - '<style>.figcaption { margin-bottom: 1.5em; } .w09-overlap-scroll { max-height: 1360px; max-height: min(140vh, 1360px); overflow: auto; overscroll-behavior: contain; padding: 8px; margin-bottom: 1em; } .w09-overlap-scroll img { width: 200% !important; max-width: none !important; height: auto !important; } </style>'
 bibliography: references.bib
 link-citations: true
 reference-section-title: References
