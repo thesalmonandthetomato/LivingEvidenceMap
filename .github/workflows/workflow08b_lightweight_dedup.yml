@@ -1,6 +1,17 @@
 name: W08b deterministic lightweight deduplication
 on:
   workflow_dispatch:
+    inputs:
+      bibliography_run:
+        description: "W08b complete bibliography run"
+        required: true
+        default: "40182796865"
+        type: string
+      previous_w01_pointer:
+        description: "Published W01 canonical pointer"
+        required: true
+        default: "docs/deduplication/zenodo/run-39990028078.json"
+        type: string
   push:
     branches: [workflow01-final-architecture]
     paths: [docs/workflow08b/.run_lightweight_dedup]
@@ -25,21 +36,24 @@ jobs:
       - name: Restore historical W01 canonical state read-only
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          W01_POINTER: ${{ inputs.previous_w01_pointer || 'docs/deduplication/zenodo/run-39990028078.json' }}
         run: |
           set -euo pipefail
           Rscript scripts/updater/workflow_01_restore_current_state.R \
-            --pointer docs/deduplication/zenodo/run-39990028078.json \
+            --pointer "$W01_POINTER" \
             --pointer-dir docs/deduplication/zenodo \
             --output-root "$RUNNER_TEMP/w01"
           test -s "$RUNNER_TEMP/w01/canonical/records.jsonl"
       - name: Restore full citation-chasing bibliographies
         env:
           GH_TOKEN: ${{ github.token }}
+          BIB_RUN: ${{ inputs.bibliography_run || '40182796865' }}
         run: |
           set -euo pipefail
+          [[ "$BIB_RUN" =~ ^[0-9]+$ ]]
           mkdir -p "$RUNNER_TEMP/w08b"
-          gh run download 40182796865 --repo "$GITHUB_REPOSITORY" \
-            --name w08b-complete-bibliographies-40182796865 \
+          gh run download "$BIB_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name "w08b-complete-bibliographies-$BIB_RUN" \
             --dir "$RUNNER_TEMP/w08b"
           test -s "$RUNNER_TEMP/w08b/lens/records.jsonl"
           test -s "$RUNNER_TEMP/w08b/openalex/openalex_sidecar_records.jsonl"
@@ -68,10 +82,12 @@ jobs:
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
+          BIB_RUN: ${{ inputs.bibliography_run || '40182796865' }}
+          W01_POINTER: ${{ inputs.previous_w01_pointer || 'docs/deduplication/zenodo/run-39990028078.json' }}
         run: |
           set -euo pipefail
           gh workflow run workflow08b_publish_shiny.yml --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture \
             -f dedup_run="$GITHUB_RUN_ID" \
-            -f bibliography_run="40182796865" \
-            -f previous_w01_pointer="docs/deduplication/zenodo/run-39990028078.json"
+            -f bibliography_run="$BIB_RUN" \
+            -f previous_w01_pointer="$W01_POINTER"
           echo "PASS: dispatched W08b Shiny adjudication publication"
