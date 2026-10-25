@@ -1,0 +1,45 @@
+name: W08b export completed human deduplication decisions
+on:
+  workflow_dispatch:
+    inputs:
+      batch_id:
+        description: Exact W08b review batch identity
+        required: true
+        type: string
+      queue_sha256:
+        description: Exact immutable review queue SHA-256
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: w08b-decision-export-${{ inputs.queue_sha256 }}
+  cancel-in-progress: false
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install dependencies
+        run: Rscript -e 'install.packages(c("googlesheets4","jsonlite","digest","httr2"))'
+      - name: Validate and archive human decisions privately
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          W08B_BATCH_ID: ${{ inputs.batch_id }}
+          W08B_QUEUE_SHA: ${{ inputs.queue_sha256 }}
+        run: Rscript scripts/workflow08b/export_review_decisions.R
+      - name: Preserve receipt, not restricted decision contents
+        uses: actions/upload-artifact@v4
+        with:
+          name: w08b-decision-export-receipt-${{ github.run_id }}
+          path: w08b_export_receipt.json
+          if-no-files-found: error
