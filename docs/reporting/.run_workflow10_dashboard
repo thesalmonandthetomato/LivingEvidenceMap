@@ -2,7 +2,7 @@
   "schema": "living-evidence-map-workflow10-trigger-v1",
   "workflow09_run_id": "37309046559",
   "workflow09_commit_sha": "6656cb939a92db924a8d5c45c443bd0ccfedd6a5",
-  "triggered_at_utc": "2026-10-25T20:10:00Z",
-  "reason": "Restore first Figure 3 enlargement and double height without border; revert W09 experimental wrapper",
-  "trigger_reason": "figure3_restore_first_working_implementation"
+  "triggered_at_utc": "2026-10-25T21:05:00Z",
+  "reason": "Apply deterministic caption-based Figure 3 sizing without touching Figure 2",
+  "trigger_reason": "figure3_caption_target_v8"
 }
