@@ -2,7 +2,7 @@
   "schema": "living-evidence-map-workflow10-trigger-v1",
   "workflow09_run_id": "37309046559",
   "workflow09_commit_sha": "6656cb939a92db924a8d5c45c443bd0ccfedd6a5",
-  "triggered_at_utc": "2026-10-25T18:15:00Z",
-  "reason": "Publish Figure 3 doubled scroll height and borderless layout from W09 through W10",
-  "trigger_reason": "figure3_height_border_only"
+  "triggered_at_utc": "2026-10-25T19:05:00Z",
+  "reason": "Restore Figure 2 normal size; apply double-height borderless scroll only to Figure 3; remove no-human-consistency sentence",
+  "trigger_reason": "correct_figure_2_regression_and_figure_3_target"
 }
