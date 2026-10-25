@@ -63,7 +63,7 @@ permissions:
 jobs:
   publication-status:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
     outputs:
       pointer_path: ${{ steps.handoff.outputs.pointer_path }}
     steps:
