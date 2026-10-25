@@ -6,7 +6,7 @@ on:
     paths: [docs/workflow08b/.run_lightweight_dedup]
 permissions:
   contents: read
-  actions: read
+  actions: write
 jobs:
   deduplicate:
     runs-on: ubuntu-latest
@@ -64,3 +64,14 @@ jobs:
           path: ${{ runner.temp }}/w08b_dedup/
           retention-days: 30
           if-no-files-found: warn
+      - name: Automatically publish historical ambiguities to Shiny
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run workflow08b_publish_shiny.yml --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture \\
+            -f dedup_run="$GITHUB_RUN_ID" \\
+            -f bibliography_run="40182796865" \\
+            -f previous_w01_pointer="docs/deduplication/zenodo/run-39990028078.json"
+          echo "PASS: dispatched W08b Shiny adjudication publication"
