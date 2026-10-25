@@ -24,7 +24,19 @@ d<-fread(decisions,colClasses="character",na.strings=c("","NA"))
 stopifnot(all(c("review_case_id","decision","target_w01_id")%in%names(d)))
 if(anyDuplicated(d$review_case_id))stop("Duplicated human decisions")
 r<-if(file.exists(repairs)&&file.info(repairs)$size>0L)fread(repairs,colClasses="character",na.strings=c("","NA"))else data.table()
-if(nrow(r))stopifnot(all(c("source_kind","source_record_id","action","value")%in%names(r)))
+repair_fields<-c("source_kind","source_record_id","action","value")
+if(nrow(r) && !all(repair_fields %in% names(r))){
+  # Empty data.frame() is serialised by write.csv as a one-column CSV.
+  # fread may interpret its placeholder as a row. Ignore only an entirely
+  # blank placeholder; never discard actual, unrecognised audit data.
+  flattened<-unlist(r,use.names=FALSE)
+  placeholder<-all(is.na(flattened) | !nzchar(trimws(as.character(flattened))))
+  if(placeholder) {
+    message("W08b abstract repairs: exported empty-table placeholder; no repairs to apply")
+    r<-data.table()
+  } else stop(sprintf("W08b abstract repair CSV schema mismatch; found columns: %s; first row: %s",
+    paste(names(r),collapse=","),paste(utils::head(as.character(flattened),8L),collapse="|")))
+}
 existing_ids<-unique(map$cluster_id)
 setindex(x,cluster)
 clusters<-unique(x$cluster)
