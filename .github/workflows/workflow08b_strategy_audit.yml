@@ -1,0 +1,50 @@
+name: W08b candidate strategy audit
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [docs/workflow08b/.run_strategy_audit]
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','httr2','digest'))
+      - name: Verify strategy R syntax and canonical registered strategy
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript -e 'invisible(parse(file="scripts/workflow08b/stream_strategy_filter.R"));x<-jsonlite::fromJSON("user_input/workflow00_search_strategy.json");stopifnot(identical(x$search_version,"v2"),"maricultur*" %in% x$farm_terms);cat("PASS: preflight\\n")'
+      - name: Restore full restricted candidate bibliography
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/restore_discovery.R 23628056 "$RUNNER_TEMP/w08b"
+          test -s "$RUNNER_TEMP/w08b/lens_candidate_metadata.jsonl"
+      - name: Run streaming strategy audit on all retrieved Lens candidate records
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/stream_strategy_filter.R \
+            "$RUNNER_TEMP/w08b/lens_candidate_metadata.jsonl" \
+            user_input/workflow00_search_strategy.json \
+            "$RUNNER_TEMP/w08b/strategy_filter.csv" "$RUNNER_TEMP/w08b/strategy_filter_audit.json"
+          cat "$RUNNER_TEMP/w08b/strategy_filter_audit.json"
+      - name: Archive offline strategy results without modifying W01
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/archive_discovery.R "$RUNNER_TEMP/w08b" "$GITHUB_RUN_ID" "$RUNNER_TEMP/w08b-receipt.json"
+          cat "$RUNNER_TEMP/w08b-receipt.json"
