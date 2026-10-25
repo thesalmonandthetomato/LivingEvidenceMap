@@ -6,5 +6,7 @@
   "bib_run": "40182796865",
   "previous_w01_pointer": "docs/deduplication/zenodo/run-39990028078.json",
   "previous_w02_pointer": "docs/enrichment/zenodo/run-40000668150.json",
-  "source_export_run": "40211702264"
+  "source_export_run": "40211702264",
+  "retry_of": "40213775439",
+  "retry_reason": "correct GitHub environment value serialization"
 }
