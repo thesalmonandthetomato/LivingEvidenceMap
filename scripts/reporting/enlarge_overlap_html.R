@@ -13,6 +13,7 @@ injection <- paste0(
 '.w09-figure3-frame-v4 img{width:200%!important;max-width:none!important;height:auto!important}',
 '.w09-overlap-scroll{max-height:none!important;height:auto!important;overflow:visible!important;border:none!important;padding:0!important}',
 '.w09-overlap-scroll img{width:auto!important;max-width:100%!important;height:auto!important}',
+'.w09-overlap-scroll .w09-figure3-frame-v4 img{width:200%!important;max-width:none!important;height:auto!important}',
 '</style>\n',
 '<script id="w09-figure3-publisher-script-v4">',
 'document.addEventListener("DOMContentLoaded",function(){',
