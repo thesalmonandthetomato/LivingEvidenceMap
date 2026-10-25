@@ -19,6 +19,7 @@ stopifnot(all(c("source","source_record_id","cluster_id","cluster_size","idx")%i
 x<-fread(cross,colClasses="character",na.strings=c("","NA"))
 stopifnot(all(c("candidate_key","provider","provider_id","cluster","status","matched_w01_ids")%in%names(x)))
 if(anyDuplicated(x$candidate_key))stop("Duplicate candidate keys")
+setkey(x,candidate_key)
 d<-fread(decisions,colClasses="character",na.strings=c("","NA"))
 stopifnot(all(c("review_case_id","decision","target_w01_id")%in%names(d)))
 if(anyDuplicated(d$review_case_id))stop("Duplicated human decisions")
@@ -61,6 +62,8 @@ paths<-c(lens=file.path(bib,"lens","records.jsonl"),openalex=file.path(bib,"open
 if(any(!file.exists(paths)))stop("Missing W08b bibliography files")
 map[,key__:=paste(source,source_record_id,sep="::")]
 oldkeys<-map$key__
+oldkeyset<-new.env(hash=TRUE,parent=emptyenv(),size=length(oldkeys)*2L)
+for(k in oldkeys)assign(k,TRUE,envir=oldkeyset)
 initial_max<-max(as.integer(map$idx),na.rm=TRUE)
 nextidx<-initial_max
 newrows<-list()
@@ -69,7 +72,7 @@ for(src in names(paths)){
   dest<-file.path(out,"workflow01_seed",paste0(src,"_records_for_deduplication.jsonl"))
   if(!file.exists(dest))file.create(dest)
   output<-file(dest,"at");on.exit(close(output),add=TRUE)
-  seen<-character()
+  seen<-new.env(hash=TRUE,parent=emptyenv())
   repeat{
     lines<-readLines(input,n=500L,warn=FALSE)
     if(!length(lines))break
@@ -78,12 +81,13 @@ for(src in names(paths)){
       sid<-if(src=="lens")as.character(z$identity$lens_id%||%"")else as.character(z$sidecar_identity$sidecar_record_id%||%"")
       pid<-if(src=="lens")sid else as.character(z$sidecar_identity$openalex_id%||%"")
       cand<-paste0(src,":",pid)
-      if(!cand%in%x$candidate_key)stop("Bibliographic record absent from dedup crosswalk: ",cand)
-      if(cand%in%seen)stop("Duplicate W08b bibliography ID ",cand)
-      seen<-c(seen,cand)
+      cl_rows<-x[J(cand),cluster]
+      if(length(cl_rows)!=1L||is.na(cl_rows[[1L]]))stop("Bibliographic record absent from dedup crosswalk: ",cand)
+      if(exists(cand,envir=seen,inherits=FALSE))stop("Duplicate W08b bibliography ID ",cand)
+      assign(cand,TRUE,envir=seen)
       key<-paste(src,sid,sep="::")
-      if(key%in%oldkeys)next
-      cl<-x[candidate_key==cand,cluster][[1L]]
+      if(exists(key,envir=oldkeyset,inherits=FALSE))next
+      cl<-cl_rows[[1L]]
       nextidx<-nextidx+1L
       row<-as.list(rep(NA_character_,length(names(map))-1L))
       names(row)<-setdiff(names(map),"key__")
@@ -94,7 +98,7 @@ for(src in names(paths)){
     }
   }
   close(input);close(output);on.exit(NULL,add=FALSE)
-  if(length(setdiff(x[provider==src,candidate_key],seen)))stop("Missing input bibliography IDs for ",src)
+  if(length(setdiff(x[provider==src,candidate_key],ls(seen,all.names=TRUE))))stop("Missing input bibliography IDs for ",src)
 }
 if(length(newrows)){
   adds<-rbindlist(newrows,fill=TRUE)
