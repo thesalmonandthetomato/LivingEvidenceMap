@@ -1,0 +1,66 @@
+name: W08b deterministic lightweight deduplication
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [docs/workflow08b/.run_lightweight_dedup]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  deduplicate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install R packages
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','data.table','stringi','httr2','digest'))
+      - name: Restore historical W01 canonical state read-only
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer docs/deduplication/zenodo/run-39990028078.json \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root "$RUNNER_TEMP/w01"
+          test -s "$RUNNER_TEMP/w01/canonical/records.jsonl"
+      - name: Restore full citation-chasing bibliographies
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/w08b"
+          gh run download 40182796865 --repo "$GITHUB_REPOSITORY" \
+            --name w08b-complete-bibliographies-40182796865 \
+            --dir "$RUNNER_TEMP/w08b"
+          test -s "$RUNNER_TEMP/w08b/lens/records.jsonl"
+          test -s "$RUNNER_TEMP/w08b/openalex/openalex_sidecar_records.jsonl"
+          test -s "$RUNNER_TEMP/w08b/lens_citation_edges.csv"
+          test -s "$RUNNER_TEMP/w08b/openalex_citation_edges.csv"
+      - name: Deduplicate identifier DOI title and normalised abstract
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/deduplicate_citations.R \
+            "$RUNNER_TEMP/w08b/lens/records.jsonl" \
+            "$RUNNER_TEMP/w08b/openalex/openalex_sidecar_records.jsonl" \
+            "$RUNNER_TEMP/w01/canonical/records.jsonl" \
+            "$RUNNER_TEMP/w08b/lens_citation_edges.csv" \
+            "$RUNNER_TEMP/w08b/openalex_citation_edges.csv" \
+            "$RUNNER_TEMP/w08b_dedup"
+          cat "$RUNNER_TEMP/w08b_dedup/summary.json"
+      - name: Preserve W08b deterministic dedup outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w08b-lightweight-dedup-${{ github.run_id }}
+          path: ${{ runner.temp }}/w08b_dedup/
+          retention-days: 30
+          if-no-files-found: warn
