@@ -4,13 +4,13 @@ a <- commandArgs(trailingOnly=TRUE)
 if(length(a)!=1L || !file.exists(a[[1L]])) stop("Usage: enlarge_overlap_html.R results.html")
 path<-a[[1L]]
 x<-paste(readLines(path,warn=FALSE,encoding="UTF-8"),collapse="\n")
-marker<-"w09-figure3-publisher-enhancement-v2"
+marker<-"w09-figure3-publisher-enhancement-v3"
 if(grepl(marker,x,fixed=TRUE))quit(status=0L)
 # W09 source now wraps Figure 3 directly; already rendered older documents need
-# this idempotent, caption-based enhancement when W10 publishes them.
+# this idempotent, alt-text-based enhancement when W10 publishes them.
 injection<-paste0(
 '<style id="',marker,'">',
-'.w09-overlap-scroll{max-height:680px;max-height:min(70vh,680px);overflow:auto;overscroll-behavior:contain;border:1px solid #dedede;padding:8px;margin-bottom:1em}',
+'.w09-overlap-scroll{max-height:1360px;max-height:min(140vh,1360px);overflow:auto;overscroll-behavior:contain;padding:8px;margin-bottom:1em}',
 '.w09-overlap-scroll img{width:200%!important;max-width:none!important;height:auto!important}',
 '</style>\n',
 '<script id="w09-overlap-scroll-compatibility">',
