@@ -3,6 +3,7 @@
 suppressPackageStartupMessages({
   library(googlesheets4); library(jsonlite); library(digest); library(httr2)
 })
+`%||%` <- function(x,y) if(is.null(x) || length(x)==0L) y else x
 env <- function(k) { x <- Sys.getenv(k,""); if(!nzchar(x)) stop("Missing environment variable: ",k); x }
 batch <- env("W08B_BATCH_ID")
 sha <- env("W08B_QUEUE_SHA")
