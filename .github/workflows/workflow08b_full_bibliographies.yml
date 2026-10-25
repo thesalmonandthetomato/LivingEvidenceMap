@@ -2,6 +2,11 @@ name: W08b full eligible bibliographies to W01 staging
 on:
   workflow_dispatch:
     inputs:
+      previous_w01_pointer:
+        description: "Most recent published W01 baseline or delta pointer"
+        required: true
+        default: "docs/deduplication/zenodo/run-39990028078.json"
+        type: string
       lens_run:
         description: 'Successful Lens eligible-ID export run'
         required: true
@@ -17,7 +22,7 @@ on:
     paths: [docs/workflow08b/.run_full_bibliographies]
 permissions:
   contents: read
-  actions: read
+  actions: write
 jobs:
   bibliography:
     runs-on: ubuntu-latest
@@ -66,3 +71,15 @@ jobs:
           path: ${{ runner.temp }}/w08b_bibliography/
           retention-days: 30
           if-no-files-found: warn
+      - name: Automatically trigger lightweight W08b deduplication and Shiny review
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          W01_POINTER: ${{ inputs.previous_w01_pointer || 'docs/deduplication/zenodo/run-39990028078.json' }}
+        run: |
+          set -euo pipefail
+          gh workflow run workflow08b_lightweight_dedup.yml \
+            --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture \
+            -f bibliography_run="$GITHUB_RUN_ID" \
+            -f previous_w01_pointer="$W01_POINTER"
+          echo "PASS: dispatched dedicated W08b deduplication and automatic Shiny review"
