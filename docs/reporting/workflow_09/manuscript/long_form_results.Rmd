@@ -7,7 +7,7 @@ output:
     toc: true
     toc_float: true
 header-includes:
-  - '<style>.figcaption { margin-bottom: 1.5em; } .w09-figure3-frame-v5 { max-height: 1360px; max-height: min(140vh, 1360px); overflow: auto; overscroll-behavior: contain; padding: 8px; margin-bottom: 1em; border: none; } .w09-figure3-frame-v5 img { width: 200% !important; max-width: none !important; height: auto !important; }</style>'
+  - '<style>.figcaption { margin-bottom: 1.5em; }</style>'
 bibliography: references.bib
 link-citations: true
 reference-section-title: References
@@ -332,9 +332,6 @@ include_figure(citesource_unique_figure_path)
 include_figure(citesource_overlap_figure_path)
 ```
 
-```{r fig-source-overlap-frame, results='asis', echo=FALSE}
-if (knitr::is_html_output()) cat('<script>document.addEventListener("DOMContentLoaded",function(){var imgs=Array.from(document.querySelectorAll("img"));var f2=imgs.filter(function(i){return /^Figure\\s*2\\s*[.:]/i.test((i.getAttribute("alt")||"").trim());}),f3=imgs.filter(function(i){return /^Figure\\s*3\\s*[.:]/i.test((i.getAttribute("alt")||"").trim());});if(f2.length!==1||f3.length!==1)return;document.querySelectorAll(".w09-overlap-scroll,.w09-figure3-frame-v4").forEach(function(w){while(w.firstChild)w.parentNode.insertBefore(w.firstChild,w);w.remove();});if(!f3[0].closest(".w09-figure3-frame-v5")){var wrap=document.createElement("div");wrap.className="w09-figure3-frame-v5";wrap.setAttribute("role","region");wrap.setAttribute("tabindex","0");wrap.setAttribute("aria-label","Figure 3 scrollable enlarged image");f3[0].parentNode.insertBefore(wrap,f3[0]);wrap.appendChild(f3[0]);}});</script>\\n')
-```
 
 ## Publication year
 
