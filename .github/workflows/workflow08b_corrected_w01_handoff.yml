@@ -1,0 +1,95 @@
+name: W08b corrected historical-source W01 handoff
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [docs/workflow08b/.run_corrected_w01_handoff]
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: w08b-corrected-handoff
+  cancel-in-progress: false
+jobs:
+  handoff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','httr2','digest'))
+      - name: Parse R scripts
+        run: Rscript -e 'invisible(parse(file="scripts/workflow08b/w01_preserve_sources.R"))'
+      - name: Restore published W08b handoff without repeating provider requests
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p w08b_stage/harvests w08b_stage/plan w08b_stage/search_records
+          Rscript scripts/updater/workflow_01_restore_workflow00_from_zenodo.R \
+            --pointer docs/search_record/zenodo/run-40184177676.json \
+            --sources lens,openalex --output-root w08b_stage/harvests
+          test -s w08b_stage/harvests/lens/source_delta/reconciliation_manifest.json
+          test -s w08b_stage/harvests/openalex/source_delta/reconciliation_manifest.json
+      - name: Include unchanged historic source manifests in the W01 union
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/w01_preserve_sources.R \
+            docs/search_record/zenodo/run-39298022062.json \
+            docs/current_run/current_run_status.json \
+            w08b_stage w08b_corrected_status.json w08b_sources.txt
+          cp docs/workflow08b/zenodo/w01-handoff-40184177676.json w08b_stage/plan/original_w08b_handoff.json
+          for src in lens openalex; do
+            Rscript -e 'library(jsonlite);src<-commandArgs(TRUE)[[1]];z<-fromJSON(file.path("w08b_stage/harvests",src,"source_delta/reconciliation_manifest.json"));stopifnot(z$status=="success",z$new_native_ids>=0)' "$src"
+          done
+      - name: Publish corrected restricted W00 source archive
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          SOURCES="$(cat w08b_sources.txt)"
+          Rscript scripts/updater/workflow_00_archive_to_zenodo.R \
+            --staging-root w08b_stage --run-id "$GITHUB_RUN_ID" \
+            --run-type citation_chasing --search-version v2 \
+            --sources "$SOURCES" --repository "$GITHUB_REPOSITORY" \
+            --output-dir w08b_corrected_archive
+      - name: Register corrected W00 handoff and launch W01-Fast
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_update_zenodo_registry.R \
+            --receipt w08b_corrected_archive/zenodo_receipt.json \
+            --registry docs/search_record/zenodo_registry.csv \
+            --pointer-dir docs/search_record/zenodo
+          mkdir -p docs/workflow08b/zenodo
+          cp w08b_corrected_archive/zenodo_receipt.json "docs/workflow08b/zenodo/corrected-handoff-$GITHUB_RUN_ID.json"
+          Rscript -e 'library(jsonlite);x<-fromJSON("w08b_corrected_status.json",simplifyVector=FALSE);x$search$workflow00_run_id<-Sys.getenv("GITHUB_RUN_ID");x$workflow_runs$W00<-Sys.getenv("GITHUB_RUN_ID");x$update_id<-paste0("w08b-citation-run-",Sys.getenv("GITHUB_RUN_ID"));writeLines(toJSON(x,pretty=TRUE,auto_unbox=TRUE,null="null",na="null"),"docs/current_run/current_run_status.json")'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/search_record/zenodo_registry.csv docs/search_record/zenodo/ docs/workflow08b/zenodo/ docs/current_run/current_run_status.json
+          git commit -m "W08b: preserve all historical W00 sources in corrected supplemental handoff $GITHUB_RUN_ID"
+          git push origin HEAD:workflow01-final-architecture
+          gh workflow run workflow_01_production.yml \
+            --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture \
+            -f workflow00_pointer_path="docs/search_record/zenodo/run-$GITHUB_RUN_ID.json" \
+            -f previous_workflow01_pointer_path="docs/deduplication/zenodo/run-39990028078.json"
+          echo "PASS: re-dispatched existing W01-Fast without modifying production code"
+      - name: Preserve receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w08b-corrected-handoff-${{ github.run_id }}
+          path: |
+            w08b_corrected_archive/zenodo_receipt.json
+            w08b_sources.txt
+            w08b_corrected_status.json
+          if-no-files-found: warn
