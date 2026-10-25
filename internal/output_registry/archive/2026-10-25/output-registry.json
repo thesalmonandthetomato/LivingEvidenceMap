@@ -1,6 +1,6 @@
 {
   "schema": "living-evidence-map-internal-output-registry-v1",
-  "generated_at_utc": "2026-10-25T19:27:36Z",
+  "generated_at_utc": "2026-10-25T19:56:23Z",
   "search_date": "2026-10-25",
   "update_id": "w08b-citation-run-40191412234",
   "note": "Internal repository registry. Not intended for publication.",
@@ -317,6 +317,16 @@
       "visibility": "restricted",
       "source_run_id": "39990028078",
       "published_at_utc": "2026-10-23T18:05:58Z"
+    },
+    {
+      "stage": "W01",
+      "description": "Deduplication state and canonical record set",
+      "state": "delta",
+      "doi": "10.5281/zenodo.23648657",
+      "record_url": "https://zenodo.org/records/23648657",
+      "visibility": "restricted",
+      "source_run_id": "40218882441",
+      "published_at_utc": "2026-10-25T19:11:44Z"
     },
     {
       "stage": "W02",
@@ -1194,7 +1204,7 @@
       "description": "W10 internal dashboard data payload",
       "format": "JS",
       "bytes": 72226187,
-      "sha256": "df90004af172a28a7bbd3f239649d47ba0278d867a9afa3c5ebe2d6d038a1875"
+      "sha256": "02c7e594c801b3a51e16da30502eac1c7825146369ab596eb2a645b0716df273"
     },
     {
       "category": "W10 build artefact",
@@ -1202,7 +1212,7 @@
       "description": "W10 public-projection dashboard data payload",
       "format": "JS",
       "bytes": 41903610,
-      "sha256": "5a3980dd51148211556c09338c9f552a837e42200d593e2ead8914154db26ea0"
+      "sha256": "2761f8607a0ea1d4c3ef6396b5d114261dafe46790ec72416516d13f588687af"
     },
     {
       "category": "W10 build artefact",
