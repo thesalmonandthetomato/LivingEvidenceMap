@@ -1,0 +1,10 @@
+{
+  "batch_id": "w08b-citation-dedup-c64c116e013d",
+  "queue_sha256": "c64c116e013dc99aeac801fd0ceb068f3309c6454c0d22a8b029339431a5c479",
+  "review_zenodo_id": "23645922",
+  "dedup_run": "40198092478",
+  "bib_run": "40182796865",
+  "previous_w01_pointer": "docs/deduplication/zenodo/run-39990028078.json",
+  "previous_w02_pointer": "docs/enrichment/zenodo/run-40000668150.json",
+  "source_export_run": "40211702264"
+}
