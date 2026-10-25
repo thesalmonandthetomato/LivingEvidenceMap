@@ -367,6 +367,7 @@ jobs:
           cp outputs/workflow10/dashboard-search-index.js public-site/dashboard-search-index.js
           cp docs/reporting/workflow_09/manuscript/methods.html public-site/methodology.html
           cp docs/reporting/workflow_09/manuscript/results.html public-site/results.html
+          Rscript scripts/reporting/enlarge_overlap_html.R public-site/results.html
           touch public-site/.nojekyll
 
           grep -q './dashboard-data.js' public-site/index.html
