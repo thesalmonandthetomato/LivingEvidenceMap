@@ -17,7 +17,7 @@ get<-function(kind){
   req_url_query(filter=paste0("ids.openalex:",paste(ids,collapse="|")),per_page=100,select="id")
  if(kind!="all"){
   term<-if(kind=="species")paste0("(",sp,")") else paste0("(",sp,") NOT (",fm,")")
-  q<-req_url_query(q,search.exact=term)
+  q<-req_url_query(q,search.title_abstract_keywords.exact=term)
  }
  key<-Sys.getenv("OPENALEX_API_KEY","")
  if(nzchar(key))q<-req_url_query(q,api_key=key)
