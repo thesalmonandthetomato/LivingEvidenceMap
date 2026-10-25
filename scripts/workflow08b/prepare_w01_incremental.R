@@ -69,10 +69,10 @@ initial_max<-max(as.integer(map$idx),na.rm=TRUE)
 nextidx<-initial_max
 newrows<-list()
 for(src in names(paths)){
-  input<-file(paths[[src]],"rt");on.exit(close(input),add=TRUE)
+  input<-file(paths[[src]],"rt")
   dest<-file.path(out,"workflow01_seed",paste0(src,"_records_for_deduplication.jsonl"))
   if(!file.exists(dest))file.create(dest)
-  output<-file(dest,"at");on.exit(close(output),add=TRUE)
+  output<-file(dest,"at")
   seen<-new.env(hash=TRUE,parent=emptyenv())
   repeat{
     lines<-readLines(input,n=500L,warn=FALSE)
@@ -98,7 +98,7 @@ for(src in names(paths)){
       writeLines(line,output,useBytes=TRUE)
     }
   }
-  close(input);close(output);on.exit(NULL,add=FALSE)
+  close(input);close(output)
   if(length(setdiff(x[provider==src,candidate_key],ls(seen,all.names=TRUE))))stop("Missing input bibliography IDs for ",src)
 }
 if(length(newrows)){
