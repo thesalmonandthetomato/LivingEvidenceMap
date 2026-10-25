@@ -68,7 +68,7 @@ jobs:
         run: |
           library(data.table)
           p<-file.path(Sys.getenv("RUNNER_TEMP"),"w08b_review","abstract_repairs.csv")
-          z<-if(file.exists(p)&&file.info(p)$size>0) fread(p,colClasses="character",na.strings=c("","NA")) else data.table()
+          z<-if(file.exists(p)&&file.info(p)$size>0) fread(p,header=TRUE,colClasses="character",na.strings=c("","NA")) else data.table()
           cat("Review repair export columns:",paste(names(z),collapse=","),"rows:",nrow(z),"\n")
           if(nrow(z)>0L && !all(c("source_kind","source_record_id","action","value") %in% names(z))) {
             vals<-as.character(unlist(z,use.names=FALSE))
