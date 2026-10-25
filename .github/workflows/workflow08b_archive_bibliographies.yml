@@ -1,0 +1,94 @@
+name: W08b archive complete citation-chasing bibliographies
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [docs/workflow08b/.run_archive_bibliographies]
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: w08b-archive-bibliographies
+  cancel-in-progress: false
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install R packages
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','httr2','digest'))
+      - name: Download successful complete bibliographies
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/w08b_input"
+          gh run download 40182796865 --repo "$GITHUB_REPOSITORY" --name w08b-complete-bibliographies-40182796865 --dir "$RUNNER_TEMP/w08b_input"
+          test -s "$RUNNER_TEMP/w08b_input/manifest.json"
+          Rscript -e 'library(jsonlite);x<-fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"w08b_input/manifest.json"));stopifnot(x$status=="complete",x$lens_records==31449,x$openalex_records==1867)'
+          test -s "$RUNNER_TEMP/w08b_input/lens/records.jsonl"
+          test -s "$RUNNER_TEMP/w08b_input/openalex/openalex_sidecar_records.jsonl"
+      - name: Prepare W00-compatible restricted source archives and citation provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          R="$RUNNER_TEMP"
+          mkdir -p "$R/w08b_stage/harvests/lens/source_child" "$R/w08b_stage/harvests/openalex/source_child/raw" "$R/w08b_stage/plan" "$R/w08b_stage/search_records"
+          cp "$R/w08b_input/lens/records.jsonl" "$R/w08b_stage/harvests/lens/source_child/records.jsonl"
+          cp "$R/w08b_input/openalex/openalex_sidecar_records.jsonl" "$R/w08b_stage/harvests/openalex/source_child/openalex_sidecar_records.jsonl"
+          cp "$R/w08b_input/manifest.json" "$R/w08b_stage/plan/w08b_manifest.json"
+          cp "$R/w08b_input/lens_citation_edges.csv" "$R/w08b_stage/search_records/lens_citation_edges.csv"
+          cp "$R/w08b_input/openalex_citation_edges.csv" "$R/w08b_stage/search_records/openalex_citation_edges.csv"
+          cp -a "$R/w08b_input/raw/openalex/." "$R/w08b_stage/harvests/openalex/source_child/raw/"
+          mkdir -p "$R/w08b_stage/harvests/lens/citation_provenance" "$R/w08b_stage/harvests/openalex/citation_provenance"
+          cp "$R/w08b_input/lens_citation_edges.csv" "$R/w08b_stage/harvests/lens/citation_provenance/"
+          cp "$R/w08b_input/openalex_citation_edges.csv" "$R/w08b_stage/harvests/openalex/citation_provenance/"
+          Rscript -e 'library(jsonlite);r<-Sys.getenv("RUNNER_TEMP");for(s in c("lens","openalex")){p<-file.path(r,"w08b_input",s,if(s=="lens")"records.jsonl" else "openalex_sidecar_records.jsonl");n<-length(readLines(p,warn=FALSE));stopifnot(n==if(s=="lens")31449L else 1867L);cat("PASS",s,n,"complete records\n")}'
+      - name: Publish W08b restricted Zenodo archive using W00 archiver
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_archive_to_zenodo.R \
+            --staging-root "$RUNNER_TEMP/w08b_stage" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-type citation_chasing \
+            --search-version v2 \
+            --sources lens,openalex \
+            --repository "$GITHUB_REPOSITORY" \
+            --output-dir "$RUNNER_TEMP/w08b_archive"
+          cat "$RUNNER_TEMP/w08b_archive/zenodo_receipt.json"
+      - name: Register immutable citation-chasing Zenodo pointer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_update_zenodo_registry.R \
+            --receipt "$RUNNER_TEMP/w08b_archive/zenodo_receipt.json" \
+            --registry docs/search_record/zenodo_registry.csv \
+            --pointer-dir docs/search_record/zenodo
+          mkdir -p docs/workflow08b/zenodo
+          cp "$RUNNER_TEMP/w08b_archive/zenodo_receipt.json" "docs/workflow08b/zenodo/run-$GITHUB_RUN_ID.json"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/search_record/zenodo_registry.csv docs/search_record/zenodo/ docs/workflow08b/zenodo/
+          git commit -m "W08b: register restricted citation-chasing bibliographic archive $GITHUB_RUN_ID"
+          git push origin HEAD:workflow01-final-architecture
+      - name: Preserve receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w08b-citation-chasing-zenodo-receipt-${{ github.run_id }}
+          path: ${{ runner.temp }}/w08b_archive/
+          retention-days: 30
+          if-no-files-found: warn
