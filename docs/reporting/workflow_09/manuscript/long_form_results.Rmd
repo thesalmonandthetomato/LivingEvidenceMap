@@ -7,7 +7,7 @@ output:
     toc: true
     toc_float: true
 header-includes:
-  - '<style>.figcaption { margin-bottom: 1.5em; }</style>'
+  - '<style>.figcaption { margin-bottom: 1.5em; } .w09-overlap-scroll { max-height: 680px; max-height: min(70vh, 680px); overflow: auto; overscroll-behavior: contain; border: 1px solid #dedede; padding: 8px; margin-bottom: 1em; } .w09-overlap-scroll img { width: 200% !important; max-width: none !important; height: auto !important; } </style>'
 bibliography: references.bib
 link-citations: true
 reference-section-title: References
@@ -330,8 +330,16 @@ Database provenance was retained through deduplication, allowing the contributio
 include_figure(citesource_unique_figure_path)
 ```
 
+```{r fig-source-overlap-scroll-open, results='asis', echo=FALSE}
+if (knitr::is_html_output()) cat('<div class="w09-overlap-scroll" role="region" aria-label="Figure 3 database overlap, scroll horizontally and vertically to inspect the enlarged chart" tabindex="0">\n')
+```
+
 ```{r fig-source-overlap, fig.cap="***Figure 3.*** *Overlap among bibliographic databases. Only records retrieved from two or more databases are shown; single-database records are presented in Figure 2. Black bars show exact database intersections in the deduplicated corpus and salmon-pink bars show the corresponding records retained in the definitive final included corpus. The matrix indicates the databases represented in each intersection.*"}
 include_figure(citesource_overlap_figure_path)
+```
+
+```{r fig-source-overlap-scroll-close, results='asis', echo=FALSE}
+if (knitr::is_html_output()) cat('</div>\n')
 ```
 
 ## Publication year
