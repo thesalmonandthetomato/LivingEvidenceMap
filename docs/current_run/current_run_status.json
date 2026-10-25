@@ -1,13 +1,13 @@
 {
   "schema": "living-evidence-map-current-run-status-v1",
-  "update_id": "w00-run-39298022062",
+  "update_id": "w08b-citation-run-40184177676",
   "branch": "workflow01-final-architecture",
-  "started_at_utc": "2026-10-19T18:03:02Z",
-  "last_updated_at_utc": "2026-10-24T19:01:49Z",
+  "started_at_utc": "2026-10-25T10:25:29Z",
+  "last_updated_at_utc": "2026-10-25T10:25:29Z",
   "baseline": {
     "release_update_id": "w00-run-39127932051",
-    "workflow01_source_run_id": "39140209398",
-    "workflow01_pointer": "docs/deduplication/zenodo/run-39140209398.json",
+    "workflow01_source_run_id": "39990028078",
+    "workflow01_pointer": "docs/deduplication/zenodo/run-39990028078.json",
     "workflow02_source_run_id": "39144383368",
     "workflow02_pointer": "docs/enrichment/zenodo/run-39144383368.json",
     "lean_pointer": "docs/compaction/zenodo/run-39144383368.json",
@@ -42,85 +42,17 @@
     }
   },
   "search": {
-    "workflow00_run_id": "39298022062",
-    "search_date": "2026-10-19",
-    "search_results": 19007,
+    "workflow00_run_id": "40184177676",
+    "search_date": "2026-10-25",
+    "search_results": 33316,
     "sources": {
-      "agricola": {
-        "reported_search_results": 7,
-        "successfully_downloaded_results": 7
-      },
-      "ebsco_africa_wide": {
-        "reported_search_results": 432,
-        "successfully_downloaded_results": 432
-      },
-      "ebsco_amed": {
-        "reported_search_results": 3,
-        "successfully_downloaded_results": 3
-      },
-      "ebsco_atla_religion": {
-        "reported_search_results": 0,
-        "successfully_downloaded_results": 0
-      },
-      "ebsco_biological_agricultural_index": {
-        "reported_search_results": 2918,
-        "successfully_downloaded_results": 2918
-      },
-      "ebsco_cinahl": {
-        "reported_search_results": 102,
-        "successfully_downloaded_results": 102
-      },
-      "ebsco_econlit": {
-        "reported_search_results": 311,
-        "successfully_downloaded_results": 311
-      },
-      "ebsco_family_society": {
-        "reported_search_results": 121,
-        "successfully_downloaded_results": 121
-      },
-      "ebsco_greenfile": {
-        "reported_search_results": 916,
-        "successfully_downloaded_results": 916
-      },
-      "ebsco_medline": {
-        "reported_search_results": 6883,
-        "successfully_downloaded_results": 6883
-      },
-      "ebsco_mla": {
-        "reported_search_results": 5,
-        "successfully_downloaded_results": 5
-      },
-      "ebsco_political_science": {
-        "reported_search_results": 30,
-        "successfully_downloaded_results": 30
-      },
-      "ebsco_psycinfo": {
-        "reported_search_results": 97,
-        "successfully_downloaded_results": 97
-      },
-      "ebsco_waters_oceans": {
-        "reported_search_results": 5297,
-        "successfully_downloaded_results": 5297
-      },
-      "ethos": {
-        "reported_search_results": 0,
-        "successfully_downloaded_results": 0
-      },
       "lens": {
-        "reported_search_results": 130,
-        "successfully_downloaded_results": 130
+        "reported_search_results": 31449,
+        "successfully_downloaded_results": 31449
       },
       "openalex": {
-        "reported_search_results": 1346,
-        "successfully_downloaded_results": 1346
-      },
-      "scopus": {
-        "reported_search_results": 120,
-        "successfully_downloaded_results": 120
-      },
-      "wos": {
-        "reported_search_results": 289,
-        "successfully_downloaded_results": 289
+        "reported_search_results": 1867,
+        "successfully_downloaded_results": 1867
       }
     }
   },
@@ -150,42 +82,41 @@
       "status": "complete"
     },
     "W01": {
-      "status": "complete"
+      "status": "pending"
     },
     "W02": {
-      "status": "complete"
+      "status": "pending"
     },
     "W03": {
-      "status": "complete"
+      "status": "pending"
     },
     "W04": {
-      "status": "complete"
+      "status": "pending"
     },
     "W05": {
-      "status": "complete"
+      "status": "pending"
     },
     "W06": {
-      "status": "complete"
+      "status": "pending"
     },
     "W07": {
-      "status": "complete"
+      "status": "pending"
     },
     "W08": {
-      "status": "complete"
+      "status": "pending"
     },
     "W09": {
-      "status": "complete"
+      "status": "pending"
     },
     "W10": {
-      "status": "complete"
+      "status": "pending"
     },
-    "current_stage": "W10",
-    "completed_through": 11,
-    "status_label": "Current update complete"
+    "current_stage": "W01",
+    "completed_through": 1,
+    "status_label": "Citation-chasing supplemental update"
   },
   "workflow_runs": {
-    "W00": "39298022062",
-    "W01": "39990028078",
+    "W00": "40184177676",
     "W02": "40000668150",
     "W03": "40015813902",
     "W04": "40028381004",
