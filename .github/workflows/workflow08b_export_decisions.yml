@@ -14,7 +14,7 @@ on:
         required: true
         type: string
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: w08b-decision-export-${{ inputs.queue_sha256 }}
   cancel-in-progress: false
@@ -56,3 +56,36 @@ jobs:
           name: w08b-decision-export-receipt-${{ github.run_id }}
           path: w08b_export_receipt.json
           if-no-files-found: error
+
+      - name: Automatically continue completed W08b review through W01 canonicalisation to W02
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git pull --rebase origin workflow01-final-architecture
+          Rscript -e '
+            library(jsonlite)
+            receipt<-fromJSON("w08b_export_receipt.json")
+            source<-fromJSON("docs/workflow08b/review_provenance.json")
+            stopifnot(receipt$queue_sha256==source$queue_sha256,
+              receipt$batch_id==source$batch_id,
+              receipt$decisions==receipt$cases,
+              receipt$cases>0L,
+              grepl("^[0-9]+$",as.character(receipt$restricted_zenodo_record_id)))
+            marker<-list(batch_id=receipt$batch_id,
+              queue_sha256=receipt$queue_sha256,
+              review_zenodo_id=as.character(receipt$restricted_zenodo_record_id),
+              dedup_run=as.character(source$dedup_run),
+              bib_run=as.character(source$bib_run),
+              previous_w01_pointer=as.character(source$previous_w01_pointer),
+              previous_w02_pointer=as.character(source$previous_w02_pointer),
+              source_export_run=Sys.getenv("GITHUB_RUN_ID"))
+            writeLines(toJSON(marker,pretty=TRUE,auto_unbox=TRUE),
+              "docs/workflow08b/.run_canonical_handoff")
+          '
+          git add docs/workflow08b/.run_canonical_handoff
+          git commit -m "W08b: continue human deduplication export to W01 delta and W02"
+          git push origin HEAD:workflow01-final-architecture
+          echo "PASS: requested W08b W01-compatible canonical handoff"
