@@ -22,7 +22,9 @@ jobs:
         shell: Rscript {0}
         run: install.packages(c('jsonlite','httr2','digest'))
       - name: Preflight R syntax
-        run: Rscript -e 'invisible(parse(file="scripts/workflow08b/lens_not_count.R"));cat("PASS: R parse preflight\n")'
+        shell: bash
+        run: |
+          Rscript -e 'invisible(parse(file="scripts/workflow08b/lens_not_count.R"))'
       - name: Restore unique Lens citation ID register
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
