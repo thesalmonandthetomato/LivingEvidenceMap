@@ -2,6 +2,7 @@
 # W08b offline strategy verification, streaming candidate metadata without
 # quadratic record accumulation. No W01 or production mutations.
 suppressPackageStartupMessages(library(jsonlite))
+`%||%`<-function(x,y)if(is.null(x))y else x
 argv<-commandArgs(trailingOnly=TRUE)
 if(length(argv)!=4L)stop("Usage: stream_strategy_filter.R metadata.jsonl strategy.json output.csv audit.json")
 cfg<-fromJSON(argv[[2]],simplifyVector=FALSE)
@@ -51,4 +52,3 @@ info<-list(schema="workflow08b-strategy-filter-stream-v1",search_version="v2",
 writeLines(toJSON(info,pretty=TRUE,auto_unbox=TRUE),argv[[4]])
 cat("PASS: offline strategy classifications=",total,"; matched=",counts[["original_strategy_match"]],
  "; unknown=",counts[["metadata_incomplete"]],"; not_matched=",counts[["not_matched"]],"\\n",sep="")
-`%||%`<-function(x,y)if(is.null(x))y else x
