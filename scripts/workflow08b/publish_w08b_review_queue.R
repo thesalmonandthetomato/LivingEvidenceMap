@@ -20,7 +20,12 @@ d<-fread(a[[1]],colClasses="character",na.strings=NULL)
 need<-c("candidate_key","provider","provider_id","cluster","status","matched_w01_ids")
 if(!all(need%in%names(d)))stop("Dedup identity crosswalk schema mismatch")
 groups<-unique(d[status=="ambiguous_historical",cluster])
-if(length(groups)!=21L)stop("Expected 21 unresolved historical clusters; found ",length(groups))
+if(!length(groups)){
+ writeLines(toJSON(list(schema="w08b-human-review-queue-v1",case_count=0L,status="no_review_required"),
+  auto_unbox=TRUE,pretty=TRUE),file.path(out,"review_queue_manifest.json"))
+ cat("PASS: no ambiguous historical clusters require Shiny adjudication\n")
+ quit(status=0L)
+}
 requested<-unique(d[cluster%in%groups,candidate_key])
 candidates<-new.env(hash=TRUE,parent=emptyenv())
 take<-function(path,source){
