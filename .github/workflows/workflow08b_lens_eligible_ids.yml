@@ -1,0 +1,48 @@
+name: W08b Lens eligible citation ID export
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [docs/workflow08b/.run_lens_eligible_ids]
+permissions:
+  contents: read
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','httr2','digest'))
+      - name: Parse preflight
+        run: Rscript -e 'invisible(parse(file="scripts/workflow08b/lens_species_not_farming_ids.R"))'
+      - name: Restore Lens citation register
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/restore_discovery.R 23628056 "$RUNNER_TEMP/w08b"
+          test -s "$RUNNER_TEMP/w08b/merged/provider_candidate_ids.csv"
+          test -s "$RUNNER_TEMP/w08b/merged/citation_edges.csv"
+      - name: Export Lens eligible IDs and provenance
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/lens_species_not_farming_ids.R "$RUNNER_TEMP/w08b/merged/provider_candidate_ids.csv" "$RUNNER_TEMP/w08b/merged/citation_edges.csv" user_input/workflow00_search_strategy.json "$RUNNER_TEMP/lens_eligible"
+          cat "$RUNNER_TEMP/lens_eligible/summary.json"
+      - name: Upload isolated ID register
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w08b-lens-eligible-${{ github.run_id }}
+          path: ${{ runner.temp }}/lens_eligible/
+          if-no-files-found: warn
+          retention-days: 30
