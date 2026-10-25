@@ -1,3 +1,4 @@
 Run provider-side count of distinct Lens citation IDs after v2 original-search NOT. No W01 updates.
 Retry corrected workflow syntax.
 Retry with valid YAML block.
+Retry with strict Lens 50/min rate-limit compliance and 429 cooling.
