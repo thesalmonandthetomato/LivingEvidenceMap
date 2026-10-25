@@ -1,0 +1,128 @@
+name: W08b complete W00 handoff and launch W01-Fast
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [docs/workflow08b/.run_w01_handoff]
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: w08b-w01-handoff
+  cancel-in-progress: false
+jobs:
+  handoff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install packages
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','httr2','digest'))
+      - name: R parse preflight
+        run: Rscript -e 'invisible(parse(file="scripts/workflow08b/prepare_w01_status.R"));invisible(parse(file="scripts/updater/workflow_00_native_id_reconcile.R"))'
+      - name: Restore complete W08b bibliographic payload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p w08b_input
+          gh run download 40182796865 --repo "$GITHUB_REPOSITORY" --name w08b-complete-bibliographies-40182796865 --dir w08b_input
+          test -s w08b_input/lens/records.jsonl
+          test -s w08b_input/openalex/openalex_sidecar_records.jsonl
+      - name: Convert raw OpenAlex response pages and reconcile native identifiers
+        run: |
+          set -euo pipefail
+          mkdir -p w08b_stage/harvests/lens/source_child w08b_stage/harvests/openalex/source_child/raw w08b_stage/plan w08b_stage/search_records
+          cp w08b_input/lens/records.jsonl w08b_stage/harvests/lens/source_child/records.jsonl
+          Rscript -e '
+            fs<-sort(list.files("w08b_input/raw/openalex",pattern="\\.jsonl$",full.names=TRUE))
+            stopifnot(length(fs)>0L)
+            for(i in seq_along(fs)){
+              txt<-readLines(fs[[i]],warn=FALSE)
+              stopifnot(length(txt)==1L)
+              writeLines(txt,sprintf("w08b_stage/harvests/openalex/source_child/raw/response_%06d.json",i))
+            }
+          '
+          cp w08b_input/manifest.json w08b_stage/plan/w08b_manifest.json
+          cp w08b_input/lens_citation_edges.csv w08b_stage/search_records/lens_citation_edges.csv
+          cp w08b_input/openalex_citation_edges.csv w08b_stage/search_records/openalex_citation_edges.csv
+          for source in lens openalex; do
+            Rscript scripts/updater/workflow_00_native_id_reconcile.R \
+              --source "$source" \
+              --current-root "w08b_stage/harvests/$source/source_child" \
+              --registry "data/workflow00/source_id_registry/${source}_native_ids.txt" \
+              --output-dir "w08b_stage/harvests/$source/source_delta" \
+              --run-type citation_chasing
+            cat "w08b_stage/harvests/$source/source_delta/reconciliation_manifest.json"
+          done
+          Rscript -e '
+            library(jsonlite)
+            for(src in c("lens","openalex")){
+              p<-file.path("w08b_stage/harvests",src,"source_delta/reconciliation_manifest.json")
+              z<-fromJSON(p)
+              n<-if(src=="lens")31449L else 1867L
+              stopifnot(z$status=="success",z$current_unique_records==n,
+                z$new_native_ids>=0,z$new_native_ids<=n)
+            }
+          '
+      - name: Publish supplementary W01-ready source archive to restricted Zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_00_archive_to_zenodo.R \
+            --staging-root w08b_stage --run-id "$GITHUB_RUN_ID" \
+            --run-type citation_chasing --search-version v2 \
+            --sources lens,openalex --repository "$GITHUB_REPOSITORY" \
+            --output-dir w08b_handoff_archive
+      - name: Prepare current-run state and register archive
+        run: |
+          set -euo pipefail
+          test -s docs/deduplication/zenodo/run-39990028078.json
+          Rscript scripts/workflow08b/prepare_w01_status.R \
+            docs/current_run/current_run_status.json \
+            w08b_handoff_archive/zenodo_receipt.json \
+            docs/deduplication/zenodo/run-39990028078.json \
+            w08b_handoff_status.json
+          Rscript scripts/updater/workflow_00_update_zenodo_registry.R \
+            --receipt w08b_handoff_archive/zenodo_receipt.json \
+            --registry docs/search_record/zenodo_registry.csv \
+            --pointer-dir docs/search_record/zenodo
+      - name: Register authoritative supplemental handoff and dispatch W01
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p docs/workflow08b/zenodo
+          cp w08b_handoff_archive/zenodo_receipt.json "docs/workflow08b/zenodo/w01-handoff-$GITHUB_RUN_ID.json"
+          cp w08b_handoff_status.json docs/current_run/current_run_status.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/search_record/zenodo_registry.csv docs/search_record/zenodo/ docs/workflow08b/zenodo/ docs/current_run/current_run_status.json
+          git commit -m "W08b: register W01-compatible supplemental intake $GITHUB_RUN_ID"
+          git push origin HEAD:workflow01-final-architecture
+          gh workflow run workflow_01_production.yml \
+            --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture \
+            -f workflow00_pointer_path="docs/search_record/zenodo/run-$GITHUB_RUN_ID.json" \
+            -f previous_workflow01_pointer_path="docs/deduplication/zenodo/run-39990028078.json"
+          echo "PASS: dispatched existing W01-Fast production workflow with latest W01 delta"
+      - name: Preserve source manifests and receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w08b-w01-handoff-${{ github.run_id }}
+          path: |
+            w08b_handoff_archive/zenodo_receipt.json
+            w08b_handoff_status.json
+            w08b_stage/harvests/lens/source_delta/reconciliation_manifest.json
+            w08b_stage/harvests/openalex/source_delta/reconciliation_manifest.json
+          if-no-files-found: warn
