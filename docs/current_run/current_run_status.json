@@ -1,6 +1,6 @@
 {
   "schema": "living-evidence-map-current-run-status-v1",
-  "update_id": "w08b-citation-run-40184177676",
+  "update_id": "w08b-citation-run-40191412234",
   "branch": "workflow01-final-architecture",
   "started_at_utc": "2026-10-25T10:25:29Z",
   "last_updated_at_utc": "2026-10-25T10:25:29Z",
@@ -42,7 +42,7 @@
     }
   },
   "search": {
-    "workflow00_run_id": "40184177676",
+    "workflow00_run_id": "40191412234",
     "search_date": "2026-10-25",
     "search_results": 33316,
     "sources": {
@@ -53,6 +53,74 @@
       "openalex": {
         "reported_search_results": 1867,
         "successfully_downloaded_results": 1867
+      },
+      "scopus": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "agricola": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ethos": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "wos": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_africa_wide": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_amed": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_psycinfo": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_atla_religion": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_biological_agricultural_index": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_cinahl": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_econlit": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_family_society": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_greenfile": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_medline": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_mla": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_political_science": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_waters_oceans": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
       }
     }
   },
@@ -116,7 +184,7 @@
     "status_label": "Citation-chasing supplemental update"
   },
   "workflow_runs": {
-    "W00": "40184177676",
+    "W00": "40191412234",
     "W02": "40000668150",
     "W03": "40015813902",
     "W04": "40028381004",
