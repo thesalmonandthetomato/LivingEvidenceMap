@@ -21,7 +21,7 @@ on:
     branches: [workflow01-final-architecture]
     paths: [docs/workflow08b/.run_publish_shiny]
 permissions:
-  contents: read
+  contents: write
   actions: read
 jobs:
   publish:
@@ -80,6 +80,36 @@ jobs:
             "$RUNNER_TEMP/w01/canonical/records.jsonl" \
             "$RUNNER_TEMP/w08b_shiny"
           cat "$RUNNER_TEMP/w08b_shiny/review_queue_manifest.json"
+      - name: Save immutable W08b review-source provenance for automatic handoff
+        env:
+          DEDUP_RUN: ${{ inputs.dedup_run || '40198092478' }}
+          BIB_RUN: ${{ inputs.bibliography_run || '40182796865' }}
+          PREV_W01: ${{ inputs.previous_w01_pointer || 'docs/deduplication/zenodo/run-39990028078.json' }}
+        run: |
+          set -euo pipefail
+          Rscript -e '
+            library(jsonlite)
+            z<-fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"w08b_shiny/review_queue_manifest.json"))
+            candidates<-list.files("docs/enrichment/zenodo",pattern="^run-[0-9]+\\.json$",full.names=TRUE)
+            stopifnot(length(candidates)>0L,z$status=="published_to_shiny")
+            candidates<-candidates[order(as.numeric(sub("^run-([0-9]+)\\.json$","\\1",basename(candidates))),decreasing=TRUE)]
+            prev_w02<-candidates[[1L]]
+            stopifnot(fromJSON(prev_w02)$status=="published")
+            out<-list(schema="w08b-review-provenance-v1",queue_sha256=z$queue_sha256,
+              batch_id=z$batch_id,dedup_run=Sys.getenv("DEDUP_RUN"),
+              bib_run=Sys.getenv("BIB_RUN"),
+              previous_w01_pointer=Sys.getenv("PREV_W01"),
+              previous_w02_pointer=prev_w02)
+            writeLines(toJSON(out,pretty=TRUE,auto_unbox=TRUE),"docs/workflow08b/review_provenance.json")
+          '
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git pull --rebase origin workflow01-final-architecture
+          git add docs/workflow08b/review_provenance.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Register W08b review queue source lineage"
+            git push origin HEAD:workflow01-final-architecture
+          fi
       - name: Preserve queue provenance
         if: always()
         uses: actions/upload-artifact@v4
