@@ -87,6 +87,9 @@ jobs:
           PREV_W01: ${{ inputs.previous_w01_pointer || 'docs/deduplication/zenodo/run-39990028078.json' }}
         run: |
           set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git pull --rebase origin workflow01-final-architecture
           Rscript -e '
             library(jsonlite)
             z<-fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"w08b_shiny/review_queue_manifest.json"))
@@ -102,9 +105,6 @@ jobs:
               previous_w02_pointer=prev_w02)
             writeLines(toJSON(out,pretty=TRUE,auto_unbox=TRUE),"docs/workflow08b/review_provenance.json")
           '
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git pull --rebase origin workflow01-final-architecture
           git add docs/workflow08b/review_provenance.json
           if ! git diff --cached --quiet; then
             git commit -m "Register W08b review queue source lineage"
