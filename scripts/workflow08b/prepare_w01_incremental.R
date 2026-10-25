@@ -26,10 +26,11 @@ if(anyDuplicated(d$review_case_id))stop("Duplicated human decisions")
 r<-if(file.exists(repairs)&&file.info(repairs)$size>0L)fread(repairs,colClasses="character",na.strings=c("","NA"))else data.table()
 if(nrow(r))stopifnot(all(c("source_kind","source_record_id","action","value","saved_at_utc")%in%names(r)))
 existing_ids<-unique(map$cluster_id)
+setindex(x,cluster)
 clusters<-unique(x$cluster)
 chosen<-setNames(character(length(clusters)),clusters)
 for(cl in clusters){
-  rows<-x[cluster==cl]
+  rows<-x[.(cl),on="cluster",nomatch=0L]
   categories<-unique(rows$status)
   if(length(categories)!=1L)stop("Mixed statuses in W08b cluster ",cl)
   status<-categories[[1L]]
