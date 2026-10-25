@@ -4,7 +4,7 @@ a <- commandArgs(trailingOnly=TRUE)
 if(length(a)!=1L || !file.exists(a[[1L]])) stop("Usage: enlarge_overlap_html.R results.html")
 path<-a[[1L]]
 x<-paste(readLines(path,warn=FALSE,encoding="UTF-8"),collapse="\n")
-marker<-"w09-figure3-publisher-enhancement-v1"
+marker<-"w09-figure3-publisher-enhancement-v2"
 if(grepl(marker,x,fixed=TRUE))quit(status=0L)
 # W09 source now wraps Figure 3 directly; already rendered older documents need
 # this idempotent, caption-based enhancement when W10 publishes them.
@@ -15,13 +15,11 @@ injection<-paste0(
 '</style>\n',
 '<script id="w09-overlap-scroll-compatibility">',
 'document.addEventListener("DOMContentLoaded",function(){',
-'var selectors=document.querySelectorAll(".figure,figure");',
+'var selectors=document.querySelectorAll("img");',
 'for(var i=0;i<selectors.length;i++){',
-'var fig=selectors[i];var caps=fig.querySelectorAll(".caption,figcaption,p");',
-'var isThree=false;for(var j=0;j<caps.length;j++){',
-'var t=(caps[j].textContent||"").trim();if(/^Figure\\s*3\\s*[.:]/.test(t)){isThree=true;break;}}',
-'if(!isThree)continue;var img=fig.querySelector("img");',
-'if(!img||img.closest(".w09-overlap-scroll"))continue;',
+'var img=selectors[i];var alt=(img.getAttribute("alt")||"").trim();',
+'if(!/^Figure\\s*3\\s*[.:]/i.test(alt))continue;',
+'if(img.closest(".w09-overlap-scroll"))continue;',
 'var frame=document.createElement("div");frame.className="w09-overlap-scroll";',
 'frame.setAttribute("role","region");frame.setAttribute("tabindex","0");',
 'frame.setAttribute("aria-label","Figure 3 database overlap, scroll horizontally and vertically");',
