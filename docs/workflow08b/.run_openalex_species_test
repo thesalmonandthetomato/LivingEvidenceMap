@@ -1,3 +1,4 @@
 Validate OpenAlex citation candidate ID filter with required eligible species and NOT farming, no pipeline dispatch.
 
 retry with verified OpenAlex citation checkpoint 23627320; 2026-10-25
+validate scoped title abstract keywords Boolean search 2026-10-25
