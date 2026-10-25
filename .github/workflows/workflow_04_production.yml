@@ -89,7 +89,7 @@ permissions:
 jobs:
   prepare:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 360
     outputs:
       queue_n: ${{ steps.queue.outputs.queue_n }}
       mode: ${{ steps.queue.outputs.mode }}
@@ -419,7 +419,7 @@ jobs:
     needs: [prepare,screen]
     if: ${{ always() && needs.prepare.result == 'success' && (needs.screen.result == 'success' || needs.screen.result == 'skipped') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 360
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -473,7 +473,7 @@ jobs:
     outputs:
       status: ${{ steps.status.outputs.status }}
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 360
     steps:
       - name: Checkout
         uses: actions/checkout@v4
