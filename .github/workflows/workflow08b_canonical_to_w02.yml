@@ -1,0 +1,145 @@
+name: W08b incremental W01 canonical handoff to W02
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [docs/workflow08b/.run_canonical_handoff]
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: w08b-incremental-w01-canonical
+  cancel-in-progress: false
+jobs:
+  canonical_handoff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install existing W01 and W08b dependencies
+        shell: Rscript {0}
+        run: install.packages(c('data.table','jsonlite','digest','httr2','stringi'))
+      - name: Resolve immutable W08b handoff inputs
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          z<-fromJSON('docs/workflow08b/.run_canonical_handoff')
+          stopifnot(grepl('^[0-9a-f]{64}$',z$queue_sha256),
+            grepl('^[0-9]+$',z$review_zenodo_id),
+            grepl('^[0-9]+$',z$dedup_run),
+            grepl('^[0-9]+$',z$bib_run),
+            grepl('^docs/deduplication/zenodo/run-[0-9]+\\.json$',z$previous_w01_pointer),
+            grepl('^docs/enrichment/zenodo/run-[0-9]+\\.json$',z$previous_w02_pointer))
+          for(p in c(z$previous_w01_pointer,z$previous_w02_pointer)) {
+            stopifnot(file.exists(p),identical(fromJSON(p)$status,'published'))
+          }
+          fields<-c(W08B_QUEUE_SHA=z$queue_sha256,W08B_REVIEW_ZENODO=z$review_zenodo_id,
+            W08B_DEDUP_RUN=z$dedup_run,W08B_BIB_RUN=z$bib_run,
+            W08B_PREV_W01=z$previous_w01_pointer,W08B_PREV_W02=z$previous_w02_pointer)
+          cat(paste0(names(fields),'=',unname(fields),'\n'),
+              file=Sys.getenv('GITHUB_ENV'),append=TRUE)
+      - name: Restore published W01 baseline and delta lineage once
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer "$W08B_PREV_W01" --pointer-dir docs/deduplication/zenodo \
+            --output-root "$RUNNER_TEMP/w01_previous"
+      - name: Retrieve existing W08b deterministic and bibliography artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/w08b_dedup" "$RUNNER_TEMP/w08b_bib"
+          gh run download "$W08B_DEDUP_RUN" --name "w08b-lightweight-dedup-$W08B_DEDUP_RUN" \
+            --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/w08b_dedup"
+          gh run download "$W08B_BIB_RUN" --name "w08b-complete-bibliographies-$W08B_BIB_RUN" \
+            --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/w08b_bib"
+          test -s "$RUNNER_TEMP/w08b_dedup/identity_crosswalk.csv"
+          test -s "$RUNNER_TEMP/w08b_bib/lens/records.jsonl"
+          test -s "$RUNNER_TEMP/w08b_bib/openalex/openalex_sidecar_records.jsonl"
+      - name: Restore human decisions and abstract corrections from published restricted archive
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          Rscript scripts/workflow08b/restore_review_export.R \
+            "$W08B_REVIEW_ZENODO" "$W08B_QUEUE_SHA" "$RUNNER_TEMP/w08b_review"
+      - name: Apply existing W08b classifications and human decisions to W01 map
+        run: |
+          Rscript scripts/workflow08b/prepare_w01_incremental.R \
+            "$RUNNER_TEMP/w01_previous" \
+            "$RUNNER_TEMP/w08b_dedup/identity_crosswalk.csv" \
+            "$RUNNER_TEMP/w08b_bib" \
+            "$RUNNER_TEMP/w08b_review/decisions.csv" \
+            "$RUNNER_TEMP/w08b_review/abstract_repairs.csv" \
+            "$RUNNER_TEMP/w08b_adapted"
+          cat "$RUNNER_TEMP/w08b_adapted/adapter_manifest.json"
+      - name: Build canonical W01 records using existing canonicalisation script
+        run: |
+          Rscript scripts/updater/workflow_01_build_canonical_jsonl.R \
+            --cluster-map "$RUNNER_TEMP/w08b_adapted/final/manifestation_cluster_map.csv" \
+            --strip-actions "$RUNNER_TEMP/w08b_adapted/final/abstract_strip_actions.jsonl" \
+            --data-quality-repairs "$RUNNER_TEMP/w08b_adapted/final/cumulative_data_quality_repairs.jsonl" \
+            --repair-audit "$RUNNER_TEMP/w08b_adapted/canonical/data_quality_repair_application.jsonl" \
+            --input-manifest "$RUNNER_TEMP/w08b_adapted/source_inputs.json" \
+            --run-id "$GITHUB_RUN_ID" \
+            --output "$RUNNER_TEMP/w08b_adapted/canonical/records.jsonl" \
+            --manifest "$RUNNER_TEMP/w08b_adapted/canonical/canonical_manifest.json"
+      - name: Construct standard incremental W01 delta without rerunning deduplication
+        run: |
+          Rscript scripts/updater/workflow_01_build_delta.R \
+            --previous-root "$RUNNER_TEMP/w01_previous" \
+            --current-seed-root "$RUNNER_TEMP/w08b_adapted/workflow01_seed" \
+            --current-final-root "$RUNNER_TEMP/w08b_adapted/final" \
+            --current-canonical "$RUNNER_TEMP/w08b_adapted/canonical/records.jsonl" \
+            --current-canonical-manifest "$RUNNER_TEMP/w08b_adapted/canonical/canonical_manifest.json" \
+            --previous-pointer "$W08B_PREV_W01" \
+            --repair-audit "$RUNNER_TEMP/w08b_adapted/canonical/data_quality_repair_application.jsonl" \
+            --repair-ledger "$RUNNER_TEMP/w08b_adapted/final/cumulative_data_quality_repairs.jsonl" \
+            --output-dir "$RUNNER_TEMP/w08b_delta" --run-id "$GITHUB_RUN_ID"
+          test -s "$RUNNER_TEMP/w08b_delta/delta_manifest.json"
+      - name: Publish the W01-compatible incremental state to restricted Zenodo
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          Rscript scripts/updater/workflow_01_archive_delta_to_zenodo.R \
+            --delta-dir "$RUNNER_TEMP/w08b_delta" --run-id "$GITHUB_RUN_ID" \
+            --repository "$GITHUB_REPOSITORY" --output-dir "$RUNNER_TEMP/w08b_w01_zenodo"
+      - name: Register authoritative W01 pointer and trigger existing W02–W10 chain
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git pull --rebase origin workflow01-final-architecture
+          Rscript scripts/updater/workflow_01_update_zenodo_registry.R \
+            --receipt "$RUNNER_TEMP/w08b_w01_zenodo/zenodo_receipt.json" \
+            --registry docs/deduplication/zenodo_registry.csv \
+            --pointer-dir docs/deduplication/zenodo
+          POINTER="docs/deduplication/zenodo/run-$GITHUB_RUN_ID.json"
+          test -s "$POINTER"
+          git add docs/deduplication/zenodo_registry.csv "$POINTER"
+          git commit -m "W08b: publish W01-compatible incremental handoff $GITHUB_RUN_ID"
+          git pull --rebase origin workflow01-final-architecture
+          git push origin HEAD:workflow01-final-architecture
+          gh workflow run workflow_02_batched_production.yml \
+            --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture \
+            -f workflow01_pointer_path="$POINTER" \
+            -f previous_workflow02_pointer_path="$W08B_PREV_W02"
+          echo "PASS: dispatched existing batched W02 using authoritative incremental W01 pointer $POINTER"
+      - name: Preserve non-sensitive W01 canonical handoff receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w08b-w01-canonical-handoff-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/w08b_adapted/adapter_manifest.json
+            ${{ runner.temp }}/w08b_w01_zenodo/zenodo_receipt.json
+          if-no-files-found: warn
