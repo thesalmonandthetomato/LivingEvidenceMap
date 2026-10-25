@@ -29,11 +29,15 @@ jobs:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
-          Rscript scripts/workflow08b/restore_discovery.R 23628056 "$RUNNER_TEMP/w08b"
+          Rscript scripts/workflow08b/restore_discovery.R 23627320 "$RUNNER_TEMP/w08b"
+      - name: Verify OpenAlex-specific citation register
+        run: |
+          test -s "$RUNNER_TEMP/w08b/openalex_merged/provider_candidate_ids.csv"
+          Rscript -e 'd<-read.csv(file.path(Sys.getenv("RUNNER_TEMP"),"w08b/openalex_merged/provider_candidate_ids.csv"));stopifnot("provider"%in%names(d),any(d$provider=="openalex"));cat("OpenAlex candidate IDs:",sum(d$provider=="openalex"),"\\n")'
       - name: Validate OpenAlex ID, species and NOT farming queries
         env:
           OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
         run: |
           set -euo pipefail
-          Rscript scripts/workflow08b/openalex_species_not_farming_test.R "$RUNNER_TEMP/w08b/merged/provider_candidate_ids.csv" user_input/workflow00_search_strategy.json "$RUNNER_TEMP/openalex_boolean.json"
+          Rscript scripts/workflow08b/openalex_species_not_farming_test.R "$RUNNER_TEMP/w08b/openalex_merged/provider_candidate_ids.csv" user_input/workflow00_search_strategy.json "$RUNNER_TEMP/openalex_boolean.json"
           cat "$RUNNER_TEMP/openalex_boolean.json"
