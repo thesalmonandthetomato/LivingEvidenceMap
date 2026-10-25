@@ -71,7 +71,7 @@ for(i in seq_along(groups)){
   id<-scalar(w$lens_id);title<-scalar(w$title)
   auth<-w$authors%||%w$author%||%NULL
   keys<-w$keywords%||%w$keyword%||%NULL
-  journal<-scalar(w$source$title%||%w$source$display_name%||%w$source%||%NULL)
+  journal<-if(is.list(w$source))scalar(w$source$title%||%w$source$display_name) else scalar(w$source)
   record<-list(identity=list(lens_id=id),canonical=list(
    lens_id=id,doi=extract_doi(w),title=title,abstract=lens_abstract(w),
    authors=auth,year=scalar(w$year_published),source=journal,
