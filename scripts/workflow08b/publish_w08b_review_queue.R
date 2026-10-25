@@ -61,11 +61,11 @@ repeat{
 close(con)
 if(any(!vapply(history_ids,exists,logical(1),envir=historical,inherits=FALSE)))stop("Historical W01 record missing")
 rows<-lapply(seq_along(groups),function(i){
- cluster<-groups[[i]];g<-d[cluster==..cluster]
+ target_cluster<-groups[[i]];g<-d[cluster==target_cluster]
  keys<-unique(g$candidate_key)
  ids<-unique(unlist(strsplit(g$matched_w01_ids[nzchar(g$matched_w01_ids)],"|",fixed=TRUE),use.names=FALSE))
- case<-list(review_case_id=paste0("w08b-ambiguous-",cluster),
-   cluster_id=cluster,
+ case<-list(review_case_id=paste0("w08b-ambiguous-",target_cluster),
+   cluster_id=target_cluster,
    candidates=lapply(keys,function(k)get(k,envir=candidates,inherits=FALSE)),
    historical=lapply(ids,function(k)get(k,envir=historical,inherits=FALSE)),
    match_methods=unique(unlist(strsplit(g$match_methods[nzchar(g$match_methods)],"|",fixed=TRUE),use.names=FALSE)))
