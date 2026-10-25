@@ -1,0 +1,46 @@
+name: W08b Lens NOT count
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [docs/workflow08b/.run_lens_not_count]
+permissions:
+  contents: read
+jobs:
+  count:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','httr2','digest'))
+      - name: Preflight R syntax
+        run: Rscript -e 'invisible(parse(file="scripts/workflow08b/lens_not_count.R"));cat("PASS: R parse preflight\n")'
+      - name: Restore unique Lens citation ID register
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/restore_discovery.R 23628056 "$RUNNER_TEMP/w08b"
+          test -s "$RUNNER_TEMP/w08b/merged/provider_candidate_ids.csv"
+      - name: Count Lens IDs after registered provider NOT
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/lens_not_count.R "$RUNNER_TEMP/w08b/merged/provider_candidate_ids.csv" user_input/workflow00_search_strategy.json "$RUNNER_TEMP/lens_count"
+          cat "$RUNNER_TEMP/lens_count/lens_not_count_summary.json"
+      - name: Upload count and batch manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w08b-lens-not-count
+          path: ${{ runner.temp }}/lens_count/
+          if-no-files-found: warn
