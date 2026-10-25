@@ -62,7 +62,7 @@ env:
 jobs:
   prepare:
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 360
     steps:
       - name: Checkout Workflow 01 implementation
         uses: actions/checkout@v4
@@ -453,7 +453,7 @@ jobs:
   adjudicate:
     needs: prepare
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 360
     outputs:
       pending_count: ${{ steps.adjudication.outputs.pending_count }}
     steps:
@@ -744,7 +744,7 @@ jobs:
   canonicalise:
     needs: adjudicate
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1041,7 +1041,7 @@ jobs:
     needs: [adjudicate, canonicalise]
     if: ${{ needs.adjudicate.outputs.pending_count == '0' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
         with:
