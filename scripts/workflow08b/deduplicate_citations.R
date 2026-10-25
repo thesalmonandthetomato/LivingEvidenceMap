@@ -56,7 +56,7 @@ repeat{
   if(!nzchar(id))stop("Missing historical W01 ID")
   ca<-z$canonical%||%list()
   keys<-list()
-  add<-function(kind,v){if(nzchar(v))keys[[length(keys)+1L]]<<-data.table(kind=kind,key=v,w01_record_id=id)}
+  add<-function(kind,v){if(nzchar(v))keys[[length(keys)+1L]]<<-data.table(kind=kind,identity_key=v,w01_record_id=id)}
   add("doi",ndoi(scalar(ca$doi)))
   title<-norm(scalar(ca$title));ab<-norm(scalar(ca$abstract))
   if(nzchar(title))add("title",title)
@@ -79,16 +79,16 @@ close(con)
 h<-unique(rbindlist(hist,fill=TRUE))
 # Ambiguous historical matches are held for targeted inspection, never assigned at random.
 q<-rbindlist(list(
- d[nzchar(doi),.(idx,kind="doi",key=doi)],
- d[nzchar(title),.(idx,kind="title",key=title)],
- d[nzchar(abstract),.(idx,kind="abstract",key=abstract)],
- d[provider=="lens",.(idx,kind="lens",key=provider_id)],
- d[provider=="openalex",.(idx,kind="openalex",key=provider_id)]
+ d[nzchar(doi),.(idx,kind="doi",identity_key=doi)],
+ d[nzchar(title),.(idx,kind="title",identity_key=title)],
+ d[nzchar(abstract),.(idx,kind="abstract",identity_key=abstract)],
+ d[provider=="lens",.(idx,kind="lens",identity_key=provider_id)],
+ d[provider=="openalex",.(idx,kind="openalex",identity_key=provider_id)]
 ))
-hits<-merge(q,h,by=c("kind","key"),allow.cartesian=TRUE)
+hits<-merge(q,h,by=c("kind","identity_key"),allow.cartesian=TRUE)
 hits<-merge(hits,d[,.(idx,doi,title,year,author)],by="idx")
 # Contradictory DOI is a hard stop to automatic text-based matching; DOI itself remains authoritative.
-hist_doi<-unique(h[kind=="doi",.(w01_record_id,historical_doi=key)])
+hist_doi<-unique(h[kind=="doi",.(w01_record_id,historical_doi=identity_key)])
 hits<-merge(hits,hist_doi,by="w01_record_id",all.x=TRUE,allow.cartesian=TRUE)
 hits[,conflict:=kind%in%c("title","abstract") & nzchar(doi) & !is.na(historical_doi)&nzchar(historical_doi)&doi!=historical_doi]
 hits<-hits[!conflict | kind%in%c("doi","lens","openalex")]
