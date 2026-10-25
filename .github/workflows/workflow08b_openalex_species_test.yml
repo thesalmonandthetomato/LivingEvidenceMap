@@ -1,0 +1,39 @@
+name: W08b OpenAlex species NOT farming test
+on:
+  workflow_dispatch:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [docs/workflow08b/.run_openalex_species_test]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install packages
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','httr2','digest'))
+      - name: Parse preflight
+        run: |
+          Rscript -e 'invisible(parse(file="scripts/workflow08b/openalex_species_not_farming_test.R"))'
+      - name: Restore provider citation IDs
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/restore_discovery.R 23628056 "$RUNNER_TEMP/w08b"
+      - name: Validate OpenAlex ID, species and NOT farming queries
+        env:
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/openalex_species_not_farming_test.R "$RUNNER_TEMP/w08b/merged/provider_candidate_ids.csv" user_input/workflow00_search_strategy.json "$RUNNER_TEMP/openalex_boolean.json"
+          cat "$RUNNER_TEMP/openalex_boolean.json"
