@@ -23,7 +23,7 @@ setkey(x,candidate_key)
 d<-fread(decisions,colClasses="character",na.strings=c("","NA"))
 stopifnot(all(c("review_case_id","decision","target_w01_id")%in%names(d)))
 if(anyDuplicated(d$review_case_id))stop("Duplicated human decisions")
-r<-if(file.exists(repairs)&&file.info(repairs)$size>0L)fread(repairs,colClasses="character",na.strings=c("","NA"))else data.table()
+r<-if(file.exists(repairs)&&file.info(repairs)$size>0L)fread(repairs,header=TRUE,colClasses="character",na.strings=c("","NA"))else data.table()
 repair_fields<-c("source_kind","source_record_id","action","value")
 if(nrow(r) && !all(repair_fields %in% names(r))){
   # Empty data.frame() is serialised by write.csv as a one-column CSV.
