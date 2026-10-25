@@ -9,6 +9,7 @@ on:
       - 'docs/search_record/full_search/*.json'
       - 'docs/search_record/fortnightly_update/*.json'
       - 'docs/search_record/ad_hoc/*.json'
+      - 'docs/current_run/current_run_status.json'
       - 'docs/deduplication/zenodo_registry.csv'
       - 'docs/enrichment/zenodo_registry.csv'
       - 'docs/publication_status/zenodo_registry.csv'
