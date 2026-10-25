@@ -751,7 +751,7 @@ jobs:
     needs: [validate-and-plan, archive-search-records]
     if: ${{ always() && needs.validate-and-plan.result == 'success' && needs.archive-search-records.result == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
     env:
       SELECTED_SOURCES: ${{ needs.validate-and-plan.outputs.selected_sources_csv }}
     steps:
