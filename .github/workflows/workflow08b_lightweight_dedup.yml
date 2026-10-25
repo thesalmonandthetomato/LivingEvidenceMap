@@ -70,8 +70,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh workflow run workflow08b_publish_shiny.yml --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture \\
-            -f dedup_run="$GITHUB_RUN_ID" \\
-            -f bibliography_run="40182796865" \\
+          gh workflow run workflow08b_publish_shiny.yml --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture \
+            -f dedup_run="$GITHUB_RUN_ID" \
+            -f bibliography_run="40182796865" \
             -f previous_w01_pointer="docs/deduplication/zenodo/run-39990028078.json"
           echo "PASS: dispatched W08b Shiny adjudication publication"
