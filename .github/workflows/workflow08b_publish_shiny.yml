@@ -1,0 +1,92 @@
+name: W08b publish human dedup cases to Shiny
+on:
+  workflow_dispatch:
+    inputs:
+      dedup_run:
+        description: 'Successful W08b deterministic deduplication run'
+        required: true
+        default: '40198092478'
+        type: string
+      bibliography_run:
+        description: 'Full W08b bibliography download run'
+        required: true
+        default: '40182796865'
+        type: string
+      previous_w01_pointer:
+        description: 'Authoritative historical W01 final/delta pointer'
+        required: true
+        default: 'docs/deduplication/zenodo/run-39990028078.json'
+        type: string
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [docs/workflow08b/.run_publish_shiny]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install R libraries
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','data.table','googlesheets4','digest','httr2'))
+      - name: Restore new citation bibliography and verified dedup outputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BIB_RUN: ${{ inputs.bibliography_run || '40182796865' }}
+          DEDUP_RUN: ${{ inputs.dedup_run || '40198092478' }}
+        run: |
+          set -euo pipefail
+          [[ "$BIB_RUN" =~ ^[0-9]+$ && "$DEDUP_RUN" =~ ^[0-9]+$ ]]
+          mkdir -p "$RUNNER_TEMP/w08b" "$RUNNER_TEMP/dedup"
+          gh run download "$BIB_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name "w08b-complete-bibliographies-$BIB_RUN" --dir "$RUNNER_TEMP/w08b"
+          gh run download "$DEDUP_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name "w08b-lightweight-dedup-$DEDUP_RUN" --dir "$RUNNER_TEMP/dedup"
+          test -s "$RUNNER_TEMP/dedup/identity_crosswalk.csv"
+          test -s "$RUNNER_TEMP/w08b/lens/records.jsonl"
+          test -s "$RUNNER_TEMP/w08b/openalex/openalex_sidecar_records.jsonl"
+          Rscript -e 'x<-jsonlite::fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"dedup/summary.json"));stopifnot(x$ambiguous_clusters==21L,x$provider_manifestations==33316L)'
+      - name: Restore authoritative historical W01 records read-only
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          PREV_POINTER: ${{ inputs.previous_w01_pointer || 'docs/deduplication/zenodo/run-39990028078.json' }}
+        run: |
+          set -euo pipefail
+          test -s "$PREV_POINTER"
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer "$PREV_POINTER" \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root "$RUNNER_TEMP/w01"
+          test -s "$RUNNER_TEMP/w01/canonical/records.jsonl"
+      - name: Publish exactly the ambiguous historical matches to Shiny
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/publish_w08b_review_queue.R \
+            "$RUNNER_TEMP/dedup/identity_crosswalk.csv" \
+            "$RUNNER_TEMP/w08b/lens/records.jsonl" \
+            "$RUNNER_TEMP/w08b/openalex/openalex_sidecar_records.jsonl" \
+            "$RUNNER_TEMP/w01/canonical/records.jsonl" \
+            "$RUNNER_TEMP/w08b_shiny"
+          cat "$RUNNER_TEMP/w08b_shiny/review_queue_manifest.json"
+      - name: Preserve queue provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w08b-shiny-review-queue-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/w08b_shiny/w08b_review_queue.csv
+            ${{ runner.temp }}/w08b_shiny/review_queue_manifest.json
+          retention-days: 30
+          if-no-files-found: warn
