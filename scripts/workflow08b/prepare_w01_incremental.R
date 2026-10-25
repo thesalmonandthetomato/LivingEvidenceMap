@@ -24,7 +24,7 @@ d<-fread(decisions,colClasses="character",na.strings=c("","NA"))
 stopifnot(all(c("review_case_id","decision","target_w01_id")%in%names(d)))
 if(anyDuplicated(d$review_case_id))stop("Duplicated human decisions")
 r<-if(file.exists(repairs)&&file.info(repairs)$size>0L)fread(repairs,colClasses="character",na.strings=c("","NA"))else data.table()
-if(nrow(r))stopifnot(all(c("source_kind","source_record_id","action","value","saved_at_utc")%in%names(r)))
+if(nrow(r))stopifnot(all(c("source_kind","source_record_id","action","value")%in%names(r)))
 existing_ids<-unique(map$cluster_id)
 setindex(x,cluster)
 clusters<-unique(x$cluster)
@@ -121,7 +121,8 @@ if(file.exists(prior_repairs))file.copy(prior_repairs,repair_out,overwrite=TRUE)
 # Historical repairs remain an audit, not a mutation of published W01 records.
 # Candidate corrections are applied using their exact new manifestation identity.
 if(nrow(r)){
-  r<-r[order(saved_at_utc)]
+  # The Sheets export preserves append order; timestamp is optional in older repairs.
+  if("saved_at_utc"%in%names(r))setorderv(r,"saved_at_utc",na.last=TRUE)
   for(i in seq_len(nrow(r))){
     z<-r[i]
     if(z$source_kind!="candidate")next
