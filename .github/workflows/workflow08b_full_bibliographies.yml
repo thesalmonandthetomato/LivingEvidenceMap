@@ -1,0 +1,68 @@
+name: W08b full eligible bibliographies to W01 staging
+on:
+  workflow_dispatch:
+    inputs:
+      lens_run:
+        description: 'Successful Lens eligible-ID export run'
+        required: true
+        default: '40180695418'
+        type: string
+      openalex_run:
+        description: 'Successful OpenAlex eligible-ID export run'
+        required: true
+        default: '40180337422'
+        type: string
+  push:
+    branches: [workflow01-final-architecture]
+    paths: [docs/workflow08b/.run_full_bibliographies]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  bibliography:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','httr2'))
+      - name: Parse production script
+        run: Rscript -e 'invisible(parse(file="scripts/workflow08b/w08b_bibliography_to_w01.R"))'
+      - name: Restore this update's eligible-ID artefacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LENS_RUN: ${{ inputs.lens_run || '40180695418' }}
+          OPENALEX_RUN: ${{ inputs.openalex_run || '40180337422' }}
+        run: |
+          set -euo pipefail
+          [[ "$LENS_RUN" =~ ^[0-9]+$ && "$OPENALEX_RUN" =~ ^[0-9]+$ ]]
+          mkdir -p "$RUNNER_TEMP/lens" "$RUNNER_TEMP/openalex"
+          gh run download "$LENS_RUN" --name "w08b-lens-eligible-$LENS_RUN" --dir "$RUNNER_TEMP/lens"
+          gh run download "$OPENALEX_RUN" --name "w08b-openalex-eligible-$OPENALEX_RUN" --dir "$RUNNER_TEMP/openalex"
+          test -s "$RUNNER_TEMP/lens/eligible_lens_ids.csv"
+          test -s "$RUNNER_TEMP/openalex/eligible_openalex_ids.csv"
+          test -s "$RUNNER_TEMP/lens/eligible_lens_citation_edges.csv"
+          test -s "$RUNNER_TEMP/openalex/eligible_openalex_citation_edges.csv"
+      - name: Retrieve full metadata and prepare source-specific W01 inputs
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/w08b_bibliography_to_w01.R "$RUNNER_TEMP/lens/eligible_lens_ids.csv" "$RUNNER_TEMP/openalex/eligible_openalex_ids.csv" "$RUNNER_TEMP/lens/eligible_lens_citation_edges.csv" "$RUNNER_TEMP/openalex/eligible_openalex_citation_edges.csv" "$RUNNER_TEMP/w08b_bibliography"
+          cat "$RUNNER_TEMP/w08b_bibliography/manifest.json"
+      - name: Upload outputs and checkpoint
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w08b-complete-bibliographies-${{ github.run_id }}
+          path: ${{ runner.temp }}/w08b_bibliography/
+          retention-days: 30
+          if-no-files-found: warn
