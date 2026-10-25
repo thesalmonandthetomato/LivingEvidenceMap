@@ -30,6 +30,7 @@ injection <- paste0(
 'var fig2=two[0],fig3=three[0];',
 'fig2.style.removeProperty("width");fig2.style.removeProperty("max-width");fig2.style.removeProperty("height");',
 'fig2.style.setProperty("max-width","100%","important");',
+'if(fig3.closest(".w09-figure3-frame-v5"))return;',
 'var frame=document.createElement("div");frame.className="w09-figure3-frame-v5";',
 'frame.setAttribute("role","region");frame.setAttribute("tabindex","0");',
 'frame.setAttribute("aria-label","Figure 3 enlarged and scrollable");',
