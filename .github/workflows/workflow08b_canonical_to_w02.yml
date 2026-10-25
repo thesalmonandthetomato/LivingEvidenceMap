@@ -43,7 +43,7 @@ jobs:
             W08B_DEDUP_RUN=z$dedup_run,W08B_BIB_RUN=z$bib_run,
             W08B_PREV_W01=z$previous_w01_pointer,W08B_PREV_W02=z$previous_w02_pointer)
           cat(paste0(names(fields),'=',unname(fields),'\n'),
-              file=Sys.getenv('GITHUB_ENV'),append=TRUE)
+              file=Sys.getenv('GITHUB_ENV'),append=TRUE,sep='')
       - name: Restore published W01 baseline and delta lineage once
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
