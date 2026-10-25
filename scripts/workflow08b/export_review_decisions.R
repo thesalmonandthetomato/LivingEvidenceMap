@@ -57,6 +57,7 @@ tryCatch(utils::zip(zipfile,files=c("queue.csv","decisions.csv","abstract_repair
 if(!file.exists(zipfile)||file.info(zipfile)$size<100L)stop("Failed to create private export archive")
 token <- env("ZENODO_ACCESS_TOKEN")
 base <- "https://zenodo.org/api/deposit/depositions"
+message("ZENODO_STAGE=create_deposition")
 post <- request(base) |> req_auth_bearer_token(token) |> req_body_json(list(metadata=list(
   title=paste("W08b citation-chasing human adjudication",batch),
   upload_type="dataset",description="Restricted adjudication, audited abstract repairs and queue provenance.",
@@ -64,12 +65,16 @@ post <- request(base) |> req_auth_bearer_token(token) |> req_body_json(list(meta
   access_right="closed"))) |> req_perform() |> resp_body_json(simplifyVector=FALSE)
 bucket <- as.character(post$links$bucket %||% "")
 if(!nzchar(bucket))stop("Zenodo deposition did not return a bucket")
+message("ZENODO_STAGE=upload_file")
 upload <- request(paste0(bucket,"/w08b-human-decisions.zip")) |>
   req_method("PUT") |> req_auth_bearer_token(token) |>
-  req_body_file(zipfile,type="application/zip") |> req_perform()
+  req_body_file(zipfile,type="application/octet-stream") |> req_perform()
 if(resp_status(upload) >= 300L)stop("Zenodo upload failed")
+message("ZENODO_STAGE=publish_deposition")
 publish <- request(paste0(base,"/",post$id,"/actions/publish")) |>
-  req_method("POST") |> req_auth_bearer_token(token) |> req_perform() |> resp_body_json(simplifyVector=FALSE)
+  req_method("POST") |> req_auth_bearer_token(token) |>
+  req_headers(`Content-Type`="application/json") |>
+  req_body_raw(charToRaw("{}"),type="application/json") |> req_perform() |> resp_body_json(simplifyVector=FALSE)
 receipt <- list(schema="w08b-human-decision-receipt-v1",batch_id=batch,queue_sha256=sha,
   cases=nrow(q),decisions=nrow(d),restricted_zenodo_record_id=publish$id,
   doi=publish$doi %||% "",status=publish$state %||% "")
