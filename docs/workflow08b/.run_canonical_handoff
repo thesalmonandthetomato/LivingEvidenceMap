@@ -7,6 +7,6 @@
   "previous_w01_pointer": "docs/deduplication/zenodo/run-39990028078.json",
   "previous_w02_pointer": "docs/enrichment/zenodo/run-40000668150.json",
   "source_export_run": "40211702264",
-  "retry_of": "40213986667",
-  "retry_reason": "accept exported repair schema without optional timestamp"
+  "retry_of": "40216238092",
+  "retry_reason": "repair CSV placeholder handling and early schema preflight"
 }
