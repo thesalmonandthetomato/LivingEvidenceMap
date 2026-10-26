@@ -1,16 +1,16 @@
 {
   "schema": "living-evidence-map-workflow09-stage-summary-v1",
   "stage": "W02",
-  "source_run_id": "40000668150",
-  "update_id": "w00-run-39298022062",
-  "generated_at_utc": "2026-10-23T18:50:08Z",
-  "pointer_path": "docs/enrichment/zenodo/run-40000668150.json",
-  "pointer_sha256": "275337c1cc0d70ac14327c9b733ecf21b607f3bdeb3a11b5c844d694a04a8d42",
+  "source_run_id": "40289685551",
+  "update_id": "w08b-citation-run-40191412234",
+  "generated_at_utc": "2026-10-26T08:28:02Z",
+  "pointer_path": "docs/enrichment/zenodo/run-40289685551.json",
+  "pointer_sha256": "11457068076befb7ecc41d1e112784e99cb5747e889cb587a483616910f0957b",
   "status": "complete",
   "metrics": {
-    "enriched_records": 2113,
-    "cumulative_patch_records": 3340,
-    "upstream_workflow01_canonical_sha256": "4eb0ce57c54887c8f1fec607996c65cace6c57f3ffca65e78dced42a1029e14e",
-    "final_enriched_sha256": "acf87d3c3cf76041511a259c492092c528598ba8560ae6586ff3d0f4a968ef76"
+    "enriched_records": 6046,
+    "cumulative_patch_records": 10540,
+    "upstream_workflow01_canonical_sha256": "0daaf255f297a284ffcec155d674483ad88cf675b49c1b56026cea7bc7b3520c",
+    "final_enriched_sha256": "47c741da344baf98209944baa7aaf7bcdadd460bbb66935ab11643cdd27f2aa1"
   }
 }
