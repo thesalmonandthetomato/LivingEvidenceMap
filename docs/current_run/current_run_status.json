@@ -3,7 +3,7 @@
   "update_id": "w08b-citation-run-40191412234",
   "branch": "workflow01-final-architecture",
   "started_at_utc": "2026-10-25T10:25:29Z",
-  "last_updated_at_utc": "2026-10-25T21:51:21Z",
+  "last_updated_at_utc": "2026-10-26T07:00:00Z",
   "baseline": {
     "release_update_id": "w00-run-39127932051",
     "workflow01_source_run_id": "39990028078",
@@ -153,7 +153,7 @@
       "status": "complete"
     },
     "W02": {
-      "status": "pending"
+      "status": "waiting_human"
     },
     "W03": {
       "status": "pending"
@@ -179,14 +179,14 @@
     "W10": {
       "status": "pending"
     },
-    "current_stage": "W01",
+    "current_stage": "W02",
     "completed_through": 2,
-    "status_label": "Deduplication complete; Workflow 02 enrichment in progress",
+    "status_label": "Enrichment awaiting human review (10 records)",
     "active_position": 3
   },
   "workflow_runs": {
     "W00": "40191412234",
-    "W02": "40000668150",
+    "W02": "40233813968",
     "W03": "40015813902",
     "W04": "40028381004",
     "W05": "40028381004",
