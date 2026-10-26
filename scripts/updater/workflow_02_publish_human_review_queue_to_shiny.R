@@ -118,4 +118,8 @@ if(!identical(digest(reconstructed,algo="sha256",serialize=FALSE),queue_sha)) {
   stop("Published W02 queue reconstruction SHA mismatch",call.=FALSE)
 }
 
+# Reuse the metadata from the successfully verified queue; no second Sheets read needed.
+writeLines(paste(batch_id,queue_sha,sep="|"),
+           "outputs/workflow02_human_review/validated_queue_metadata.txt")
+
 cat(sprintf("PASS: published validated W02 queue batch=%s cases=%d sha256=%s\n",batch_id,length(out),queue_sha))
