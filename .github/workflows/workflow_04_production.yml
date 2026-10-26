@@ -604,8 +604,16 @@ jobs:
           git add docs/current_run/current_run_status.json
           if ! git diff --cached --quiet; then
             git commit -m "Mark W04 awaiting human review [skip ci]"
-            git pull --rebase origin workflow01-final-architecture
-            git push origin HEAD:workflow01-final-architecture
+            # Retry only transient remote 5xx failures; never force-push or mask conflicts.
+            for attempt in 1 2 3 4; do
+              git pull --rebase origin workflow01-final-architecture
+              if git push origin HEAD:workflow01-final-architecture; then break; fi
+              if [ "$attempt" -eq 4 ]; then
+                echo "::error::W04 status push failed after four attempts; Shiny queue and artifacts remain intact"
+                exit 1
+              fi
+              sleep $((attempt * 5))
+            done
           fi
 
       - name: Publish resolved W04 state
@@ -664,8 +672,16 @@ jobs:
           git add docs/current_run/current_run_status.json docs/reporting/workflow_09_inputs/current
           if ! git diff --cached --quiet; then
             git commit -m "Update current-run status through W04 [skip ci]"
-            git pull --rebase origin workflow01-final-architecture
-            git push origin HEAD:workflow01-final-architecture
+            # Retry only transient remote 5xx failures; never force-push or mask conflicts.
+            for attempt in 1 2 3 4; do
+              git pull --rebase origin workflow01-final-architecture
+              if git push origin HEAD:workflow01-final-architecture; then break; fi
+              if [ "$attempt" -eq 4 ]; then
+                echo "::error::W04 status push failed after four attempts; Shiny queue and artifacts remain intact"
+                exit 1
+              fi
+              sleep $((attempt * 5))
+            done
           fi
 
       - name: Upload W04 handoff/review state
