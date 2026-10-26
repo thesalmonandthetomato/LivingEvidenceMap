@@ -1,0 +1,112 @@
+name: ONE-OFF W04 citation-chasing provisional exclusions 40298490744
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/oneoff_w04_citation_chasing_40298490744.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: w04-oneoff-citation-chasing-40298490744
+  cancel-in-progress: false
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install minimal R dependencies
+        shell: Rscript {0}
+        run: install.packages(c("jsonlite", "digest", "googlesheets4"))
+      - name: One-off verified deterministic exclusions (no LLM calls)
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript --vanilla - "$RUNNER_TEMP/lem-google-service-account.json" <<'RSCRIPT'
+          suppressPackageStartupMessages({library(jsonlite);library(digest);library(googlesheets4)})
+          sheet_id <- "1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA"
+          source_run <- "40298490744"
+          expected_sha <- "49fb9e3d586f9d17e9a3f5a55b6eca472bb9032084f54fb3f7b8e709a78c8cbf"
+          gs4_auth(path=commandArgs(TRUE)[[1]],cache=FALSE)
+          q <- read_sheet(sheet_id,sheet="queue_w04_resolution_active",col_types="c")
+          stopifnot(nrow(q)==2944L,all(c("review_case_id","case_json","queue_sha256","batch_id","record_id")%in%names(q)))
+          q <- q[order(as.integer(q$case_index)),,drop=FALSE]
+          stopifnot(length(unique(q$queue_sha256))==1L,identical(unique(q$queue_sha256),expected_sha))
+          stopifnot(length(unique(q$batch_id))==1L,
+            identical(unique(q$batch_id),paste0("w04-resolution-",source_run,"-",substr(expected_sha,1,12))))
+          reconstructed <- paste0(paste(q$case_json,collapse="\n"),"\n")
+          stopifnot(identical(digest(reconstructed,algo="sha256",serialize=FALSE),expected_sha))
+          cases <- lapply(q$case_json,fromJSON,simplifyVector=FALSE)
+          ids <- vapply(cases,function(z)as.character(z$record_id),character(1))
+          votes <- lapply(cases,function(z)as.character(unlist(z$screening$votes)))
+          stopifnot(!anyDuplicated(ids),identical(ids,as.character(q$record_id)),
+            all(vapply(cases,function(z)identical(z$screening$decision,"uncertain"),logical(1))))
+          exclude <- vapply(votes,function(x)any(x=="exclude")||all(x=="uncertain"),logical(1))
+          stopifnot(sum(exclude)==2536L,sum(!exclude)==408L)
+          remaining_votes <- votes[!exclude]
+          stopifnot(all(vapply(remaining_votes,function(x)sum(x=="retain")==1L && sum(x=="uncertain")==2L,logical(1))))
+          tab <- "decisions_w04_resolution"
+          d <- read_sheet(sheet_id,sheet=tab,col_types="c")
+          needed <- c("decision_id","review_case_id","record_id","decision","rationale","reviewer","resolved_at_utc","queue_sha256","supersedes_decision_id")
+          stopifnot(all(needed%in%names(d)))
+          own <- d[tolower(as.character(d$queue_sha256))==expected_sha,,drop=FALSE]
+          if(nrow(own)) {
+            own <- own[order(as.character(own$resolved_at_utc),seq_len(nrow(own)),decreasing=TRUE),,drop=FALSE]
+            own <- own[!duplicated(own$review_case_id),,drop=FALSE]
+            stopifnot(all(own$review_case_id%in%q$review_case_id))
+            # Human judgements are authoritative and are never overwritten by this one-off.
+            cat(sprintf("Preserving %d existing decisions for this batch\n",nrow(own)))
+          }
+          keep <- exclude & !q$review_case_id%in%own$review_case_id
+          n <- sum(keep)
+          now <- format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
+          rows <- data.frame(
+            decision_id=vapply(q$review_case_id[keep],function(id)paste0("w04-res-dec-",digest(paste(id,"oneoff-citation-chasing-rule-20261026",now,"exclude",sep="|"),algo="sha256",serialize=FALSE)),character(1)),
+            review_case_id=q$review_case_id[keep],
+            record_id=q$record_id[keep],
+            decision=rep("exclude",n),
+            rationale=rep("ONE-OFF citation-chasing 40298490744: previously unresolved; exclude if any saved valid exclude vote or all three votes uncertain. Original LLM votes retained in immutable W04 artifact and unchanged Shiny case_json. Rule applies only to this source run.",n),
+            reviewer=rep("oneoff-citation-chasing-rule-20261026",n),
+            resolved_at_utc=rep(now,n),
+            queue_sha256=rep(expected_sha,n),
+            supersedes_decision_id=rep("",n),
+            stringsAsFactors=FALSE
+          )
+          dir.create("outputs/w04_oneoff",recursive=TRUE,showWarnings=FALSE)
+          write.csv(rows,"outputs/w04_oneoff/provisional_exclusions.csv",row.names=FALSE)
+          write.csv(data.frame(record_id=q$record_id[!exclude],review_case_id=q$review_case_id[!exclude]),
+            "outputs/w04_oneoff/408_remaining_review_cases.csv",row.names=FALSE)
+          # Write in batches and verify each decision; safe to retry after an interrupted write.
+          if(n>0L) {
+            for(start in seq(1L,n,by=200L)){
+              batch <- rows[start:min(start+199L,n),,drop=FALSE]
+              current <- read_sheet(sheet_id,sheet=tab,col_types="c")
+              already <- current$review_case_id[tolower(as.character(current$queue_sha256))==expected_sha]
+              batch <- batch[!batch$review_case_id%in%already,,drop=FALSE]
+              if(nrow(batch)) sheet_append(sheet_id,data=batch,sheet=tab)
+              cat(sprintf("Wrote/confirmed provisional decisions through %d of %d\n",min(start+199L,n),n))
+            }
+          }
+          verify <- read_sheet(sheet_id,sheet=tab,col_types="c")
+          active <- verify[tolower(as.character(verify$queue_sha256))==expected_sha,,drop=FALSE]
+          active <- active[order(as.character(active$resolved_at_utc),seq_len(nrow(active)),decreasing=TRUE),,drop=FALSE]
+          active <- active[!duplicated(active$review_case_id),,drop=FALSE]
+          stopifnot(all(q$review_case_id[exclude]%in%active$review_case_id))
+          cat(sprintf("PASS: original queue kept at 2944; provisional exclusions targeted=2536; remaining target for human review=408; decisions active=%d; new decisions written=%d\n",nrow(active),n))
+          write_json(list(source_run_id=source_run,original_queue_sha256=expected_sha,original_uncertain=2944L,rule_exclusion_targets=2536L,remaining_manual_targets=408L,prior_human_decisions=nrow(own),new_provisional_exclusions=n,active_decisions=nrow(active),rule="oneoff-20261026-only"),"outputs/w04_oneoff/receipt.json",auto_unbox=TRUE,pretty=TRUE)
+          RSCRIPT
+      - name: Preserve one-off audit receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oneoff-w04-citation-chasing-40298490744-${{ github.run_id }}
+          path: outputs/w04_oneoff/
+          retention-days: 90
