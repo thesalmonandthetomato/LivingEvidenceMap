@@ -330,7 +330,17 @@ jobs:
             --report outputs/workflow02/final_inventory.json \
             --missing-both-queue outputs/workflow02/missing_both_queue.jsonl
 
+          # Recreate the standard W02 enrichment report from the original immutable batch reports.
+          # Use the adjudicated patch checksum; no enrichment requests are repeated.
+          Rscript scripts/updater/workflow_02_aggregate_batches.R \
+            --batch-root source/batches \
+            --plan source/prepared/outputs/workflow02_plan/plan.json \
+            --input source/prepared/outputs/workflow02/input_with_previous_state.jsonl \
+            --current-patch outputs/workflow02/current_patch_human.jsonl \
+            --output outputs/workflow02/enrichment_report.json
+
           cp outputs/workflow02/cumulative_patch.jsonl outputs/workflow02_state/
+          cp outputs/workflow02/enrichment_report.json outputs/workflow02_state/
           cp outputs/workflow02/enrichment_audit.jsonl outputs/workflow02_state/
           cp outputs/workflow02/retry_queue.jsonl outputs/workflow02_state/
           cp outputs/workflow02/final_inventory.json outputs/workflow02_state/
