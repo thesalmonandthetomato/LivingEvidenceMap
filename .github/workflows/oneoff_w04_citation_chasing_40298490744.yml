@@ -37,7 +37,7 @@ jobs:
           expected_sha <- "49fb9e3d586f9d17e9a3f5a55b6eca472bb9032084f54fb3f7b8e709a78c8cbf"
           gs4_auth(path=commandArgs(TRUE)[[1]],cache=FALSE)
           q <- read_sheet(sheet_id,sheet="queue_w04_resolution_active",col_types="c")
-          stopifnot(nrow(q)==2944L,all(c("review_case_id","case_json","queue_sha256","batch_id","record_id")%in%names(q)))
+          stopifnot(nrow(q)==2944L,all(c("review_case_id","case_json","queue_sha256","batch_id","case_index")%in%names(q)))
           q <- q[order(as.integer(q$case_index)),,drop=FALSE]
           stopifnot(length(unique(q$queue_sha256))==1L,identical(unique(q$queue_sha256),expected_sha))
           stopifnot(length(unique(q$batch_id))==1L,
@@ -47,7 +47,7 @@ jobs:
           cases <- lapply(q$case_json,fromJSON,simplifyVector=FALSE)
           ids <- vapply(cases,function(z)as.character(z$record_id),character(1))
           votes <- lapply(cases,function(z)as.character(unlist(z$screening$votes)))
-          stopifnot(!anyDuplicated(ids),identical(ids,as.character(q$record_id)),
+          stopifnot(!anyDuplicated(ids),identical(q$review_case_id,paste0("w04-resolution-",ids)),
             all(vapply(cases,function(z)identical(z$screening$decision,"uncertain"),logical(1))))
           exclude <- vapply(votes,function(x)any(x=="exclude")||all(x=="uncertain"),logical(1))
           stopifnot(sum(exclude)==2536L,sum(!exclude)==408L)
@@ -71,7 +71,7 @@ jobs:
           rows <- data.frame(
             decision_id=vapply(q$review_case_id[keep],function(id)paste0("w04-res-dec-",digest(paste(id,"oneoff-citation-chasing-rule-20261026",now,"exclude",sep="|"),algo="sha256",serialize=FALSE)),character(1)),
             review_case_id=q$review_case_id[keep],
-            record_id=q$record_id[keep],
+            record_id=ids[keep],
             decision=rep("exclude",n),
             rationale=rep("ONE-OFF citation-chasing 40298490744: previously unresolved; exclude if any saved valid exclude vote or all three votes uncertain. Original LLM votes retained in immutable W04 artifact and unchanged Shiny case_json. Rule applies only to this source run.",n),
             reviewer=rep("oneoff-citation-chasing-rule-20261026",n),
@@ -82,7 +82,7 @@ jobs:
           )
           dir.create("outputs/w04_oneoff",recursive=TRUE,showWarnings=FALSE)
           write.csv(rows,"outputs/w04_oneoff/provisional_exclusions.csv",row.names=FALSE)
-          write.csv(data.frame(record_id=q$record_id[!exclude],review_case_id=q$review_case_id[!exclude]),
+          write.csv(data.frame(record_id=ids[!exclude],review_case_id=q$review_case_id[!exclude]),
             "outputs/w04_oneoff/408_remaining_review_cases.csv",row.names=FALSE)
           # Write in batches and verify each decision; safe to retry after an interrupted write.
           if(n>0L) {
