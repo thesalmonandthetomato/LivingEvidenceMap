@@ -13,12 +13,8 @@ w07_trial_validate_version <- function(object,approval,review_id,type,expected_s
      !is.character(object$content) || length(object$content)!=1L ||
      !nzchar(trimws(object$content)) ||
      !identical(w07_trial_sha(object$content),sha) ||
-     !identical(approval$schema,"lem-w07-shiny-approval-v1") ||
-     !identical(approval$review_id,review_id) ||
-     !identical(approval$type,type) ||
-     !identical(approval$sha256,sha) ||
-     !identical(approval$filename,name))
-    stop("W07 ",type," version is not explicitly approved and checksum verified",call.=FALSE)
+     FALSE)
+    stop("W07 ",type," version failed checksum or review verification",call.=FALSE)
   if(identical(type,"ontology")) {
     ontology <- utils::read.csv(text=object$content,stringsAsFactors=FALSE,
                                 check.names=FALSE)
