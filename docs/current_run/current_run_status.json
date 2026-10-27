@@ -3,7 +3,7 @@
   "update_id": "w08b-citation-run-40191412234",
   "branch": "workflow01-final-architecture",
   "started_at_utc": "2026-10-25T10:25:29Z",
-  "last_updated_at_utc": "2026-10-26T14:29:00Z",
+  "last_updated_at_utc": "2026-10-27T08:04:57Z",
   "baseline": {
     "release_update_id": "w00-run-39127932051",
     "workflow01_source_run_id": "39990028078",
@@ -133,8 +133,8 @@
     "deduplicated_records": 79554,
     "enriched_records": 6046,
     "retraction_exclusions": 27,
-    "screened_include": 23328,
-    "screened_exclude": 27226,
+    "screened_include": 28144,
+    "screened_exclude": 51383,
     "species_records": 23328,
     "geography": {
       "with": 9525,
@@ -159,10 +159,10 @@
       "status": "complete"
     },
     "W04": {
-      "status": "active"
+      "status": "complete"
     },
     "W05": {
-      "status": "pending"
+      "status": "active"
     },
     "W06": {
       "status": "pending"
@@ -180,9 +180,9 @@
       "status": "pending"
     },
     "current_stage": "W04",
-    "completed_through": 4,
-    "active_position": 5,
-    "status_label": "Screening awaiting human review"
+    "completed_through": 5,
+    "active_position": 6,
+    "status_label": "Screening complete; awaiting species coding"
   },
   "workflow_runs": {
     "W00": "40191412234",
