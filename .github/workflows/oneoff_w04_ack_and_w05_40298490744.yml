@@ -1,0 +1,58 @@
+name: ONE-OFF recover W04 batch acknowledgement then W05 40298490744
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/oneoff_w04_ack_and_w05_40298490744.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: w04-oneoff-ack-40298490744
+  cancel-in-progress: false
+jobs:
+  acknowledge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install Google Sheet dependencies
+        shell: Rscript {0}
+        run: install.packages(c('googlesheets4','digest'))
+      - name: Verify published W04 pointer and acknowledge completed batch
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          POINTER=docs/workflow04/zenodo/run-40298490744.json
+          test -s "$POINTER"
+          Rscript -e 'x<-jsonlite::fromJSON("docs/workflow04/zenodo/run-40298490744.json");stopifnot(x$status=="published",x$unresolved==0,x$retained==28144,x$excluded==51383,x$zenodo_record_id=="23685468")'
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          for STATUS in review_complete consumed; do
+            Rscript scripts/updater/workflow_shiny_batch_status.R \
+              --stage 04 \
+              --batch-id w04-resolution-40298490744-49fb9e3d586f \
+              --queue-sha256 49fb9e3d586f9d17e9a3f5a55b6eca472bb9032084f54fb3f7b8e709a78c8cbf \
+              --status "$STATUS" \
+              --sheet-id 1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA \
+              --credential "$RUNNER_TEMP/lem-google-service-account.json" \
+              --source-run-id 40298490744 \
+              --output-sha256 01e0a3c3281ca027ac9be25f97cd25ca8ae5bccadeec8d3375d2fe3b5cc127df \
+              --message "One-off W04 overlay finalised and archived in restricted Zenodo 23685468; recovery of missing lifecycle acknowledgement"
+          done
+  handoff-w05:
+    needs: acknowledge
+    if: ${{ needs.acknowledge.result == 'success' }}
+    uses: ./.github/workflows/workflow_05_production.yml
+    with:
+      workflow04_pointer_path: docs/workflow04/zenodo/run-40298490744.json
+      publish: true
+    secrets: inherit
