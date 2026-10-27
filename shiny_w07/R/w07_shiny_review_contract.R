@@ -4,6 +4,8 @@ w07_review_handoff_validate <- function(x,review_id,run_id) {
      !identical(as.character(x$run_id %||% ""),as.character(run_id)) ||
      !identical(as.character(x$status %||% ""),"review_complete_not_published"))
     stop("W07 handoff identity or schema mismatch",call.=FALSE)
+  if(!nzchar(as.character(x$completed_by %||% "")))
+    stop("Missing W07 completion actor",call.=FALSE)
   if(!grepl("^[a-f0-9]{64}$",as.character(x$sha256 %||% "")))
     stop("Missing W07 handoff payload checksum",call.=FALSE)
   records <- x$model_results %||% list()
@@ -17,7 +19,7 @@ w07_review_handoff_validate <- function(x,review_id,run_id) {
   for(e in events) {
     if(!identical(as.character(e$run_id %||% ""),as.character(run_id)) ||
        !identical(as.character(e$review_id %||% ""),as.character(review_id)) ||
-       !identical(as.character(e$user_id %||% ""),as.character(x$reviewer_id)) ||
+       !nzchar(as.character(e$user_id %||% "")) ||
        !as.character(e$relevance %||% "") %in%
          c("CODED_IN_SCOPE","IN_SCOPE_ONTOLOGY_GAP","INSUFFICIENT_INFORMATION"))
       stop("W07 handoff has unauthorised or inconsistent review decisions",call.=FALSE)
