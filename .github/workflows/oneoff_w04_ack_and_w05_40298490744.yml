@@ -3,7 +3,7 @@ on:
   push:
     branches: [workflow01-final-architecture]
     paths: ['.github/workflows/oneoff_w04_ack_and_w05_40298490744.yml']
-  workflow_dispatch:
+  workflow_dispatch: {}
 permissions:
   contents: write
   actions: read
@@ -24,7 +24,7 @@ jobs:
           use-public-rspm: true
       - name: Install Google Sheet dependencies
         shell: Rscript {0}
-        run: install.packages(c('googlesheets4','digest'))
+        run: install.packages(c('googlesheets4','digest','jsonlite'))
       - name: Verify published W04 pointer and acknowledge completed batch
         env:
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
