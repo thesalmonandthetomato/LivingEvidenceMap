@@ -9,7 +9,7 @@ decision <- list(event_id="evt1",review_id="review-test",run_id="123",
   queue_sha256=hex("c"),case_sha256=hex("d"),
   supersedes_event_id="",version="1")
 payload <- list(schema="lem-w07-human-reviewed-subset-v1",
-  review_id="review-test",run_id="123",reviewer_id="reviewer",
+  review_id="review-test",run_id="123",completed_by="administrator",
   status="review_complete_not_published",sha256=hex("e"),
   manifest=list(ontology_sha256=hex("a"),prompt_sha256=hex("b")),
   model_results=list(model),decision_events=list(decision))
@@ -22,6 +22,15 @@ missing <- payload
 missing$model_results[[2]] <- list(record_id="test-two")
 stopifnot(inherits(try(w07_review_handoff_validate(missing,"review-test","123"),
   silent=TRUE),"try-error"))
+# Authorship belongs to each event, not necessarily the administrator completing it.
+multi <- payload
+multi$model_results[[2]] <- list(record_id="test-two",title="Second")
+second <- decision
+second$event_id <- "evt2"
+second$record_id <- "test-two"
+second$user_id <- "other-reviewer"
+multi$decision_events[[2]] <- second
+stopifnot(isTRUE(w07_review_handoff_validate(multi,"review-test","123")))
 wrong_review <- payload
 wrong_review$review_id <- "other-review"
 stopifnot(inherits(try(w07_review_handoff_validate(wrong_review,"review-test","123"),
