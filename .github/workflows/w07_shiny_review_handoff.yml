@@ -1,5 +1,5 @@
 name: W07 Shiny reviewed subset handoff
-run-name: W07 reviewed ${{ inputs.review_id }} run ${{ inputs.source_run_id }}
+run-name: W07 reviewed ${{ inputs.review_id }} run ${{ inputs.source_run_id }} sha ${{ inputs.archive_sha256 }}
 on:
   workflow_dispatch:
     inputs:
