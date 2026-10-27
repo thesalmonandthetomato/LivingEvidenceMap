@@ -6,7 +6,7 @@ on:
   workflow_dispatch: {}
 permissions:
   contents: write
-  actions: read
+  actions: write
 concurrency:
   group: w04-oneoff-ack-40298490744
   cancel-in-progress: false
@@ -48,11 +48,16 @@ jobs:
               --output-sha256 01e0a3c3281ca027ac9be25f97cd25ca8ae5bccadeec8d3375d2fe3b5cc127df \
               --message "One-off W04 overlay finalised and archived in restricted Zenodo 23685468; recovery of missing lifecycle acknowledgement"
           done
-  handoff-w05:
-    needs: acknowledge
-    if: ${{ needs.acknowledge.result == 'success' }}
-    uses: ./.github/workflows/workflow_05_production.yml
-    with:
-      workflow04_pointer_path: docs/workflow04/zenodo/run-40298490744.json
-      publish: true
-    secrets: inherit
+      - name: Dispatch W05 from already archived W04 pointer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run workflow_05_production.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref workflow01-final-architecture \
+            -f workflow04_pointer_path=docs/workflow04/zenodo/run-40298490744.json \
+            -f lean_pointer_path=docs/compaction/zenodo/run-40289685551.json \
+            -f publish=true
+          echo "PASS: W05 dispatch requested after batch acknowledgement"
