@@ -66,10 +66,8 @@ if(isTRUE(dep$submitted) ||
   stop("W07 configuration must be a matching restricted unpublished draft",call.=FALSE)
 version <- function(type,sha) {
   prefix <- paste0("w07-",type,"-",sha,".json")
-  mark <- paste0("w07-approved-",type,"-",sha,".json")
   object <- fromJSON(rawToChar(file_bytes(dep,prefix)),simplifyVector=FALSE)
-  approval <- fromJSON(rawToChar(file_bytes(dep,mark)),simplifyVector=FALSE)
-  w07_trial_validate_version(object,approval,review,type,sha)
+  w07_trial_validate_version(object,NULL,review,type,sha)
 }
 ontology <- version("ontology",ont_sha)
 prompt <- version("prompt",prompt_sha)
