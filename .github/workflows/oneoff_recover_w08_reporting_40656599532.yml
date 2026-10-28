@@ -1,0 +1,92 @@
+name: ONE-OFF recover W08 reporting and resume W09
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/oneoff_recover_w08_reporting_40656599532.yml']
+  workflow_dispatch: {}
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: w08-reporting-recovery
+  cancel-in-progress: false
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: install.packages(c('jsonlite','digest','httr2','readr','googlesheets4'))
+      - name: Restore matching W01 source provenance and W08 canonical
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/reporting/ensure_current_w01_source_membership.R
+          Rscript scripts/reporting/restore_workflow08_reporting_state.R \
+            --pointer docs/workflow08/zenodo/run-40656599532.json \
+            --output-dir workflow08_reporting_state
+          Rscript scripts/reporting/write_workflow09_source_snapshot.R \
+            --stage W08 --run-id 40656599532 \
+            --canonical workflow08_reporting_state/living_evidence_map_canonical_final.jsonl
+          Rscript scripts/reporting/refresh_workflow09_input_manifest.R
+      - name: Register current W08 and publish repaired reporting handoff
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_current_run_status_observer.R --force-stage W08
+          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W08 --run-id 40656599532
+          Rscript scripts/reporting/refresh_workflow09_input_manifest.R
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
+          Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
+            --status docs/current_run/current_run_status.json \
+            --sheet-id 1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/reporting/workflow_09_inputs/current/ docs/current_run/current_run_status.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Refresh current W01 provenance and W08 reporting handoff [skip ci]"
+            git pull --rebase origin workflow01-final-architecture
+            git push origin HEAD:workflow01-final-architecture
+          fi
+      - name: Acknowledge existing W08 adjudication batch
+        env:
+          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
+          for STATUS in review_complete consumed; do
+            Rscript scripts/updater/workflow_shiny_batch_status.R \
+              --stage 08 --batch-id w08-run-40649939237 \
+              --queue-sha256 08b8fa765c74d442822712e2a21bcb08b2d617c30c7da89911a515837db072e3 \
+              --status "$STATUS" \
+              --sheet-id 1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA \
+              --credential "$RUNNER_TEMP/lem-google-service-account.json" \
+              --source-run-id 40649939237 \
+              --output-sha256 778ec0fce106756e5fce7ed3d8092a5c9734ad9927ac4d616dbf88cfa77399ef \
+              --message "Resolved W08 canonical previously published and W09 reporting provenance restored"
+          done
+      - name: Dispatch Workflow 09
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run report_workflow09_figures.yml --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture
+          echo "PASS: dispatched W09 using current W01 source membership and existing W08 archive"
