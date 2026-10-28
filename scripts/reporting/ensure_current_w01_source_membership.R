@@ -23,7 +23,17 @@ if(file.exists(manifest_path)&&file.exists(file.path(out,"w01_source_membership.
    identical(digest(file=file.path(out,"w01_source_membership.csv"),algo="sha256",serialize=FALSE),
              as.character(m$w01_source_membership_sha256 %||% ""))
 }
-if(current){cat("PASS: W01 membership already current for run ",run,"\\n",sep="");quit(status=0)}
+refresh_stage_summaries <- function(){
+ w00<-as.character(s$workflow_runs$W00 %||% "")
+ for(stage_run in list(c("W00",w00),c("W01",run))){
+  if(!nzchar(stage_run[[2L]])) stop("Missing current run ID for ",stage_run[[1L]])
+  if(system2("Rscript",c("scripts/reporting/write_workflow09_stage_summary.R",
+    "--stage",stage_run[[1L]],"--run-id",stage_run[[2L]],
+    "--status",status_path,"--output-dir",out))!=0L)
+    stop("Cannot refresh current ",stage_run[[1L]]," reporting summary")
+ }
+}
+if(current){refresh_stage_summaries();cat("PASS: W01 membership already current for run ",run,"\\n",sep="");quit(status=0)}
 if(!nzchar(Sys.getenv("ZENODO_ACCESS_TOKEN")))stop("ZENODO_ACCESS_TOKEN required to restore current W01 provenance")
 root<-file.path(tempdir(),paste0("workflow01_reporting_",run))
 if(dir.exists(root))unlink(root,recursive=TRUE)
@@ -42,5 +52,6 @@ if(system2("Rscript",c("scripts/reporting/write_workflow09_source_snapshot.R",
 m<-fromJSON(manifest_path,simplifyVector=FALSE)
 stopifnot(identical(as.character(m$source_run_id),run),
           identical(as.integer(m$canonical_records),as.integer(p$canonical_records)))
+refresh_stage_summaries()
 unlink(root,recursive=TRUE)
 cat("PASS: regenerated W01 source membership for current run ",run,"\\n",sep="")
