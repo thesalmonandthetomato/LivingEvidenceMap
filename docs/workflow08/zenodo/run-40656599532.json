@@ -1,0 +1,52 @@
+{
+  "status": "published",
+  "workflow": "08",
+  "state": "corrected_final_adjudicated_canonical",
+  "supersedes_zenodo_record_id": "23459613",
+  "supersedes_doi": "10.5281/zenodo.23459613",
+  "source_github_run_id": "40656599532",
+  "source_github_commit": null,
+  "source_github_run_url": "https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/40656599532",
+  "source_canonical_population": 79554,
+  "canonical_records": 27726,
+  "excluded_records": 51828,
+  "w08_decision_issues": 172,
+  "canonical_schema_version": "living-evidence-map-canonical-v1",
+  "annotation_preservation": "lossless-upstream-handoff-v2",
+  "final_canonical_jsonl_sha256": "778ec0fce106756e5fce7ed3d8092a5c9734ad9927ac4d616dbf88cfa77399ef",
+  "final_canonical_jsonl_bytes": 344689299,
+  "excluded_records_csv_sha256": "2da2440dbfcf59cd52156e2c8d4952604eeb1b8a3f5c8e0e4d3543bb6e1cf3b0",
+  "adjudication_ledger_sha256": "a8a43a59ee7fba762e0627145503fa1385281d4184e47aee341d7edd0b810e1b",
+  "zenodo_record_id": "23725124",
+  "zenodo_deposition_id": "23725124",
+  "doi": "10.5281/zenodo.23725124",
+  "record_url": "https://zenodo.org/records/23725124",
+  "visibility": "restricted",
+  "files": [
+    {
+      "filename": "living_evidence_map_canonical_final.jsonl",
+      "bytes": 344689299,
+      "sha256": "778ec0fce106756e5fce7ed3d8092a5c9734ad9927ac4d616dbf88cfa77399ef",
+      "zenodo_checksum": "md5:9977728ccbdb802cce012d827a307f73"
+    },
+    {
+      "filename": "workflow08_excluded_records.csv",
+      "bytes": 14407940,
+      "sha256": "2da2440dbfcf59cd52156e2c8d4952604eeb1b8a3f5c8e0e4d3543bb6e1cf3b0",
+      "zenodo_checksum": "md5:9801b7b174e57a913d8fde49840e06d2"
+    },
+    {
+      "filename": "workflow08_adjudication_ledger.jsonl",
+      "bytes": 134032,
+      "sha256": "a8a43a59ee7fba762e0627145503fa1385281d4184e47aee341d7edd0b810e1b",
+      "zenodo_checksum": "md5:103e4a0390db7e7e4ed1529e9e747b43"
+    },
+    {
+      "filename": "workflow08_final_manifest.json",
+      "bytes": 2627,
+      "sha256": "d6f7d5347bdca4c1d27a5d5c8eeaf56af6613515df9a1313828f44686fbcdb7f",
+      "zenodo_checksum": "md5:921639f7d6bf1c7aea24e2245e458a50"
+    }
+  ],
+  "published_at_utc": "2026-10-28T08:59:05Z"
+}
