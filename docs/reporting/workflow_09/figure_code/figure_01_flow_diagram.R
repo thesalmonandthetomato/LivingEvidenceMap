@@ -143,24 +143,6 @@ source_meta$search_date <- vapply(source_meta$code, function(code) {
   if (code %in% names(manual_dates)) manual_dates[[code]] else latest_date
 }, character(1))
 source_meta$search_date_display <- format(as.Date(source_meta$search_date), "%d-%m-%Y")
-# Citation chasing is an additional discovery METHOD, not a separate index.
-# Its Lens/OpenAlex records already enter W01 under their provider sources.
-# Display its W00 total as a separately labelled, non-additive source row.
-citation_count <- as.integer((w00$metrics$citation_chasing_records %||% 0L)[[1L]])
-if (!is.na(citation_count) && citation_count > 0L) {
-  if (!identical(as.character(w00$metrics$search_mode %||% ""), "citation_chasing"))
-    stop("Citation-chasing count lacks W00 campaign provenance", call. = FALSE)
-  cc_date <- as.character(w00$metrics$search_date %||% latest_date)
-  if (!grepl("^\\d{4}-\\d{2}-\\d{2}$",cc_date))
-    stop("Citation-chasing W00 provenance date missing")
-  source_meta <- dplyr::bind_rows(source_meta, tibble::tibble(
-    code="citation_chasing", database="Citation chasing*",
-    hits=citation_count,search_date=cc_date,
-    search_date_display=format(as.Date(cc_date),"%d-%m-%Y")
-  )) |>
-    dplyr::arrange(database)
-}
-
 cat("PASS: manual Zenodo dates (published or draft creation): ",
     paste(names(manual_dates), manual_dates, manual_date_types, collapse = "; "), "\n")
 
@@ -212,7 +194,7 @@ if(n_review_other_excluded_final < 0L) stop("W08 exclusion attribution is incons
 
 
 stopifnot(
-  sum(source_meta$hits[source_meta$code != "citation_chasing"]) == n_combined,
+  sum(source_meta$hits) == n_combined,
   n_combined - n_deduplicated == n_duplicates_removed,
   n_deduplicated - n_w03 == n_screened_ta,
   n_w04 + n_w04_retained == n_screened_ta,
@@ -223,7 +205,7 @@ stopifnot(
   n_post_w04_excluded >= n_species_none + n_w07_late
 )
 
-source_counts <- setNames(source_meta$hits[source_meta$code != "citation_chasing"], source_meta$database[source_meta$code != "citation_chasing"])
+source_counts <- setNames(source_meta$hits, source_meta$database)
 valid_source_dates <- source_meta$search_date[grepl("^\\d{4}-\\d{2}-\\d{2}$", source_meta$search_date)]
 search_update_date <- if (length(valid_source_dates)) max(valid_source_dates) else ""
 fmt <- function(x) format(as.integer(x), big.mark = ",", scientific = FALSE, trim = TRUE)
@@ -458,7 +440,7 @@ p <- ggplot() +
     "text",
     x = (source_panel_left + source_panel_right) / 2,
     y = source_panel_top - source_title_offset,
-    label = "Database searches and citation chasing",
+    label = "Bibliographic database searches",
     colour = "#2c454a",
     fontface = "bold",
     size = database_title_size,
@@ -524,12 +506,6 @@ p <- ggplot() +
     aes(x=x, y=y, label=label),
     angle = 90, colour = "white", fontface = "bold", size = phase_label_size, family = font_family
   ) +
-  # Citation chasing uses Lens/OpenAlex retrieval; those hits are already
-  # represented in provider counts. The starred line is non-additive.
-  annotate("text",x=(source_panel_left+source_panel_right)/2,
-           y=source_panel_bottom+0.045,
-           label=if (citation_count > 0L) "* Citation chasing is included within Lens/OpenAlex totals; not additional hits" else "",
-           size=1.65,colour="#2c454a",family=font_family) +
   scale_fill_manual(values = stage_fill, guide = "none") +
   scale_colour_manual(values = stage_text, guide = "none") +
   coord_cartesian(

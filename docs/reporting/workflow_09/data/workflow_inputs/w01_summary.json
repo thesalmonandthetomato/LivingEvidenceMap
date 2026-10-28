@@ -1,16 +1,16 @@
 {
   "schema": "living-evidence-map-workflow09-stage-summary-v1",
   "stage": "W01",
-  "source_run_id": "39990028078",
-  "update_id": "w00-run-39298022062",
-  "generated_at_utc": "2026-10-24T18:21:51Z",
-  "pointer_path": "docs/deduplication/zenodo/run-39990028078.json",
-  "pointer_sha256": "7314b3894438d8ea622520052d561c06917ba23658f782140ba0701edbd7b91a",
+  "source_run_id": "40218882441",
+  "update_id": "w08b-citation-run-40191412234",
+  "generated_at_utc": "2026-10-28T10:22:40Z",
+  "pointer_path": "docs/deduplication/zenodo/run-40218882441.json",
+  "pointer_sha256": "09146524dcf4ce6cab0b0822471930b7b9e399eaf9d7fa4e2e7a8ab1302b9395",
   "status": "complete",
   "metrics": {
-    "source_manifestations": 136057,
-    "canonical_records": 50567,
-    "duplicates_removed": 85490,
-    "canonical_sha256": "4eb0ce57c54887c8f1fec607996c65cace6c57f3ffca65e78dced42a1029e14e"
+    "source_manifestations": 169221,
+    "canonical_records": 79554,
+    "duplicates_removed": 89667,
+    "canonical_sha256": "0daaf255f297a284ffcec155d674483ad88cf675b49c1b56026cea7bc7b3520c"
   }
 }
