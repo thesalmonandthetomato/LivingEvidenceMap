@@ -1,14 +1,94 @@
 {
   "schema": "living-evidence-map-workflow09-stage-summary-v1",
   "stage": "W00",
-  "source_run_id": "39298022062",
-  "update_id": "w00-run-39298022062",
-  "generated_at_utc": "2026-10-19T18:03:05Z",
+  "source_run_id": "40191412234",
+  "update_id": "w08b-citation-run-40191412234",
+  "generated_at_utc": "2026-10-28T10:08:49Z",
   "pointer_path": null,
   "pointer_sha256": null,
   "status": "complete",
   "metrics": {
     "search_results": 155004,
-    "search_date": "2026-10-19"
+    "search_date": "2026-10-25",
+    "search_mode": "citation_chasing",
+    "citation_chasing_records": 33316,
+    "citation_chasing_sources": {
+      "lens": {
+        "reported_search_results": 31449,
+        "successfully_downloaded_results": 31449
+      },
+      "openalex": {
+        "reported_search_results": 1867,
+        "successfully_downloaded_results": 1867
+      },
+      "scopus": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "agricola": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ethos": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "wos": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_africa_wide": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_amed": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_psycinfo": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_atla_religion": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_biological_agricultural_index": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_cinahl": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_econlit": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_family_society": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_greenfile": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_medline": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_mla": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_political_science": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      },
+      "ebsco_waters_oceans": {
+        "reported_search_results": 0,
+        "successfully_downloaded_results": 0
+      }
+    }
   }
 }
