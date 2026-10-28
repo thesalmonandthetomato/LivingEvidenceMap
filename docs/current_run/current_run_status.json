@@ -3,7 +3,7 @@
   "update_id": "w08b-citation-run-40191412234",
   "branch": "workflow01-final-architecture",
   "started_at_utc": "2026-10-25T10:25:29Z",
-  "last_updated_at_utc": "2026-10-28T10:20:28Z",
+  "last_updated_at_utc": "2026-10-28T10:33:05Z",
   "baseline": {
     "release_update_id": "w00-run-39127932051",
     "workflow01_source_run_id": "39990028078",
@@ -174,15 +174,15 @@
       "status": "complete"
     },
     "W09": {
-      "status": "active"
+      "status": "complete"
     },
     "W10": {
-      "status": "pending"
+      "status": "active"
     },
-    "current_stage": "W08",
-    "completed_through": 9,
-    "active_position": 10,
-    "status_label": "Final adjudication complete; awaiting report build"
+    "current_stage": "W09",
+    "completed_through": 10,
+    "active_position": 11,
+    "status_label": "Report complete; awaiting dashboard build"
   },
   "workflow_runs": {
     "W00": "40191412234",
@@ -193,7 +193,7 @@
     "W06": "40471893503",
     "W07": "40649939237",
     "W08": "40656599532",
-    "W09": "40120191925",
+    "W09": "40671365349",
     "W10": "40121314618",
     "W01": "40218882441"
   }
