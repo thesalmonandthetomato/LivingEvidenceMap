@@ -458,7 +458,7 @@ p <- ggplot() +
     "text",
     x = (source_panel_left + source_panel_right) / 2,
     y = source_panel_top - source_title_offset,
-    label = "Bibliographic database searches",
+    label = "Database searches and citation chasing",
     colour = "#2c454a",
     fontface = "bold",
     size = database_title_size,
@@ -524,6 +524,12 @@ p <- ggplot() +
     aes(x=x, y=y, label=label),
     angle = 90, colour = "white", fontface = "bold", size = phase_label_size, family = font_family
   ) +
+  # Citation chasing uses Lens/OpenAlex retrieval; those hits are already
+  # represented in provider counts. The starred line is non-additive.
+  annotate("text",x=(source_panel_left+source_panel_right)/2,
+           y=source_panel_bottom+0.045,
+           label=if (citation_count > 0L) "* Citation chasing is included within Lens/OpenAlex totals; not additional hits" else "",
+           size=1.65,colour="#2c454a",family=font_family) +
   scale_fill_manual(values = stage_fill, guide = "none") +
   scale_colour_manual(values = stage_text, guide = "none") +
   coord_cartesian(
