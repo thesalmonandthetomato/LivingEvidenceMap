@@ -1,0 +1,16 @@
+name: ONE-OFF resume production W08 batch 40649939237
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/oneoff_resume_w08_40649939237.yml']
+permissions:
+  contents: write
+  actions: write
+jobs:
+  finalise:
+    uses: ./.github/workflows/workflow_08_resume_after_shiny.yml
+    with:
+      source_run_id: '40649939237'
+      batch_id: 'w08-run-40649939237'
+      queue_sha256: '08b8fa765c74d442822712e2a21bcb08b2d617c30c7da89911a515837db072e3'
+    secrets: inherit
