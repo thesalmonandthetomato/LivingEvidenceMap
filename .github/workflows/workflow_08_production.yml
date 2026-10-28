@@ -529,6 +529,8 @@ jobs:
             --credential "$RUNNER_TEMP/lem-google-service-account.json"
 
           Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W08 --run-id "$GITHUB_RUN_ID"
+          # Verify and restore current W01 source membership before W09 reporting.
+          Rscript scripts/reporting/ensure_current_w01_source_membership.R
           Rscript scripts/reporting/write_workflow09_source_snapshot.R \
             --stage W08 \
             --run-id "$GITHUB_RUN_ID" \
