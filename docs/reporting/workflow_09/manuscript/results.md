@@ -3,7 +3,7 @@
 ## Review process
 
 The review process is outlined in the flow diagram in Figure 1. Across
-the 20 databases searched, a total of 169,221 search results was
+the 21 databases searched, a total of 169,373 search results was
 obtained. Following deduplication, 79,554 unique candidate records
 remained. Title and abstract repair and enrichment supplemented 6,046
 records, whilst a sweep for retractions identified 27 records that were
@@ -69,7 +69,7 @@ screening comparisons were available. The cumulative raw agreement was
 </table>
 
 Database provenance was retained through deduplication, allowing the
-contribution and overlap of the 20 bibliographic sources to be compared
+contribution and overlap of the 21 bibliographic sources to be compared
 for the deduplicated corpus and the definitive final included corpus.
 Figure 2 shows records contributed uniquely by each database, while
 Figure 3 shows only multi-database overlaps.

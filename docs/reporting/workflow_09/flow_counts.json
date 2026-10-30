@@ -1,6 +1,6 @@
 {
   "schema": "living-evidence-map-workflow09-flow-counts-v3",
-  "generated_at_utc": "2026-10-28T10:30:21Z",
+  "generated_at_utc": "2026-10-30T09:18:53Z",
   "search_update_date": "2026-10-25",
   "input_mode": "compact_workflow_reporting_snapshots",
   "input_directory": "/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/docs/reporting/workflow_09_inputs/current",
@@ -19,6 +19,7 @@
     "sources": {
       "AGRICOLA": 2746,
       "CAB Abstracts": 26907,
+      "Citation chasing": 33316,
       "Ebsco Africa Wide": 431,
       "Ebsco Amed": 3,
       "Ebsco Biological Agricultural Index": 2913,
@@ -32,10 +33,10 @@
       "Ebsco Psycinfo": 97,
       "Ebsco Waters Oceans": 5256,
       "Ethos": 212,
-      "OpenAlex": 30051,
+      "OpenAlex": 28184,
       "ProQuest/PQD&T": 1577,
       "Scopus": 20015,
-      "The Lens": 55472,
+      "The Lens": 24175,
       "WoSCC": 15202
     },
     "source_searches": [
@@ -50,6 +51,12 @@
         "database": "CAB Abstracts",
         "hits": 26907,
         "search_date": "2026-09-30"
+      },
+      {
+        "code": "citation_chasing",
+        "database": "Citation chasing",
+        "hits": 33316,
+        "search_date": "2026-10-25"
       },
       {
         "code": "ebsco_africa_wide",
@@ -132,7 +139,7 @@
       {
         "code": "openalex",
         "database": "OpenAlex",
-        "hits": 30051,
+        "hits": 28184,
         "search_date": "2026-10-25"
       },
       {
@@ -150,7 +157,7 @@
       {
         "code": "lens",
         "database": "The Lens",
-        "hits": 55472,
+        "hits": 24175,
         "search_date": "2026-10-25"
       },
       {
@@ -160,8 +167,8 @@
         "search_date": "2026-10-25"
       }
     ],
-    "combined_search_results": 169221,
-    "duplicates_removed": 89667,
+    "combined_search_results": 169373,
+    "duplicates_removed": 89819,
     "deduplicated_records": 79554,
     "records_enriched_workflow02": 6046,
     "retractions_excluded": 27,
