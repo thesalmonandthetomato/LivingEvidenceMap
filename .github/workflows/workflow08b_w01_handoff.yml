@@ -1,6 +1,11 @@
 name: W08b complete W00 handoff and launch W01-Fast
 on:
   workflow_dispatch:
+    inputs:
+      bibliography_run_id:
+        description: 'Verified bibliography retrieval run; defaults to latest W08b review provenance'
+        required: false
+        type: string
   push:
     branches: [workflow01-final-architecture]
     paths: [docs/workflow08b/.run_w01_handoff]
@@ -34,7 +39,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p w08b_input
-          gh run download 40182796865 --repo "$GITHUB_REPOSITORY" --name w08b-complete-bibliographies-40182796865 --dir w08b_input
+          BIB_RUN="${{ inputs.bibliography_run_id || '' }}"
+          if [ -z "$BIB_RUN" ]; then
+            BIB_RUN="$(jq -r '.bib_run // empty' docs/workflow08b/review_provenance.json)"
+          fi
+          [[ "$BIB_RUN" =~ ^[0-9]+$ ]] || { echo "Missing valid W08b bibliography run"; exit 1; }
+          gh run download "$BIB_RUN" --repo "$GITHUB_REPOSITORY" --name "w08b-complete-bibliographies-$BIB_RUN" --dir w08b_input
           test -s w08b_input/lens/records.jsonl
           test -s w08b_input/openalex/openalex_sidecar_records.jsonl
       - name: Convert raw OpenAlex response pages and reconcile native identifiers
@@ -68,8 +78,8 @@ jobs:
             for(src in c("lens","openalex")){
               p<-file.path("w08b_stage/harvests",src,"source_delta/reconciliation_manifest.json")
               z<-fromJSON(p)
-              n<-if(src=="lens")31449L else 1867L
-              stopifnot(z$status=="success",z$current_unique_records==n,
+              n<-as.integer(z$current_unique_records)
+              stopifnot(z$status=="success",length(n)==1L,!is.na(n),n>=0L,
                 z$new_native_ids>=0,z$new_native_ids<=n)
             }
           '
@@ -86,11 +96,14 @@ jobs:
       - name: Prepare current-run state and register archive
         run: |
           set -euo pipefail
-          test -s docs/deduplication/zenodo/run-39990028078.json
+          PRIOR_W01="$(Rscript -e 'x<-jsonlite::fromJSON("docs/reporting/workflow_09/flow_counts.json");cat(x$source_runs$W01)')"
+          [[ "$PRIOR_W01" =~ ^[0-9]+$ ]] || { echo "Prior W01 release run missing"; exit 1; }
+          test -s "docs/deduplication/zenodo/run-$PRIOR_W01.json"
+          echo "PRIOR_W01=$PRIOR_W01" >> "$GITHUB_ENV"
           Rscript scripts/workflow08b/prepare_w01_status.R \
             docs/current_run/current_run_status.json \
             w08b_handoff_archive/zenodo_receipt.json \
-            docs/deduplication/zenodo/run-39990028078.json \
+            docs/deduplication/zenodo/run-$PRIOR_W01.json \
             w08b_handoff_status.json
           Rscript scripts/updater/workflow_00_update_zenodo_registry.R \
             --receipt w08b_handoff_archive/zenodo_receipt.json \
@@ -113,7 +126,7 @@ jobs:
           gh workflow run workflow_01_production.yml \
             --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture \
             -f workflow00_pointer_path="docs/search_record/zenodo/run-$GITHUB_RUN_ID.json" \
-            -f previous_workflow01_pointer_path="docs/deduplication/zenodo/run-39990028078.json"
+            -f previous_workflow01_pointer_path="docs/deduplication/zenodo/run-$PRIOR_W01.json"
           echo "PASS: dispatched existing W01-Fast production workflow with latest W01 delta"
       - name: Preserve source manifests and receipts
         if: always()
