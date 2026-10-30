@@ -24,7 +24,7 @@
     "canonical_records": 22911,
     "canonical_sha256": "fa52cf8179399ac8b28d10a22f1479999a7c1fe0c3487b4e18f29dfb05cbda1e",
     "previous_counts": {
-      "search_results": 135997,
+      "search_results": 136057,
       "deduplicated_records": 50551,
       "enriched_records": 2113,
       "retraction_exclusions": 13,
@@ -122,14 +122,16 @@
         "reported_search_results": 0,
         "successfully_downloaded_results": 0
       }
-    }
+    },
+    "database_search_results": 136057,
+    "citation_chasing_total_results": 33316
   },
   "cohort": {
     "record_ids_path": "docs/current_run/current_run_record_ids.txt",
     "deduplicated_records": 79554
   },
   "counts": {
-    "search_results": 169313,
+    "search_results": 169373,
     "deduplicated_records": 79554,
     "enriched_records": 6046,
     "retraction_exclusions": 27,
