@@ -8,7 +8,7 @@
   "pointer_sha256": null,
   "status": "complete",
   "metrics": {
-    "search_results": 169313,
+    "search_results": 169373,
     "search_date": "2026-10-25",
     "search_mode": "citation_chasing",
     "citation_chasing_records": 33316,
@@ -90,7 +90,8 @@
         "successfully_downloaded_results": 0
       }
     },
-    "database_search_results": 135997,
-    "combined_search_results": 169313
+    "database_search_results": 136057,
+    "combined_search_results": 169373,
+    "citation_chasing_total_results": 33316
   }
 }
