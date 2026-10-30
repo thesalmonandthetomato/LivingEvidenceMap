@@ -68,10 +68,11 @@ metrics <- switch(
     search_results = num(counts$search_results),
     search_date = as.character(status$search$search_date %||% ""),
     search_mode = if (grepl("^w08b-citation-run-",as.character(status$update_id %||% ""))) "citation_chasing" else "database_search",
-    citation_chasing_records = if (grepl("^w08b-citation-run-",as.character(status$update_id %||% ""))) num(status$search$search_results) else 0L,
+    citation_chasing_records = num(status$search$citation_chasing_total_results, 0L),
     citation_chasing_sources = if (grepl("^w08b-citation-run-",as.character(status$update_id %||% ""))) status$search$sources %||% list() else list(),
-    database_search_results = if (grepl("^w08b-citation-run-",as.character(status$update_id %||% ""))) num(status$baseline$previous_counts$search_results) else num(counts$search_results),
-    combined_search_results = if (grepl("^w08b-citation-run-",as.character(status$update_id %||% ""))) num(status$baseline$previous_counts$search_results) + num(status$search$search_results) else num(counts$search_results)
+    database_search_results = num(status$search$database_search_results, num(counts$search_results)),
+    combined_search_results = num(counts$search_results),
+    citation_chasing_total_results = num(status$search$citation_chasing_total_results, 0L)
   ),
   W01 = {
     n_source <- num(pointer$source_manifestations, num(counts$search_results))
