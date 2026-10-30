@@ -207,6 +207,9 @@ jobs:
           manual_config <- fromJSON('user_input/monthly_manual_ris.json',simplifyVector=FALSE)
           manual_codes <- names(manual_config$sources)
           registered_codes <- union(searched_codes,manual_codes)
+          supplemental_codes <- "citation_chasing"
+          unknown_codes <- setdiff(source_codes,c(registered_codes,supplemental_codes))
+          actual_database_codes <- union(setdiff(source_codes,supplemental_codes),registered_codes)
           stopifnot(
             identical(as.character(run_status$progress$W00$status),'complete'),
             length(searched_codes)>0L,
@@ -214,8 +217,8 @@ jobs:
             length(manual_codes)>0L,
             !anyDuplicated(manual_codes),
             all(nzchar(manual_codes)),
-            all(source_codes %in% registered_codes),
-            as.integer(payload$metrics$databases_searched)==length(union(source_codes,registered_codes))
+            length(unknown_codes)==0L,
+            as.integer(payload$metrics$databases_searched)==length(actual_database_codes)
           )
           stopifnot(as.character(payload$source$zenodo_record_id)==as.character(pointer$zenodo_record_id))
           stopifnot(tolower(as.character(payload$source$canonical_sha256))==expected_sha)
