@@ -25,6 +25,12 @@ s$baseline$workflow01_pointer<-paste0("docs/deduplication/zenodo/run-",w$github_
 s$search<-list(workflow00_run_id=as.character(p$github_run_id),
  search_date=format(Sys.Date(),"%Y-%m-%d"),search_results=as.integer(sum(n)),
  sources=lapply(n,function(z)list(reported_search_results=as.integer(z),successfully_downloaded_results=as.integer(z))))
+# W00 cumulative hits are additive: historical database searches plus raw
+# citation-chasing retrievals, before W01 deduplication or provider filtering.
+baseline_hits<-as.integer(s$baseline$previous_counts$search_results)
+if(length(baseline_hits)!=1L||is.na(baseline_hits)||baseline_hits<0L)
+  stop("Missing authoritative baseline W00 search-hit total")
+s$counts$search_results<-as.integer(baseline_hits+sum(n))
 s$workflow_runs$W00<-as.character(p$github_run_id)
 s$workflow_runs$W01<-NULL
 for(step in sprintf("W%02d",1:10))s$progress[[step]]$status<-"pending"
