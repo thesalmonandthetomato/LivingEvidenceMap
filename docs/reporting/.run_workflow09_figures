@@ -27,3 +27,5 @@ Regenerate flow diagram using permanent abbreviated database labels (Biol. Agr. 
 Rerender W09 with provenance-backed last-search dates and Zenodo publication dates for CAB/ProQuest; 2026-10-24.
 Rebuild W09 with final W08 exclusion-attributed flow reconciliation; 2026-10-24.
 Retry W09 after authenticated manual Zenodo draft fallback with W01 source-date provenance; 2026-10-24.
+
+Rebuild additive W00+W08b 169373-hit flow with historical W09 source baseline and corrected Shiny KPI (2026-10-30)
