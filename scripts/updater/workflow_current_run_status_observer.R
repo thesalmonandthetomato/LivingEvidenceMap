@@ -232,6 +232,34 @@ if(stage=="W00"){
   prior_total<-as.integer(baseline$previous_counts$search_results)
   if(is.na(prior_total) || prior_total < 0L) stop("Published-release W00 baseline search-results total is invalid",call.=FALSE)
   total<-prior_total + update_total
+  # Preserve citation-chasing hits across ordinary database search updates.
+  # The previous published flow contains the cumulative independent source rows.
+  previous_flow<-fromJSON("docs/reporting/workflow_09/flow_counts.json",simplifyVector=FALSE)
+  previous_sources<-previous_flow$counts$source_searches
+  if(!length(previous_sources))stop("Previous W09 source-hit register is missing")
+  previous_cc<-sum(vapply(previous_sources,function(z)
+    if(identical(as.character(z$code),"citation_chasing"))as.integer(z$hits) else 0L,integer(1)))
+  db_rows<-Filter(function(z)!identical(as.character(z$code),"citation_chasing"),previous_sources)
+  db_counts<-setNames(vapply(db_rows,function(z)as.integer(z$hits),integer(1)),
+                     vapply(db_rows,function(z)as.character(z$code),character(1)))
+  if(anyDuplicated(names(db_counts))||anyNA(db_counts)||
+     sum(db_counts)+previous_cc!=prior_total)
+    stop("Historical W00 database/CC source-hit counts do not reconcile")
+  for(z in recs){
+    src_code<-as.character(z$source)
+    if(!nzchar(src_code))stop("W00 source event has no source code")
+    if(!src_code%in%names(db_counts))db_counts[src_code]<-0L
+    db_counts[src_code]<-db_counts[src_code]+as.integer(z$reported_search_results)
+  }
+  for(src_code in names(manual_sources)){
+    if(!src_code%in%names(db_counts))db_counts[src_code]<-0L
+    db_counts[src_code]<-db_counts[src_code]+as.integer(manual_sources[[src_code]]$reported_search_results)
+  }
+  if(sum(db_counts)+previous_cc!=total)stop("Updated W00 source hits do not reconcile")
+  db_path<-"docs/reporting/workflow_09_inputs/current/w00_database_search_hits.csv"
+  dir.create(dirname(db_path),recursive=TRUE,showWarnings=FALSE)
+  write.csv(data.frame(source_code=names(db_counts),hits=as.integer(db_counts)),
+            db_path,row.names=FALSE,quote=TRUE)
   dates<-as.Date(substr(vapply(recs,function(z)as.character(z$recorded_at_utc),character(1)),1,10))
   src<-setNames(lapply(recs,function(z)list(
     reported_search_results=as.integer(z$reported_search_results),
@@ -247,7 +275,9 @@ if(stage=="W00"){
     last_updated_at_utc=NULL,
     baseline=baseline,
     search=list(workflow00_run_id=parent,search_date=as.character(max(dates,na.rm=TRUE)),
-                search_results=update_total,sources=src),
+                search_results=update_total,sources=src,
+                 database_search_results=as.integer(sum(db_counts)),
+                 citation_chasing_total_results=as.integer(previous_cc)),
     cohort=list(record_ids_path=ids_path,record_ids_sha256=NULL,deduplicated_records=NULL),
     counts=list(
       search_results=total,
