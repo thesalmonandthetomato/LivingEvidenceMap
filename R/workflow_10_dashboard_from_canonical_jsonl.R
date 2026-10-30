@@ -223,10 +223,14 @@ if(file.exists(manual_path)) {
   if(any(!nzchar(manual_sources)) || anyDuplicated(manual_sources)) stopf("Manual RIS source registry is invalid")
 }
 registered_sources <- union(searched_sources,manual_sources)
-if(!all(source_codes %in% registered_sources)) {
-  stopf("W09 source ledger contains unregistered sources: %s",paste(setdiff(source_codes,registered_sources),collapse=", "))
+# Citation chasing is a separately audited acquisition method, not a database.
+# Accept it only when it is explicitly present in the W09 source ledger.
+supplemental_sources <- "citation_chasing"
+unknown_sources <- setdiff(source_codes,c(registered_sources,supplemental_sources))
+if(length(unknown_sources)) {
+  stopf("W09 source ledger contains unregistered sources: %s",paste(unknown_sources,collapse=", "))
 }
-database_n <- length(union(source_codes,registered_sources))
+database_n <- length(union(setdiff(source_codes,supplemental_sources),registered_sources))
 search_results_n<-as.integer(flow_c$combined_search_results%||%NA_integer_)
 unique_records_n<-as.integer(flow_c$deduplicated_records%||%NA_integer_)
 screened_n<-as.integer(flow_c$title_abstract_screened%||%NA_integer_)
