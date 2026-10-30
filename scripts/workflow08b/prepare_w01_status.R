@@ -33,6 +33,8 @@ if(!identical(as.character(flow$source_runs$W01),as.character(w$github_run_id)))
  stop("Historical W09 baseline is not tied to the selected W01 archive")
 baseline_hits<-as.integer(flow$counts$combined_search_results)
 source_rows<-flow$counts$source_searches
+prior_cc<-sum(vapply(source_rows,function(z)if(identical(as.character(z$code),"citation_chasing"))as.integer(z$hits) else 0L,integer(1)))
+source_rows<-Filter(function(z)!identical(as.character(z$code),"citation_chasing"),source_rows)
 if(length(baseline_hits)!=1L||is.na(baseline_hits)||baseline_hits<0L||
    !length(source_rows))stop("Historical W09 source counts missing")
 raw<-data.frame(
@@ -40,11 +42,12 @@ raw<-data.frame(
  hits=vapply(source_rows,function(z)as.integer(z$hits),integer(1)),
  stringsAsFactors=FALSE)
 if(anyDuplicated(raw$source_code)||anyNA(raw$hits)||
-   sum(raw$hits)!=baseline_hits)stop("Historical database source counts do not reconcile")
+   sum(raw$hits)+prior_cc!=baseline_hits)stop("Historical database source counts do not reconcile")
 out_sources<-"docs/reporting/workflow_09_inputs/current/w00_database_search_hits.csv"
 dir.create(dirname(out_sources),recursive=TRUE,showWarnings=FALSE)
 write.csv(raw,out_sources,row.names=FALSE,quote=TRUE)
 s$baseline$previous_counts$search_results<-baseline_hits
+s$search$database_search_results<-sum(raw$hits)
 s$update_id<-paste0("w08b-citation-run-",p$github_run_id)
 s$started_at_utc<-format(Sys.time(),"%Y-%m-%dT%H:%M:%SZ",tz="UTC")
 s$last_updated_at_utc<-s$started_at_utc
@@ -52,7 +55,9 @@ s$baseline$workflow01_source_run_id<-as.character(w$github_run_id)
 s$baseline$workflow01_pointer<-paste0("docs/deduplication/zenodo/run-",w$github_run_id,".json")
 s$search<-list(workflow00_run_id=as.character(p$github_run_id),
  search_date=format(Sys.Date(),"%Y-%m-%d"),search_results=as.integer(sum(n)),
- sources=lapply(n,function(z)list(reported_search_results=as.integer(z),successfully_downloaded_results=as.integer(z))))
+ sources=lapply(n,function(z)list(reported_search_results=as.integer(z),successfully_downloaded_results=as.integer(z))),
+ database_search_results=as.integer(sum(raw$hits)),
+ citation_chasing_total_results=as.integer(prior_cc+sum(n)))
 # W00 cumulative hits are additive: historical database searches plus raw
 # citation-chasing retrievals, before W01 deduplication or provider filtering.
 s$counts$search_results<-as.integer(baseline_hits+sum(n))
