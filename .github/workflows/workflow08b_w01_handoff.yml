@@ -107,7 +107,7 @@ jobs:
           cp w08b_handoff_status.json docs/current_run/current_run_status.json
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add docs/search_record/zenodo_registry.csv docs/search_record/zenodo/ docs/workflow08b/zenodo/ docs/current_run/current_run_status.json
+          git add docs/search_record/zenodo_registry.csv docs/search_record/zenodo/ docs/workflow08b/zenodo/ docs/current_run/current_run_status.json docs/reporting/workflow_09_inputs/current/w00_database_search_hits.csv
           git commit -m "W08b: register W01-compatible supplemental intake $GITHUB_RUN_ID"
           git push origin HEAD:workflow01-final-architecture
           gh workflow run workflow_01_production.yml \
