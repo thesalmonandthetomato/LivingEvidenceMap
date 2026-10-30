@@ -143,12 +143,48 @@ source_meta$search_date <- vapply(source_meta$code, function(code) {
   if (code %in% names(manual_dates)) manual_dates[[code]] else latest_date
 }, character(1))
 source_meta$search_date_display <- format(as.Date(source_meta$search_date), "%d-%m-%Y")
+
+# W00 search hits (before W01 filtering/deduplication) and W01 source
+# manifestations are distinct accounting units. Never pass off the latter as
+# an additive, database-specific raw search result table.
+cc_hits <- as.integer(w00$metrics$citation_chasing_records %||% 0L)
+db_hits <- as.integer(w00$metrics$database_search_results %||% NA_integer_)
+combined_hits <- as.integer(w00$metrics$combined_search_results %||% NA_integer_)
+if(anyNA(c(cc_hits,db_hits,combined_hits)) ||
+   db_hits < 0L || cc_hits < 0L || combined_hits != db_hits + cc_hits)
+  stop("W00 combined search hits do not equal database hits plus citation-chasing hits",call.=FALSE)
+if (cc_hits > 0L) {
+  # The raw database source counts must be separately certified from W00.
+  # W01 manifestations include citation-chasing records assigned to Lens
+  # and OpenAlex and cannot be reused as raw database search hits.
+  source_counts_path <- file.path(input_dir,"w00_database_search_hits.csv")
+  if (!file.exists(source_counts_path))
+    stop(paste("W09 additive flow diagram requires verified raw W00 per-database",
+               "counts in",source_counts_path,
+               "; current w01_source_summary.csv includes CC and is not additive."),
+         call.=FALSE)
+  db <- readr::read_csv(source_counts_path,show_col_types=FALSE)
+  if(!all(c("source_code","hits")%in%names(db)) || anyDuplicated(db$source_code))
+    stop("Invalid raw W00 database source counts",call.=FALSE)
+  if(!setequal(as.character(db$source_code),as.character(source_meta$code)))
+    stop("W00 source-count inventory differs from the W01 database inventory",call.=FALSE)
+  db_counts <- as.integer(db$hits[match(source_meta$code,db$source_code)])
+  if(anyNA(db_counts)||any(db_counts<0L)||sum(db_counts)!=db_hits)
+    stop("Raw W00 per-database counts do not reconcile to W00 database hit total",call.=FALSE)
+  source_meta$hits <- db_counts
+  source_meta <- dplyr::bind_rows(source_meta,tibble::tibble(
+    code="citation_chasing",database="Citation chasing",
+    hits=cc_hits,search_date=latest_date,
+    search_date_display=format(as.Date(latest_date),"%d-%m-%Y")
+  )) |> dplyr::arrange(database)
+}
+
 cat("PASS: manual Zenodo dates (published or draft creation): ",
     paste(names(manual_dates), manual_dates, manual_date_types, collapse = "; "), "\n")
 
-n_combined <- metric(w01, "source_manifestations")
+n_combined <- combined_hits
 n_deduplicated <- metric(w01, "canonical_records")
-n_duplicates_removed <- metric(w01, "duplicates_removed")
+n_duplicates_removed <- n_combined - n_deduplicated
 n_enriched <- metric(w02, "enriched_records")
 n_w03 <- metric(w03, "retraction_exclusions")
 n_screened_ta <- metric(w04, "records")
@@ -440,7 +476,7 @@ p <- ggplot() +
     "text",
     x = (source_panel_left + source_panel_right) / 2,
     y = source_panel_top - source_title_offset,
-    label = "Bibliographic database searches",
+    label = "Database searches and citation chasing",
     colour = "#2c454a",
     fontface = "bold",
     size = database_title_size,
