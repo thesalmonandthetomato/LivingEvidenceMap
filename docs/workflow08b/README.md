@@ -148,3 +148,24 @@ Do not activate monthly W08b retrieval until those runners are updated and
 tested to perform every requested query and checkpoint results per
 seed-identifier, not just per canonical seed. The expanded preflight and
 offline edge tests do not claim that provider-side retrieval is complete.
+
+## November W08b finalisation pass: all-manifestation discovery and novel-candidate staging (31 October 2026)
+
+**Target branch:** `workflow01-final-architecture` only. **Pre-pass rollback anchor:** `d99b9fd663a3bde8a75042fa5bafbe6fac409351` (the parent of the first new manifest retrieval-runner commit). Use targeted reverts for any change and preserve later unrelated commits.
+
+**New or updated implementation:**
+
+1. `run_lens_bulk_manifest.R` queries every unique Lens ID in batches up to 500, maps results to **all** owning canonical seed IDs, and saves Lens status **by Lens ID**. `run_openalex_manifest.R` independently checks every valid OpenAlex Work ID, regardless of whether Lens was checked, retaining the same many-to-many provenance. Both refresh forward citation links monthly and retrieve backward links when reference counts increase or the query was incomplete/new.
+2. `resolve_lens_doi_manifest.R` resolves **every valid DOI**, not just single-DOI or Lens-empty seeds, and preserves **all** Lens IDs returned for a DOI. Shared DOIs and shared provider IDs are valid query associations rather than exclusion reasons.
+3. `expand_seed_identifiers.R` makes the full canonical seed-to-provider-ID manifest. `plan_identifier_checks.R` uses provider/type/identifier as the restart key, so a completed query for one source manifestation cannot suppress another. The older per-seed summary remains descriptive, **not** the per-ID execution authority.
+4. `merge_edges.R` deduplicates citation IDs after provider extraction and retains source-query provenance. `merge_monthly_edges.R` unions prior and new citation edges without losing historical directional links or known source-query provenance. `monthly_candidate_delta.R` avoids re-retrieving previously seen provider IDs.
+5. `filter_existing_w01.R` preserves all historical owners of a shared identifier. `prepare_new_candidates.R` removes existing W01 provider IDs from the *new bibliography workload*, without losing their citation edges from the cumulative discovery state.
+6. `workflow08b_monthly_discovery.yml` restores checksum-verified monthly W08/W01 and previous W08b state, processes bounded provider batches when explicitly enabled, archives a **restricted** checkpoint, supports same-month resume by Zenodo record ID, produces the historical edge union, and performs the W01 duplicate precheck. Default is read-only. No W01 downstream trigger.
+7. `workflow08b_monthly_candidates.yml` requires a **complete** discovery checkpoint with the same monthly W08 canonical SHA-256. It isolates genuinely new provider IDs, enforces a novel-ID cap, runs the validated Lens/OpenAlex provider-side species/NOT-farming filters, and retrieves full bibliographies only when explicitly enabled. After a successful nonempty bibliography, it dispatches the existing W08b lightweight deduplication/Shiny review pathway, passing the current W01 pointer. A zero-source provider file is valid.
+8. Provider **test fixtures** are only accepted with explicit `W08B_TEST_MODE=1`; `archive_discovery.R` rejects fixture-derived results from Zenodo.
+
+**Successful isolated GitHub Actions tests:** multi-ID intersection and directional edge union `41225019141`; per-provider-ID resume `41225182222`; real R runner fixture tests, including multi-Lens DOI, shared seed ownership and second-run idempotence `41225316368`; monthly discovery workflow safety/parse checks `41225758388`; multi-owner W01 precheck and zero-candidate handling `41225945082`; candidate workflow safety and downstream handoff checks `41226117608`. Test workflows were deleted after success.
+
+**Not yet authorised:** automatic interposition between normal W08 and W09, a real unbounded November provider run, or a supplemental W01→W08 publication. November's new canonical source snapshot must exist and pass checksum/W01 identity reconciliation. A **bounded real provider test** must confirm DOI matching and OpenAlex pagination/latency/usage; complete incremental discovery must then be archived and its novel candidate bibliography and Shiny/W01 handoff validated. The current automatic W08→W09 path is unchanged. Do not assert the system is automatically scheduled or production-activated until the single-generation, same-update loop guard and W09/W10 reporting have been tested and the W08 trigger changed deliberately.
+
+The new discovery/candidate workflows are **bounded and fail closed** by default; they do not run provider APIs unless explicitly dispatched with their corresponding execution boolean enabled. Never change the October historical checkpoint, canonical JSONL or previous user adjudications during a November test.
