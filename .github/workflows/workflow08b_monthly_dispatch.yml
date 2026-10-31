@@ -56,7 +56,10 @@ jobs:
           GENERATION=original
           if [ -f "$STATE" ]; then
             STAGE="$(jq -r '.stage' "$STATE")"
-            if [ "$STAGE" = "supplemental_w01_started" ] || [ "$STAGE" = "completed" ]; then
+            if [ "$STAGE" = "supplemental_w01_started" ]; then
+              GENERATION=supplemental
+            elif [ "$STAGE" = "completed" ] && \
+                 [ "$(jq -r '.original_w08_run_id' "$STATE")" != "$(jq -r '.w08_run_id' "$RUNNER_TEMP/source_release.json")" ]; then
               GENERATION=supplemental
             fi
           fi
