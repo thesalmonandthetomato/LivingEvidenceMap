@@ -11,6 +11,11 @@ on:
         type: boolean
         default: false
         required: true
+      resume_checkpoint_zenodo_id:
+        description: "Optional restricted W08b checkpoint from an earlier bounded run in this same month"
+        type: string
+        required: false
+        default: ''
       max_doi_batches:
         description: "Maximum DOI-resolution batches of 500"
         type: number
@@ -95,17 +100,30 @@ jobs:
               c$w08_records==e$canonical_seeds,
               e$seed_identifier_edges==p$seed_identifier_associations,
               p$provider_calls_performed==FALSE)'
-          mkdir -p "$ROOT/state"
-          for name in lens_seed_status.jsonl openalex_seed_status.jsonl lens_doi_resolution.jsonl; do
-            if test -f "$ROOT/previous/$name"; then cp "$ROOT/previous/$name" "$ROOT/state/$name"; fi
-          done
-          Rscript -e '
-            library(jsonlite)
-            p<-file.path(Sys.getenv("RUNNER_TEMP"),"w08b/state/discovery_summary.json")
-            writeLines(toJSON(list(schema="workflow08b-lens-discovery-dev-v1",
-              requests_this_execution=0L,complete_seeds=0L,incomplete_seeds=0L,
-              halted_early=TRUE,halt_reason="not_yet_executed",
-              test_fixture_mode=FALSE),auto_unbox=TRUE),p)'
+          RESUME_ID="${{ inputs.resume_checkpoint_zenodo_id || '' }}"
+          if [ -n "$RESUME_ID" ]; then
+            [[ "$RESUME_ID" =~ ^[0-9]+$ ]] || { echo "Invalid resume checkpoint ID"; exit 1; }
+            Rscript scripts/workflow08b/restore_discovery.R "$RESUME_ID" "$ROOT/state"
+            Rscript -e '
+              library(jsonlite)
+              p<-file.path(Sys.getenv("RUNNER_TEMP"),"w08b/state/monthly_discovery_status.json")
+              if(!file.exists(p))stop("Resume archive lacks same-month checkpoint receipt")
+              s<-fromJSON(p)
+              stopifnot(identical(as.character(s$update_month),Sys.getenv("UPDATE_MONTH")))
+              cat("PASS: resumed same-month checkpoint",p,"\\n")'
+          else
+            mkdir -p "$ROOT/state"
+            for name in lens_seed_status.jsonl openalex_seed_status.jsonl lens_doi_resolution.jsonl; do
+              if test -f "$ROOT/previous/$name"; then cp "$ROOT/previous/$name" "$ROOT/state/$name"; fi
+            done
+            Rscript -e '
+              library(jsonlite)
+              p<-file.path(Sys.getenv("RUNNER_TEMP"),"w08b/state/discovery_summary.json")
+              writeLines(toJSON(list(schema="workflow08b-lens-discovery-dev-v1",
+                requests_this_execution=0L,complete_seeds=0L,incomplete_seeds=0L,
+                halted_early=TRUE,halt_reason="not_yet_executed",
+                test_fixture_mode=FALSE),auto_unbox=TRUE),p)'
+          fi
       - name: Resolve all DOI manifestations to every matching Lens ID
         id: doi
         if: ${{ inputs.execute_provider_queries }}
@@ -230,7 +248,7 @@ jobs:
               preflight=get(file.path(root,"query_plan/summary.json")),
               discovery=get(file.path(root,"state/monthly_discovery_status.json")),
               provider_calls_enabled=identical(Sys.getenv("EXECUTE_PROVIDERS"),"true"),
-              run_complete=FALSE)
+              run_complete=isTRUE(get(file.path(root,"state/monthly_discovery_status.json"))$provider_discovery_complete))
             writeLines(toJSON(out,auto_unbox=TRUE,pretty=TRUE,null="null"),
               "w08b_monthly_discovery_summary.json")'
         env:
