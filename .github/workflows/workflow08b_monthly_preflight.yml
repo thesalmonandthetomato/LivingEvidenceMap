@@ -33,6 +33,7 @@ jobs:
                      "scripts/workflow08b/resolve_previous_checkpoint.R",
                      "scripts/workflow08b/crosswalk_identifiers.R",
                      "scripts/workflow08b/plan_monthly.R",
+                     "scripts/workflow08b/expand_seed_identifiers.R",
                      "scripts/workflow08b/monthly_candidate_delta.R",
                      "scripts/workflow08b/restore_discovery.R",
                      "scripts/updater/workflow_10_restore_canonical_from_zenodo.R",
@@ -81,6 +82,20 @@ jobs:
             actual<-fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"w08b/crosswalk/summary.json"))$w01_matches
             stopifnot(identical(as.integer(actual),as.integer(expected)))
             cat("PASS: all W08 seeds have W01 manifestation crosswalk\n")'
+      - name: Expand every distinct manifestation ID for each seed
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/expand_seed_identifiers.R \
+            "$RUNNER_TEMP/w08b/crosswalk/seed_identifier_crosswalk.csv" \
+            "$RUNNER_TEMP/w08b/expanded"
+          Rscript -e '
+            library(jsonlite)
+            x<-fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"w08b/expanded/summary.json"))
+            s<-fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"current_release.json"))
+            stopifnot(x$canonical_seeds==s$w08_included_seeds,
+                      x$all_valid_manifestation_ids_retained,
+                      x$seed_identifier_edges>=x$unique_identifier_queries)
+            cat("PASS: every seed manifestation identifier represented in query manifest\\n")'
       - name: Restore checksum-verified historical W08b citation checkpoint
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
@@ -110,9 +125,10 @@ jobs:
             stopifnot(as.integer(cross$w08_records)==as.integer(rel$w08_included_seeds),
                       as.integer(plan$seeds)==as.integer(rel$w08_included_seeds),
                       identical(plan$automatic_downloads_authorised,FALSE))
+            expanded<-fromJSON(file.path(root,"w08b/expanded/summary.json"),simplifyVector=FALSE)
             out<-list(schema="workflow08b-monthly-preflight-summary-v1",
                       source_release=rel,previous_checkpoint=prev,
-                      crosswalk=cross,seed_plan=plan,provider_calls_performed=FALSE,
+                      crosswalk=cross,expanded_identifiers=expanded,seed_plan=plan,provider_calls_performed=FALSE,
                       production_w01_w10_unchanged=TRUE)
             writeLines(toJSON(out,auto_unbox=TRUE,pretty=TRUE,null="null"),
                        "w08b_monthly_preflight_summary.json")
