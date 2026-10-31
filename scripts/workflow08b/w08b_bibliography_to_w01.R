@@ -24,6 +24,10 @@ pathlens<-file.path(out,"lens","records.jsonl")
 pathoa<-file.path(out,"openalex","openalex_sidecar_records.jsonl")
 dir.create(dirname(pathlens),recursive=TRUE,showWarnings=FALSE)
 dir.create(dirname(pathoa),recursive=TRUE,showWarnings=FALSE)
+# An update can legitimately yield zero eligible IDs for one provider.
+# Preserve an explicitly empty JSONL for downstream deduplication.
+if(!file.exists(pathlens))file.create(pathlens)
+if(!file.exists(pathoa))file.create(pathoa)
 dir.create(file.path(out,"raw","lens"),recursive=TRUE,showWarnings=FALSE)
 dir.create(file.path(out,"raw","openalex"),recursive=TRUE,showWarnings=FALSE)
 get<-function(req,provider){
