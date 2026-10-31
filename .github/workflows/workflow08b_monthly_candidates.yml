@@ -21,7 +21,7 @@ on:
         type: number
         default: 5000
 permissions:
-  contents: read
+  contents: write
   actions: write
 concurrency:
   group: w08b-monthly-bibliography-${{ inputs.update_month }}
@@ -34,6 +34,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: workflow01-final-architecture
+          fetch-depth: 0
       - uses: r-lib/actions/setup-r@v2
         with:
           r-version: release
@@ -163,6 +164,28 @@ jobs:
                 file=file.path(r,"eligible_counts.env"))
             cat("PASS: eligible provider IDs: Lens=",nrow(l),", OpenAlex=",nrow(o),"\n")'
           cat "$RUNNER_TEMP/eligible_counts.env" >> "$GITHUB_ENV"
+      - name: Finalise a monthly chase with no eligible new bibliographies
+        if: ${{ inputs.execute_bibliography && steps.eligibility.outcome == 'success' && env.LENS_ELIGIBLE == '0' && env.OPENALEX_ELIGIBLE == '0' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          UPDATE_ID="$(jq -r '.update_id' "$RUNNER_TEMP/release.json")"
+          [[ "$UPDATE_ID" =~ ^[A-Za-z0-9._-]+$ ]]
+          STATE="docs/workflow08b/routing/$UPDATE_ID.json"
+          test -s "$STATE"
+          Rscript scripts/workflow08b/record_routing_event.R no_supplemental \
+            "$RUNNER_TEMP/release.json" "$STATE"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$STATE"
+          git commit -m "W08b: complete citation chase without a supplemental bibliography"
+          git pull --rebase origin workflow01-final-architecture
+          git push origin HEAD:workflow01-final-architecture
+          gh workflow run workflow08b_monthly_dispatch.yml \
+            --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture \
+            -f source_w08_run_id="$(jq -r '.w08_run_id' "$RUNNER_TEMP/release.json")"
+          echo "PASS: no novel eligible bibliographies; original W08 may publish W09"
       - name: Retrieve full provider bibliographies with citation-edge provenance
         id: bibliographies
         if: ${{ inputs.execute_bibliography && steps.eligibility.outcome == 'success' && (env.LENS_ELIGIBLE != '0' || env.OPENALEX_ELIGIBLE != '0') }}
