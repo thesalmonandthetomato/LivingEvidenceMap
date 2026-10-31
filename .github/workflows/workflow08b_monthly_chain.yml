@@ -1,0 +1,118 @@
+name: W08b one-generation reusable monthly orchestration
+on:
+  workflow_call:
+    inputs:
+      source_w08_run_id:
+        required: true
+        type: string
+    secrets:
+      ZENODO_ACCESS_TOKEN:
+        required: true
+      LENS_API_TOKEN:
+        required: true
+      OPENALEX_API_KEY:
+        required: false
+      LEM_GOOGLE_SERVICE_ACCOUNT_JSON:
+        required: true
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: w08b-one-generation-${{ inputs.source_w08_run_id }}
+  cancel-in-progress: false
+jobs:
+  begin:
+    uses: ./.github/workflows/workflow08b_monthly_dispatch.yml
+    with:
+      source_w08_run_id: ${{ inputs.source_w08_run_id }}
+    secrets: inherit
+
+  discover:
+    needs: begin
+    if: ${{ needs.begin.outputs.transition == 'start_first_citation_generation' }}
+    uses: ./.github/workflows/workflow08b_monthly_discovery.yml
+    with:
+      update_month: ${{ needs.begin.outputs.update_month }}
+      execute_provider_queries: true
+      max_doi_batches: 100
+      max_lens_batches: 100
+      max_openalex_works: 500
+    secrets: inherit
+
+  candidates:
+    needs: [begin, discover]
+    if: ${{ needs.discover.outputs.discovery_complete == 'true' }}
+    uses: ./.github/workflows/workflow08b_monthly_candidates.yml
+    with:
+      update_month: ${{ needs.begin.outputs.update_month }}
+      discovery_checkpoint_zenodo_id: ${{ needs.discover.outputs.checkpoint_zenodo_id }}
+      execute_bibliography: true
+      max_novel_provider_ids: 50000
+    secrets: inherit
+
+  no_new_records:
+    needs: [begin, discover, candidates]
+    if: ${{ needs.candidates.outputs.no_new_bibliographies == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - run: Rscript -e 'install.packages("jsonlite")'
+      - name: Complete the original W08 generation exactly once and publish W09
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPDATE_MONTH: ${{ needs.begin.outputs.update_month }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/resolve_monthly_release.R \
+            docs/current_run/current_run_status.json \
+            docs/workflow08/zenodo_registry.csv docs/deduplication/zenodo \
+            "$UPDATE_MONTH" "$RUNNER_TEMP/release.json"
+          UPDATE_ID="$(jq -r '.update_id' "$RUNNER_TEMP/release.json")"
+          [[ "$UPDATE_ID" =~ ^[A-Za-z0-9._-]+$ ]]
+          STATE="docs/workflow08b/routing/$UPDATE_ID.json"
+          test -s "$STATE"
+          Rscript scripts/workflow08b/record_routing_event.R no_supplemental \
+            "$RUNNER_TEMP/release.json" "$STATE"
+          Rscript scripts/workflow08b/record_routing_event.R completed \
+            "$RUNNER_TEMP/release.json" "$STATE"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$STATE"
+          git commit -m "W08b: no new eligible bibliography, finish original generation"
+          git pull --rebase origin workflow01-final-architecture
+          git push origin HEAD:workflow01-final-architecture
+          gh workflow run report_workflow09_figures.yml \
+            --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture
+          echo "PASS: zero new records, original W08 published to W09 without supplemental W01"
+
+  deduplicate:
+    needs: [candidates]
+    if: ${{ needs.candidates.outputs.bibliography_ready == 'true' }}
+    uses: ./.github/workflows/workflow08b_lightweight_dedup.yml
+    with:
+      bibliography_run: ${{ github.run_id }}
+      previous_w01_pointer: ${{ needs.candidates.outputs.original_w01_pointer }}
+    secrets: inherit
+
+  publish_review:
+    needs: [deduplicate, candidates]
+    if: ${{ needs.deduplicate.outputs.dedup_completed == 'true' }}
+    uses: ./.github/workflows/workflow08b_publish_shiny.yml
+    with:
+      dedup_run: ${{ github.run_id }}
+      bibliography_run: ${{ github.run_id }}
+      previous_w01_pointer: ${{ needs.candidates.outputs.original_w01_pointer }}
+    secrets: inherit
+
+  canonical_without_human_review:
+    needs: [publish_review]
+    if: ${{ needs.publish_review.outputs.no_human_review_required == 'true' }}
+    uses: ./.github/workflows/workflow08b_canonical_to_w02.yml
+    secrets: inherit
