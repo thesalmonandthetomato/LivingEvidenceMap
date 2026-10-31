@@ -52,18 +52,29 @@ plan<-lapply(seq_len(nrow(d)),function(i){
   can_doi<-route=="lens_doi_lookup" && nzchar(z$doi[[1]]) && !grepl("|",z$doi[[1]],fixed=TRUE)
   can_openalex<-route=="openalex" && nzchar(z$openalex_id[[1]]) && !grepl("|",z$openalex_id[[1]],fixed=TRUE)
   actionable<-can_lens || can_doi || can_openalex
-  previous_identifier<-if(is.null(old))"" else if(can_openalex) as.character(old$openalex_id %||% "") else as.character(old$lens_id %||% "")
-  current_identifier<-if(can_openalex)z$openalex_id[[1]] else if(can_lens)z$lens_id[[1]] else ""
-  identifier_changed<-nzchar(previous_identifier) && nzchar(current_identifier) && !identical(previous_identifier,current_identifier)
-  check_required<-actionable && (!already_checked_this_update || identifier_changed)
+  # Identity changes must be evaluated against the route actually selected.
+  # In particular, a DOI-only Lens seed cannot be compared through lens_id.
+  old_lens<-prior[[paste(id,"lens",sep="::")]]
+  old_openalex<-prior[[paste(id,"openalex",sep="::")]]
+  old_lens_id<-if(is.null(old_lens))"" else as.character(old_lens$lens_id %||% "")
+  old_openalex_id<-if(is.null(old_openalex))"" else as.character(old_openalex$openalex_id %||% "")
+  old_doi<-if(is.null(old_lens))"" else as.character(old_lens$doi %||% "")
+  current_identifier<-if(can_openalex)z$openalex_id[[1]] else if(can_lens)z$lens_id[[1]] else if(can_doi)z$doi[[1]] else ""
+  previous_identifier<-if(can_openalex)old_openalex_id else if(can_lens)old_lens_id else if(can_doi)old_doi else ""
+  identifier_changed<-nzchar(previous_identifier) && nzchar(current_identifier) &&
+    !identical(tolower(previous_identifier),tolower(current_identifier))
+  # Provider switching also requires a fresh lookup, even if another provider
+  # was already checked during this same update.
+  provider_changed<-is.null(old) && !new
+  check_required<-actionable && (!already_checked_this_update || identifier_changed || provider_changed)
   data.frame(record_id=id,update_id=update,preferred_route=route,
     lens_id=z$lens_id[[1]],openalex_id=z$openalex_id[[1]],doi=z$doi[[1]],
     previous_status=old_status,new_seed=new,previous_update_id=prior_update,
-    identifier_changed=identifier_changed,
+    identifier_changed=identifier_changed,provider_changed=provider_changed,
     provider_check_required=check_required,
     forward_refresh_required=check_required,
     backward_count_refresh_required=check_required,
-    backward_retrieval_policy=if(!check_required)"none_this_update" else if(new || old_status!="complete" || identifier_changed)"retry_or_initial" else "if_reference_count_increases",
+    backward_retrieval_policy=if(!check_required)"none_this_update" else if(new || old_status!="complete" || identifier_changed || provider_changed)"retry_or_initial" else "if_reference_count_increases",
     provider_fallback=if(can_lens||can_doi) "openalex_only_if_lens_unresolved_and_openalex_id_known" else if(can_openalex) "openalex_only" else "none",
     stringsAsFactors=FALSE)
 })
