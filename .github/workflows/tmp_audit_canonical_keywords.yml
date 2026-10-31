@@ -48,17 +48,34 @@ jobs:
           norm <- function(x) tolower(trimws(gsub("[[:space:]]+"," ",x)))
           classify <- function(x){
             x <- norm(x)
-            if(x %in% c("article","jour","journal article","review","research article","peer-reviewed article"))return("Journal article")
-            if(x %in% c("dissertation","thes","thesis","ph.d.","ph.d","m.sc.","m.s.","master's"))return("Thesis")
+            composites <- list(
+              "journal article conference paper"=c("Journal article","Conference paper"),
+              "conference paper journal article"=c("Journal article","Conference paper"),
+              "book chapter journal article"=c("Book chapter","Journal article"),
+              "thesis journal article"=c("Thesis","Journal article"),
+              "annual report journal article"=c("Report","Journal article"),
+              "book chapter conference paper"=c("Book chapter","Conference paper"),
+              "conference paper book chapter"=c("Book chapter","Conference paper"),
+              "journal article correspondence"="Journal article",
+              "bulletin article conference paper"="Conference paper",
+              "conference proceedings article"="Conference paper",
+              "conference-abstract"="Conference paper",
+              "conference proceedings"="Conference paper"
+            )
+            if(x %in% names(composites))return(composites[[x]])
+            if(x %in% c("article","jour","journal article","review","research article","peer-reviewed article","journal article [online]"))return("Journal article")
+            if(x %in% c("dissertation","thes","thesis","ph.d.","ph.d","m.sc.","m.s.","master's","m.a.","d.phil.","m.phil.","dr.sc."))return("Thesis")
             if(x=="preprint")return("Preprint")
-            if(x %in% c("cpaper","conference-paper","conference paper","conf"))return("Conference paper")
+            if(x %in% c("cpaper","conference-paper","conference paper","conf","conference proceedings article"))return("Conference paper")
             if(x %in% c("book-chapter","book chapter","chap"))return("Book chapter")
-            if(x %in% c("report","rprt"))return("Report")
+            if(x %in% c("report","rprt","reports","annual report"))return("Report")
             return("Other")
           }
           counts <- new.env(parent=emptyenv())
           raw_counts <- new.env(parent=emptyenv())
-          n<-0L; multi<-0L; synonyms<-0L; journal_multis<-0L; journal_conflicts<-0L
+          all_conflicts <- new.env(parent=emptyenv())
+          journal_unknown <- new.env(parent=emptyenv())
+          n<-0L; multi<-0L; synonyms<-0L; journal_multis<-0L; journal_conflicts<-0L; journal_conflicts_all<-0L; genuine_conflicts<-0L
           inc <- function(env,key){if(exists(key,envir=env,inherits=FALSE))assign(key,get(key,envir=env)+1L,envir=env)else assign(key,1L,envir=env)}
           con<-file("tmp_keyword_audit/canonical.jsonl","rt")
           on.exit(close(con))
@@ -71,16 +88,25 @@ jobs:
               n<-n+1L
               vals<-as.character(unlist(r$canonical$publication_type,use.names=FALSE))
               vals<-unique(vals[!is.na(vals)&nzchar(trimws(vals))])
-              if(length(vals)<=1L)next
-              multi<-multi+1L
-              cats<-sort(unique(vapply(vals,classify,character(1))))
+              if(!length(vals))next
+              cats<-sort(unique(unlist(lapply(vals,classify),use.names=FALSE)))
+              recognized<-setdiff(cats,"Other")
               key<-paste(cats,collapse=" + ")
-              inc(counts,key)
-              inc(raw_counts,paste(sort(vals),collapse=" || "))
-              if(length(cats)==1L)synonyms<-synonyms+1L
+              if(length(recognized)>1L)genuine_conflicts<-genuine_conflicts+1L
+              if(length(cats)>1L)inc(all_conflicts,key)
               if("Journal article" %in% cats){
-                journal_multis<-journal_multis+1L
-                if(length(cats)>1L)journal_conflicts<-journal_conflicts+1L
+                if(length(cats)>1L)journal_conflicts_all<-journal_conflicts_all+1L
+                for(v in vals)if(identical(classify(v),"Other"))inc(journal_unknown,v)
+              }
+              if(length(vals)>1L){
+                multi<-multi+1L
+                inc(counts,key)
+                inc(raw_counts,paste(sort(vals),collapse=" || "))
+                if(length(cats)==1L)synonyms<-synonyms+1L
+                if("Journal article" %in% cats){
+                  journal_multis<-journal_multis+1L
+                  if(length(cats)>1L)journal_conflicts<-journal_conflicts+1L
+                }
               }
             }
           }
@@ -91,4 +117,9 @@ jobs:
           for(k in sorted(counts))cat(get(k,envir=counts)," | ",k,"\n",sep="")
           cat("TOP 75 RAW COMBINATIONS:\n")
           for(k in head(sorted(raw_counts),75L))cat(get(k,envir=raw_counts)," | ",k,"\n",sep="")
+          cat(sprintf("SECONDARY SUMMARY genuine_recognized_cross_type_all_records=%d journal_with_other_category_all=%d\n",genuine_conflicts,journal_conflicts_all))
+          cat("ALL CROSS-CATEGORY COMBINATIONS, INCLUDING SINGLE COMPOSITE LABELS:\n")
+          for(k in sorted(all_conflicts))cat(get(k,envir=all_conflicts)," | ",k,"\n",sep="")
+          cat("UNKNOWN SUPPLEMENTARY LABELS CO-OCCURRING WITH JOURNAL ARTICLE:\n")
+          for(k in sorted(journal_unknown))cat(get(k,envir=journal_unknown)," | ",k,"\n",sep="")
           cat("PASS: read-only canonical type combination audit\n")
