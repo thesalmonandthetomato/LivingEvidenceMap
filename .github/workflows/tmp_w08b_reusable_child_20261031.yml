@@ -1,0 +1,8 @@
+name: TEMP W08b reusable branch child probe
+on:
+  workflow_call:
+jobs:
+  child:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'PASS branch-local workflow_call'
