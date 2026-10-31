@@ -48,9 +48,9 @@ plan<-lapply(seq_len(nrow(d)),function(i){
   # Every eligible seed needs a fresh forward lookup, including old papers
   # retrospectively indexed by the provider. The backward direction needs a
   # count refresh, but not redownloading if that count has not increased.
-  can_lens<-route=="lens" && nzchar(z$lens_id[[1]]) && !grepl("|",z$lens_id[[1]],fixed=TRUE)
-  can_doi<-route=="lens_doi_lookup" && nzchar(z$doi[[1]]) && !grepl("|",z$doi[[1]],fixed=TRUE)
-  can_openalex<-route=="openalex" && nzchar(z$openalex_id[[1]]) && !grepl("|",z$openalex_id[[1]],fixed=TRUE)
+  can_lens<-route=="lens" && nzchar(z$lens_id[[1]])
+  can_doi<-route=="lens_doi_lookup" && nzchar(z$doi[[1]])
+  can_openalex<-route=="openalex" && nzchar(z$openalex_id[[1]])
   actionable<-can_lens || can_doi || can_openalex
   # Identity changes must be evaluated against the route actually selected.
   # In particular, a DOI-only Lens seed cannot be compared through lens_id.
@@ -90,6 +90,6 @@ summary<-list(schema="workflow08b-monthly-seed-plan-v1",update_id=update,
   unresolved=sum(!df$provider_check_required),
   forward_refresh_required=sum(df$forward_refresh_required),
   backward_reference_count_refresh_required=sum(df$backward_count_refresh_required),
-  automatic_downloads_authorised=FALSE)
+  identifier_expansion_required=TRUE,automatic_downloads_authorised=FALSE)
 writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE),file.path(out,"summary.json"))
 cat("PASS: planned ",nrow(df)," W08b seeds for update ",update,"; no provider queries authorised\n",sep="")
