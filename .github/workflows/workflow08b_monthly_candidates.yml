@@ -1,25 +1,48 @@
 name: W08b monthly new-candidate bibliography and W01 review handoff
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       update_month:
-        description: "Accepted monthly source update YYYY-MM"
         required: true
         type: string
       discovery_checkpoint_zenodo_id:
-        description: "Verified complete W08b discovery checkpoint"
         required: true
         type: string
       execute_bibliography:
-        description: "Enable provider NOT queries and bibliography retrieval (false = preflight)"
         required: true
+        type: boolean
+      max_novel_provider_ids:
+        type: number
+        required: false
+        default: 50000
+    secrets:
+      ZENODO_ACCESS_TOKEN:
+        required: true
+      LENS_API_TOKEN:
+        required: true
+      OPENALEX_API_KEY:
+        required: false
+    outputs:
+      bibliography_ready:
+        value: ${{ jobs.bibliography.outputs.bibliography_ready }}
+      no_new_bibliographies:
+        value: ${{ jobs.bibliography.outputs.no_new_bibliographies }}
+      original_w01_pointer:
+        value: ${{ jobs.bibliography.outputs.original_w01_pointer }}
+  workflow_dispatch:
+    inputs:
+      update_month:
+        required: true
+        type: string
+      discovery_checkpoint_zenodo_id:
+        required: true
+        type: string
+      execute_bibliography:
         type: boolean
         default: false
       max_novel_provider_ids:
-        description: "Cost guard: maximum novel provider IDs in this execution"
-        required: true
         type: number
-        default: 5000
+        default: 50000
 permissions:
   contents: write
   actions: write
@@ -28,6 +51,10 @@ concurrency:
   cancel-in-progress: false
 jobs:
   bibliography:
+    outputs:
+      bibliography_ready: ${{ steps.bibliographies.outputs.ready }}
+      no_new_bibliographies: ${{ steps.eligibility.outputs.no_new }}
+      original_w01_pointer: ${{ steps.baseline.outputs.pointer }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
@@ -42,6 +69,7 @@ jobs:
       - name: Install R libraries
         run: Rscript -e 'install.packages(c("jsonlite","httr2","digest","data.table","stringi"))'
       - name: Require a complete checksum-matched monthly discovery checkpoint
+        id: baseline
         env:
           UPDATE_MONTH: ${{ inputs.update_month }}
           DISCOVERY_ZENODO_ID: ${{ inputs.discovery_checkpoint_zenodo_id }}
@@ -52,6 +80,7 @@ jobs:
           Rscript scripts/workflow08b/resolve_monthly_release.R \
             docs/current_run/current_run_status.json docs/workflow08/zenodo_registry.csv \
             docs/deduplication/zenodo "$UPDATE_MONTH" "$RUNNER_TEMP/release.json"
+          echo "pointer=$(jq -r '.w01_pointer' "$RUNNER_TEMP/release.json")" >> "$GITHUB_OUTPUT"
           Rscript scripts/workflow08b/restore_discovery.R \
             "$DISCOVERY_ZENODO_ID" "$RUNNER_TEMP/w08b_checkpoint"
           Rscript -e '
@@ -164,28 +193,12 @@ jobs:
                 file=file.path(r,"eligible_counts.env"))
             cat("PASS: eligible provider IDs: Lens=",nrow(l),", OpenAlex=",nrow(o),"\n")'
           cat "$RUNNER_TEMP/eligible_counts.env" >> "$GITHUB_ENV"
-      - name: Finalise a monthly chase with no eligible new bibliographies
-        if: ${{ inputs.execute_bibliography && steps.eligibility.outcome == 'success' && env.LENS_ELIGIBLE == '0' && env.OPENALEX_ELIGIBLE == '0' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          UPDATE_ID="$(jq -r '.update_id' "$RUNNER_TEMP/release.json")"
-          [[ "$UPDATE_ID" =~ ^[A-Za-z0-9._-]+$ ]]
-          STATE="docs/workflow08b/routing/$UPDATE_ID.json"
-          test -s "$STATE"
-          Rscript scripts/workflow08b/record_routing_event.R no_supplemental \
-            "$RUNNER_TEMP/release.json" "$STATE"
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add "$STATE"
-          git commit -m "W08b: complete citation chase without a supplemental bibliography"
-          git pull --rebase origin workflow01-final-architecture
-          git push origin HEAD:workflow01-final-architecture
-          gh workflow run workflow08b_monthly_dispatch.yml \
-            --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture \
-            -f source_w08_run_id="$(jq -r '.w08_run_id' "$RUNNER_TEMP/release.json")"
-          echo "PASS: no novel eligible bibliographies; original W08 may publish W09"
+          if grep -qx 'LENS_ELIGIBLE=0' "$RUNNER_TEMP/eligible_counts.env" &&
+             grep -qx 'OPENALEX_ELIGIBLE=0' "$RUNNER_TEMP/eligible_counts.env"; then
+            echo "no_new=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "no_new=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Retrieve full provider bibliographies with citation-edge provenance
         id: bibliographies
         if: ${{ inputs.execute_bibliography && steps.eligibility.outcome == 'success' && (env.LENS_ELIGIBLE != '0' || env.OPENALEX_ELIGIBLE != '0') }}
@@ -203,6 +216,7 @@ jobs:
           test -f "$RUNNER_TEMP/w08b_bibliography/lens/records.jsonl"
           test -f "$RUNNER_TEMP/w08b_bibliography/openalex/openalex_sidecar_records.jsonl"
           cat "$RUNNER_TEMP/w08b_bibliography/manifest.json"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
       - name: Save discovery, eligibility and bibliographic summary
         if: always()
         env:
@@ -236,16 +250,3 @@ jobs:
           path: ${{ runner.temp }}/w08b_bibliography/
           retention-days: 30
           if-no-files-found: error
-      - name: Automatically dispatch existing dedup and Shiny review only after successful eligible bibliography
-        if: ${{ inputs.execute_bibliography && steps.bibliographies.outcome == 'success' && steps.bibliographies.conclusion == 'success' }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          W01_POINTER="$(jq -r '.w01_pointer' "$RUNNER_TEMP/release.json")"
-          test -s "$W01_POINTER"
-          gh workflow run workflow08b_lightweight_dedup.yml \
-            --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture \
-            -f bibliography_run="$GITHUB_RUN_ID" \
-            -f previous_w01_pointer="$W01_POINTER"
-          echo 'PASS: successfully staged new citation bibliographies for W01/Shiny deduplication'
