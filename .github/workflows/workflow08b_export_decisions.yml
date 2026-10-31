@@ -15,6 +15,7 @@ on:
         type: string
 permissions:
   contents: write
+  actions: write
 concurrency:
   group: w08b-decision-export-${{ inputs.queue_sha256 }}
   cancel-in-progress: false
@@ -88,4 +89,6 @@ jobs:
           git add docs/workflow08b/.run_canonical_handoff
           git commit -m "W08b: continue human deduplication export to W01 delta and W02"
           git push origin HEAD:workflow01-final-architecture
-          echo "PASS: requested W08b W01-compatible canonical handoff"
+          gh workflow run workflow08b_canonical_to_w02.yml \
+            --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture
+          echo "PASS: explicitly dispatched W08b W01-compatible canonical handoff"
