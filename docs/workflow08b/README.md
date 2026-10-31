@@ -119,3 +119,32 @@ The bulk runner has been **committed but not yet executed**. It still needs full
 - `workflow08b_monthly_preflight.yml` is a read-only, `workflow_dispatch`-only workflow. For a new completed monthly W00–W08 release, it reconstructs the latest W01 source identities, matches the included W08 seeds, restores the prior W08b checkpoint and produces a private monthly seed plan with an aggregate public artifact. It does **not** retrieve citations, change canonical data, or start W01–W10.
 
 **Activation remains gated:** the current W08/W01 27,726-seed crosswalk audit (run `41211361474`) must pass; then test actual November provider discovery, history/edge delta reconciliation, DOI/OpenAlex fallback, historical W01 identity exclusion, bibliography retrieval and single-generation supplemental W01–W08. Only after those checks should the standard W08→W09 trigger be changed to invoke W08b. The presence of the new preflight is not evidence of automatic November readiness.
+
+## All-manifestation citation chasing policy (31 October 2026)
+
+Multiple valid Lens IDs, OpenAlex work IDs or DOIs within one W01 canonical
+work are **not** an automatic identity conflict. A seed can represent a
+preprint and published article, for example. Query every valid distinct
+manifestation identifier for its available backward references and forward
+citations, rather than arbitrarily selecting a single source record. The
+identifier-to-canonical-seed relation is many-to-one; one provider ID can also
+be associated with more than one seed and must be queried only once.
+
+The read-only `expand_seed_identifiers.R` materialises both the complete
+seed↔identifier association table and the unique provider query table. The
+`merge_edges.R` deduplicates related IDs after citation extraction at the
+canonical seed/provider/related-ID/direction level while separately retaining
+the queried source identifier in `citation_edge_query_provenance.csv`.
+Provider-specific identifiers are not assumed identical across Lens and
+OpenAlex; cross-provider merging requires DOI/validated identity reconciliation.
+
+This supersedes the previous rule quarantining seeds merely because an
+identifier field contained a `|`-separated list. Genuinely malformed
+identifiers still fail validation.
+
+**Execution gate:** existing live discovery runners were designed for a
+single source ID per seed and are not yet connected to the expanded manifest.
+Do not activate monthly W08b retrieval until those runners are updated and
+tested to perform every requested query and checkpoint results per
+seed-identifier, not just per canonical seed. The expanded preflight and
+offline edge tests do not claim that provider-side retrieval is complete.
