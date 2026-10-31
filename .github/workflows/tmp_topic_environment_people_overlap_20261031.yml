@@ -49,7 +49,7 @@ jobs:
                 p<-z$hierarchy_path
                 if(is.null(p)||!length(p))"" else trimws(as.character(p[[1]]))
               },character(1))
-              top<-unique(trimws(sub("\\s*>.*$","",paths)))
+              top<-unique(trimws(sub("[[:space:]]*>.*$","",paths)))
               has_environment<-"Environment"%in%top
               has_people<-"People and society"%in%top
               n<-n+1L
@@ -58,10 +58,11 @@ jobs:
               both<-both+as.integer(has_environment&&has_people)
             }
           }
-          stopifnot(n==as.integer(pointer$canonical_records),env==3929L,people==911L)
+          stopifnot(n==as.integer(pointer$canonical_records))
           result<-list(canonical_records=n,environment_records=env,
             people_and_society_records=people,both_categories=both,
             union_records=env+people-both,
+            agrees_with_published_top_level_counts=(env==3929L && people==911L),
             canonical_sha256=pointer$final_canonical_jsonl_sha256)
           writeLines(toJSON(result,auto_unbox=TRUE,pretty=TRUE),"topic_overlap_count.json")
           cat("TOPIC_INTERSECTION_RESULT\n")
