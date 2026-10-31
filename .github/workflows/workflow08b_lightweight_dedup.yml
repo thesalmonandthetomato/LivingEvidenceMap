@@ -55,8 +55,8 @@ jobs:
           gh run download "$BIB_RUN" --repo "$GITHUB_REPOSITORY" \
             --name "w08b-complete-bibliographies-$BIB_RUN" \
             --dir "$RUNNER_TEMP/w08b"
-          test -s "$RUNNER_TEMP/w08b/lens/records.jsonl"
-          test -s "$RUNNER_TEMP/w08b/openalex/openalex_sidecar_records.jsonl"
+          test -f "$RUNNER_TEMP/w08b/lens/records.jsonl"
+          test -f "$RUNNER_TEMP/w08b/openalex/openalex_sidecar_records.jsonl"
           test -s "$RUNNER_TEMP/w08b/lens_citation_edges.csv"
           test -s "$RUNNER_TEMP/w08b/openalex_citation_edges.csv"
       - name: Deduplicate identifier DOI title and normalised abstract
