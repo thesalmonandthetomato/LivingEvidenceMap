@@ -108,10 +108,18 @@ jobs:
           set -euo pipefail
           Rscript scripts/workflow08b/record_routing_event.R completed \
             "$RUNNER_TEMP/source_release.json" "$ROUTING_STATE"
+          Rscript scripts/workflow08b/finish_monthly_checkpoint.R \
+            docs/workflow08b/monthly_checkpoint_registry.json \
+            "$UPDATE_MONTH" \
+            "$(jq -r '.w08_run_id' "$RUNNER_TEMP/source_release.json")" \
+            "$(jq -r '.w08_canonical_sha256' "$RUNNER_TEMP/source_release.json")" \
+            "$RUNNER_TEMP/final_monthly_registry.json"
+          mv "$RUNNER_TEMP/final_monthly_registry.json" \
+            docs/workflow08b/monthly_checkpoint_registry.json
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add "$ROUTING_STATE"
-          git commit -m "W08b: complete one citation generation and allow W09"
+          git add "$ROUTING_STATE" docs/workflow08b/monthly_checkpoint_registry.json
+          git commit -m "W08b: complete one citation generation and register final W08 checksum"
           git pull --rebase origin workflow01-final-architecture
           git push origin HEAD:workflow01-final-architecture
           gh workflow run report_workflow09_figures.yml \
