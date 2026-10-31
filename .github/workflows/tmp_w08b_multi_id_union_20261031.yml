@@ -1,0 +1,55 @@
+name: TEMP W08b multi-identifier union tests
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/tmp_w08b_multi_id_union_20261031.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - run: Rscript -e 'install.packages("jsonlite")'
+      - name: Confirm every ID retained and duplicate citing/reference IDs coalesced
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          dir.create("multi_test")
+          d<-data.frame(record_id=c("seedA","seedB"),
+            lens_id=c("L1|L2","L3"),openalex_id=c("W1|W2",""),
+            doi=c("10.1000/a|10.1000/b","10.1000/c"),stringsAsFactors=FALSE)
+          write.csv(d,"multi_test/cross.csv",row.names=FALSE)
+          stopifnot(system2("Rscript",c("scripts/workflow08b/expand_seed_identifiers.R",
+            "multi_test/cross.csv","multi_test/queries"))==0)
+          q<-read.csv("multi_test/queries/seed_identifier_queries.csv")
+          stopifnot(nrow(q)==8L,sum(q$seed_record_id=="seedA")==6L,
+            sum(q$identifier_type=="lens")==3L,
+            sum(q$identifier_type=="openalex")==2L,
+            sum(q$identifier_type=="doi")==3L)
+          edges<-list(
+            list(seed_record_id="seedA",provider="lens",queried_seed_identifier="L1",
+                 backward_ids=c("C1","C2"),forward_ids=c("C3","C4")),
+            list(seed_record_id="seedA",provider="lens",queried_seed_identifier="L2",
+                 backward_ids=c("C2","C5"),forward_ids=c("C3","C6")),
+            list(seed_record_id="seedA",provider="openalex",queried_seed_identifier="W1",
+                 backward_ids=c("W9"),forward_ids=c("W8")),
+            list(seed_record_id="seedA",provider="openalex",queried_seed_identifier="W2",
+                 backward_ids=c("W9"),forward_ids=c("W7")))
+          writeLines(vapply(edges,function(z)toJSON(z,auto_unbox=TRUE),character(1)),"multi_test/edges.jsonl")
+          stopifnot(system2("Rscript",c("scripts/workflow08b/merge_edges.R",
+            "multi_test/edges.jsonl","multi_test/merged"))==0)
+          x<-read.csv("multi_test/merged/citation_edges.csv")
+          p<-read.csv("multi_test/merged/citation_edge_query_provenance.csv")
+          ids<-read.csv("multi_test/merged/provider_candidate_ids.csv")
+          stopifnot(nrow(x)==9L,nrow(p)==12L,nrow(ids)==9L,
+            nrow(x[x$provider=="lens" & x$related_provider_id=="C2" & x$direction=="backward",])==1L,
+            nrow(p[p$provider=="lens" & p$related_provider_id=="C2" & p$direction=="backward",])==2L,
+            nrow(ids[ids$provider=="openalex" & ids$related_provider_id=="W9",])==1L)
+          cat("PASS: query all manifestation IDs, union citation IDs, retain source-ID provenance\n")
