@@ -21,7 +21,14 @@ month<-substr(as.character(status$search$search_date),1L,7L)
 if(!grepl("^[0-9]{4}-(0[1-9]|1[0-2])$",month))stop("Invalid current search month")
 minimum<-as.character(config$earliest_update_month)
 if(!grepl("^[0-9]{4}-(0[1-9]|1[0-2])$",minimum))stop("Invalid W08b activation month")
-if(enabled&&month>=minimum){
+`%||%`<-function(x,y)if(is.null(x)||!length(x))y else x
+earliest_date<-as.character(config$earliest_source_date %||% paste0(minimum,"-01"))
+if(!grepl("^[0-9]{4}-(0[1-9]|1[0-2])-[0-3][0-9]$",earliest_date))
+  stop("Invalid minimum source-update date")
+source_date<-as.character(status$search$search_date)
+if(!grepl("^[0-9]{4}-(0[1-9]|1[0-2])-[0-3][0-9]$",source_date))
+  stop("Invalid actual search date")
+if(enabled&&month>=minimum&&source_date>=earliest_date){
   run<-as.character(status$workflow_runs$W08)
   if(!grepl("^[0-9]+$",run))stop("Missing authoritative W08 run for W08b dispatcher")
   next_stage<-"w08b_monthly_dispatch"
