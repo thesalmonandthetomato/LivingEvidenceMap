@@ -45,8 +45,8 @@ jobs:
           fi
           [[ "$BIB_RUN" =~ ^[0-9]+$ ]] || { echo "Missing valid W08b bibliography run"; exit 1; }
           gh run download "$BIB_RUN" --repo "$GITHUB_REPOSITORY" --name "w08b-complete-bibliographies-$BIB_RUN" --dir w08b_input
-          test -s w08b_input/lens/records.jsonl
-          test -s w08b_input/openalex/openalex_sidecar_records.jsonl
+          test -f w08b_input/lens/records.jsonl
+          test -f w08b_input/openalex/openalex_sidecar_records.jsonl
       - name: Convert raw OpenAlex response pages and reconcile native identifiers
         run: |
           set -euo pipefail
