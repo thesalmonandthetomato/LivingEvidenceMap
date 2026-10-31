@@ -22,7 +22,10 @@ vec <- function(x){
 }
 safe_year <- function(x){z<-suppressWarnings(as.integer(substr(clean(x),1,4)));if(is.na(z)||z<1800L||z>2200L)"" else as.character(z)}
 
-for(p in c(source_jsonl,pointer_path,ontology_path,flow_counts_path)) if(!file.exists(p)) stopf("Required input not found: %s",p)
+# This translation contract is published and versioned by Workflow 09.
+article_type_translator_path <- "docs/reporting/workflow_09/data/workflow09_article_type_translator.R"
+for(p in c(source_jsonl,pointer_path,ontology_path,flow_counts_path,article_type_translator_path)) if(!file.exists(p)) stopf("Required input not found: %s",p)
+source(article_type_translator_path,local=TRUE)
 
 pointer <- fromJSON(pointer_path,simplifyVector=FALSE)
 expected_records <- suppressWarnings(as.integer(pointer$canonical_records))
@@ -162,6 +165,7 @@ repeat{
       journal=clean(can$journal),
       volume=clean(can$volume),
       pages=clean(can$pages),
+      article_type=workflow09_article_type(can$publication_type),
       lens_url="",
       species=as.list(species),
       countries=as.list(if(length(isos))isos else country_names),
