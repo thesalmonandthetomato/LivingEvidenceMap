@@ -93,11 +93,17 @@ jobs:
           Rscript -e '
             library(jsonlite)
             z<-fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"w08b_shiny/review_queue_manifest.json"))
-            candidates<-list.files("docs/enrichment/zenodo",pattern="^run-[0-9]+\\.json$",full.names=TRUE)
-            stopifnot(length(candidates)>0L,z$status=="published_to_shiny")
-            candidates<-candidates[order(as.numeric(sub("^run-([0-9]+)\\.json$","\\1",basename(candidates))),decreasing=TRUE)]
-            prev_w02<-candidates[[1L]]
-            stopifnot(fromJSON(prev_w02)$status=="published")
+            stopifnot(z$status=="published_to_shiny")
+            status<-fromJSON("docs/current_run/current_run_status.json")
+            w02run<-as.character(status$workflow_runs$W02)
+            stopifnot(length(w02run)==1L,grepl("^[0-9]+$",w02run))
+            prev_w02<-file.path("docs/enrichment/zenodo",paste0("run-",w02run,".json"))
+            stopifnot(file.exists(prev_w02),fromJSON(prev_w02)$status=="published")
+            prev_w01<-Sys.getenv("PREV_W01")
+            w01run<-as.character(status$workflow_runs$W01)
+            stopifnot(grepl("^[0-9]+$",w01run),
+              identical(prev_w01,file.path("docs/deduplication/zenodo",
+                paste0("run-",w01run,".json"))))
             out<-list(schema="w08b-review-provenance-v1",queue_sha256=z$queue_sha256,
               batch_id=z$batch_id,dedup_run=Sys.getenv("DEDUP_RUN"),
               bib_run=Sys.getenv("BIB_RUN"),
