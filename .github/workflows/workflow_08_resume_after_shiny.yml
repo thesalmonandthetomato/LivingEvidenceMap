@@ -56,6 +56,8 @@ env:
 
 jobs:
   resume:
+    outputs:
+      monthly_route: ${{ steps.publication_route.outputs.route }}
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -397,6 +399,7 @@ jobs:
             --message "Workflow 08 Shiny decisions applied; final canonical state archived and registered."
 
       - name: Trigger Workflow 09 publication package
+        id: publication_route
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -407,17 +410,14 @@ jobs:
             docs/workflow08b/monthly_activation.json \
             "$RUNNER_TEMP/w08b_route.json"
           ROUTE="$(jq -r '.route' "$RUNNER_TEMP/w08b_route.json")"
+          echo "route=$ROUTE" >> "$GITHUB_OUTPUT"
           if [ "$ROUTE" = "existing_w09" ]; then
             gh workflow run report_workflow09_figures.yml \
               --repo "$GITHUB_REPOSITORY" \
               --ref workflow01-final-architecture
             echo "PASS: existing W08→W09 publication route preserved"
           elif [ "$ROUTE" = "w08b_monthly_dispatch" ]; then
-            gh workflow run workflow08b_monthly_dispatch.yml \
-              --repo "$GITHUB_REPOSITORY" \
-              --ref workflow01-final-architecture \
-              -f source_w08_run_id="$GITHUB_RUN_ID"
-            echo "PASS: dispatched validated monthly W08b orchestration"
+            echo "PASS: W08b reusable monthly chain selected; stage will run after W08 completion"
           else
             echo "Unsupported W08 routing decision: $ROUTE" >&2
             exit 1
@@ -433,3 +433,11 @@ jobs:
             outputs/workflow08_zenodo/
           retention-days: 90
           if-no-files-found: error
+
+  w08b_monthly_chain:
+    needs: resume
+    if: ${{ needs.resume.result == 'success' && needs.resume.outputs.monthly_route == 'w08b_monthly_dispatch' }}
+    uses: ./.github/workflows/workflow08b_monthly_chain.yml
+    with:
+      source_w08_run_id: ${{ github.run_id }}
+    secrets: inherit
