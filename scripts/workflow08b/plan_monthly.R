@@ -13,6 +13,13 @@ if(!all(required%in%names(d))||anyDuplicated(d$record_id))stop("Invalid W08b cro
 prior<-list()
 history_files<-if(dir.exists(history)) file.path(history,c("lens_seed_status.jsonl","openalex_seed_status.jsonl")) else history
 history_files<-history_files[file.exists(history_files)]
+if(!length(history_files))stop("No previous monthly seed-status checkpoint; refusing a fresh search")
+if(dir.exists(history)){
+  required_history<-c(if(any(d$preferred_route%in%c("lens","lens_doi_lookup")))"lens_seed_status.jsonl",
+                      if(any(d$preferred_route=="openalex"))"openalex_seed_status.jsonl")
+  missing_history<-setdiff(required_history,basename(history_files))
+  if(length(missing_history))stop("Incomplete historical provider state: ",paste(missing_history,collapse=", "))
+}
 for(history_file in history_files){
   for(line in readLines(history_file,warn=FALSE)){
     if(!nzchar(trimws(line)))next
