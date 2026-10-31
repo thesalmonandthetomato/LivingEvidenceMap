@@ -1,0 +1,110 @@
+name: W08b month-aware W08 publication dispatcher
+on:
+  workflow_dispatch:
+    inputs:
+      source_w08_run_id:
+        description: "Exact just-published W08 GitHub run ID"
+        required: true
+        type: string
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: w08b-monthly-publication-dispatch
+  cancel-in-progress: false
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - run: Rscript -e 'install.packages("jsonlite")'
+      - name: Resolve exactly the published W08 release and protected activation
+        env:
+          SOURCE_W08_RUN_ID: ${{ inputs.source_w08_run_id }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_W08_RUN_ID" =~ ^[0-9]+$ ]]
+          Rscript scripts/workflow08b/check_activation.R \
+            docs/current_run/current_run_status.json \
+            docs/workflow08b/monthly_activation.json \
+            "$RUNNER_TEMP/activation_decision.json"
+          test "$(jq -r '.route' "$RUNNER_TEMP/activation_decision.json")" = "w08b_monthly_dispatch"
+          MONTH="$(jq -r '.search.search_date[:7]' docs/current_run/current_run_status.json)"
+          STATUS_W08="$(jq -r '.workflow_runs.W08' docs/current_run/current_run_status.json)"
+          test "$SOURCE_W08_RUN_ID" = "$STATUS_W08"
+          Rscript scripts/workflow08b/resolve_monthly_release.R \
+            docs/current_run/current_run_status.json \
+            docs/workflow08/zenodo_registry.csv docs/deduplication/zenodo \
+            "$MONTH" "$RUNNER_TEMP/source_release.json"
+          test "$(jq -r '.w08_run_id' "$RUNNER_TEMP/source_release.json")" = "$SOURCE_W08_RUN_ID"
+          echo "UPDATE_MONTH=$MONTH" >> "$GITHUB_ENV"
+      - name: Decide original, supplemental or already pending generation
+        run: |
+          set -euo pipefail
+          UPDATE_ID="$(jq -r '.update_id' "$RUNNER_TEMP/source_release.json")"
+          [[ "$UPDATE_ID" =~ ^[a-zA-Z0-9._-]+$ ]]
+          STATE="docs/workflow08b/routing/$UPDATE_ID.json"
+          mkdir -p docs/workflow08b/routing
+          GENERATION=original
+          if [ -f "$STATE" ]; then
+            STAGE="$(jq -r '.stage' "$STATE")"
+            if [ "$STAGE" = "supplemental_w01_started" ] || [ "$STAGE" = "completed" ]; then
+              GENERATION=supplemental
+            fi
+          fi
+          Rscript scripts/workflow08b/route_after_w08.R \
+            "$RUNNER_TEMP/source_release.json" \
+            docs/workflow08b/monthly_checkpoint_registry.json \
+            "$STATE" "$GENERATION" "$RUNNER_TEMP/routing_decision.json"
+          echo "ROUTING_STATE=$STATE" >> "$GITHUB_ENV"
+          echo "ROUTING_TRANSITION=$(jq -r '.transition' "$RUNNER_TEMP/routing_decision.json")" >> "$GITHUB_ENV"
+      - name: Register first generation before triggering citation discovery
+        if: ${{ env.ROUTING_TRANSITION == 'start_first_citation_generation' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/record_routing_event.R init \
+            "$RUNNER_TEMP/source_release.json" "$ROUTING_STATE"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$ROUTING_STATE"
+          git commit -m "W08b: register first citation generation for $UPDATE_MONTH"
+          git pull --rebase origin workflow01-final-architecture
+          git push origin HEAD:workflow01-final-architecture
+          gh workflow run workflow08b_monthly_discovery.yml \
+            --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture \
+            -f update_month="$UPDATE_MONTH" \
+            -f execute_provider_queries=true \
+            -f max_doi_batches=100 -f max_lens_batches=100 \
+            -f max_openalex_works=500 -f resume_attempt=0
+          echo "PASS: original W08 queued one bounded, checkpointed citation generation"
+      - name: Record completed supplemental generation and dispatch W09
+        if: ${{ env.ROUTING_TRANSITION == 'publish_final_w09_w10' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/record_routing_event.R completed \
+            "$RUNNER_TEMP/source_release.json" "$ROUTING_STATE"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$ROUTING_STATE"
+          git commit -m "W08b: complete one citation generation and allow W09"
+          git pull --rebase origin workflow01-final-architecture
+          git push origin HEAD:workflow01-final-architecture
+          gh workflow run report_workflow09_figures.yml \
+            --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture
+          echo "PASS: supplemental W08 dispatched W09 only, not W08b"
+      - name: Preserve idempotent no-op for repeated original or published W08
+        if: ${{ env.ROUTING_TRANSITION == 'await_existing_citation_generation' || env.ROUTING_TRANSITION == 'already_published' }}
+        run: |
+          echo "PASS: no second citation generation and no duplicate W09 publication"
