@@ -33,7 +33,7 @@ jobs:
           path<-file.path(Sys.getenv("RUNNER_TEMP"),"canonical.jsonl")
           pointer<-fromJSON(readLines("audit_pointer.txt")[[1]],simplifyVector=FALSE)
           f<-file(path,"rt");on.exit(close(f),add=TRUE)
-          n<-0L;env<-0L;people<-0L;both<-0L
+          n<-0L;retained_for_figure<-0L;env<-0L;people<-0L;both<-0L
           ids<-new.env(hash=TRUE,parent=emptyenv())
           repeat{
             lines<-readLines(f,n=500L,warn=FALSE)
@@ -44,6 +44,10 @@ jobs:
               id<-as.character(x$identity$record_id)
               if(!nzchar(id)||exists(id,envir=ids,inherits=FALSE))stop("Duplicate or missing record ID")
               assign(id,TRUE,envir=ids)
+              n<-n+1L
+              scr<-x$screening
+              if(!is.null(scr$final_included) && !isTRUE(scr$final_included))next
+              retained_for_figure<-retained_for_figure+1L
               a<-x$topics$assignments
               paths<-if(is.null(a)||!length(a))character() else vapply(a,function(z){
                 p<-z$hierarchy_path
@@ -52,14 +56,13 @@ jobs:
               top<-unique(trimws(sub("[[:space:]]*>.*$","",paths)))
               has_environment<-"Environment"%in%top
               has_people<-"People and society"%in%top
-              n<-n+1L
               env<-env+as.integer(has_environment)
               people<-people+as.integer(has_people)
               both<-both+as.integer(has_environment&&has_people)
             }
           }
-          stopifnot(n==as.integer(pointer$canonical_records))
-          result<-list(canonical_records=n,environment_records=env,
+          stopifnot(n==as.integer(pointer$canonical_records),env==3929L,people==911L)
+          result<-list(canonical_records=n,figure_retained_records=retained_for_figure,environment_records=env,
             people_and_society_records=people,both_categories=both,
             union_records=env+people-both,
             agrees_with_published_top_level_counts=(env==3929L && people==911L),
