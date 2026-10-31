@@ -49,10 +49,35 @@ if(nrow(combined)){
 } else pairs<-data.frame(seed_record_id=character(),provider=character(),
    related_provider_id=character(),direction=character())
 write.csv(pairs,file.path(out,"seed_candidate_direction.csv"),row.names=FALSE)
+# Retain observed query-identifier provenance in addition to the deduplicated
+# canonical seed/provider/direction edges. Older archives may lack this file;
+# never invent a source identifier for such historical relationships.
+prov_fields<-c("seed_record_id","provider","queried_seed_identifier",
+               "related_provider_id","direction")
+read_provenance<-function(path){
+ if(!file.exists(path))return(as.data.frame(setNames(
+    replicate(length(prov_fields),character(),simplify=FALSE),prov_fields)))
+ z<-read.csv(path,stringsAsFactors=FALSE,na.strings=NULL)
+ if(!all(prov_fields%in%names(z)))stop("Incomplete query provenance: ",path)
+ z<-z[,prov_fields,drop=FALSE]
+ if(nrow(z)&&any(!nzchar(as.matrix(z))))stop("Missing query provenance: ",path)
+ unique(z)
+}
+prior_prov<-read_provenance(file.path(dirname(prev),"citation_edge_query_provenance.csv"))
+new_prov<-read_provenance(file.path(dirname(next_path),"citation_edge_query_provenance.csv"))
+provenance<-unique(rbind(prior_prov,new_prov))
+provenance<-provenance[order(provenance$seed_record_id,provenance$provider,
+  provenance$queried_seed_identifier,provenance$related_provider_id,
+  provenance$direction),,drop=FALSE]
+write.csv(provenance,file.path(out,"citation_edge_query_provenance.csv"),row.names=FALSE)
+
 summary<-list(schema="workflow08b-monthly-edge-union-v1",
  prior_direction_edges=nrow(prior),current_direction_edges=nrow(new),
  new_direction_edges=nrow(new_only),cumulative_direction_edges=nrow(combined),
  cumulative_provider_candidate_ids=nrow(keys),
+ historical_query_provenance=nrow(prior_prov),
+ current_query_provenance=nrow(new_prov),
+ cumulative_query_provenance=nrow(provenance),
  no_historical_edges_dropped=all(paste(prior$seed_record_id,prior$provider,prior$related_provider_id,prior$direction,sep="\037")%in%
                                paste(combined$seed_record_id,combined$provider,combined$related_provider_id,combined$direction,sep="\037")),
  candidate_bibliographies_not_downloaded=TRUE)
