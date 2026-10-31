@@ -1,5 +1,9 @@
 name: W08b incremental W01 canonical handoff to W02
 on:
+  workflow_call:
+    secrets:
+      ZENODO_ACCESS_TOKEN:
+        required: true
   workflow_dispatch:
   push:
     branches: [workflow01-final-architecture]
