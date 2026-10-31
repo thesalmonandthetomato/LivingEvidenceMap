@@ -1,5 +1,26 @@
 name: W08b publish human dedup cases to Shiny
 on:
+  workflow_call:
+    inputs:
+      dedup_run:
+        required: true
+        type: string
+      bibliography_run:
+        required: true
+        type: string
+      previous_w01_pointer:
+        required: true
+        type: string
+    secrets:
+      ZENODO_ACCESS_TOKEN:
+        required: true
+      LEM_GOOGLE_SERVICE_ACCOUNT_JSON:
+        required: true
+    outputs:
+      no_human_review_required:
+        value: ${{ jobs.publish.outputs.no_human_review_required }}
+      review_required:
+        value: ${{ jobs.publish.outputs.review_required }}
   workflow_dispatch:
     inputs:
       dedup_run:
@@ -25,6 +46,9 @@ permissions:
   actions: write
 jobs:
   publish:
+    outputs:
+      no_human_review_required: ${{ steps.review_state.outputs.no_human_review_required }}
+      review_required: ${{ steps.review_state.outputs.review_required }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
@@ -80,6 +104,21 @@ jobs:
             "$RUNNER_TEMP/w01/canonical/records.jsonl" \
             "$RUNNER_TEMP/w08b_shiny"
           cat "$RUNNER_TEMP/w08b_shiny/review_queue_manifest.json"
+      - name: Export verified Shiny adjudication pause-or-continue decision
+        id: review_state
+        run: |
+          set -euo pipefail
+          STATUS="$(jq -r '.status' "$RUNNER_TEMP/w08b_shiny/review_queue_manifest.json")"
+          if [ "$STATUS" = "no_review_required" ]; then
+            echo 'no_human_review_required=true' >> "$GITHUB_OUTPUT"
+            echo 'review_required=false' >> "$GITHUB_OUTPUT"
+          elif [ "$STATUS" = "published_to_shiny" ]; then
+            echo 'no_human_review_required=false' >> "$GITHUB_OUTPUT"
+            echo 'review_required=true' >> "$GITHUB_OUTPUT"
+          else
+            echo "Unrecognised W08b review queue status $STATUS" >&2
+            exit 1
+          fi
       - name: Archive valid zero-human-review decisions without fabricating adjudication
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
@@ -151,9 +190,7 @@ jobs:
             git push origin HEAD:workflow01-final-architecture
           fi
           if test -s "$RUNNER_TEMP/w08b_shiny/empty_review_receipt.json"; then
-            gh workflow run workflow08b_canonical_to_w02.yml \
-              --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture
-            echo "PASS: dispatched verified zero-ambiguity W01 canonical handoff"
+            echo "PASS: verified zero-human-review canonical marker ready for reusable W01 handoff"
           fi
       - name: Preserve queue provenance
         if: always()
