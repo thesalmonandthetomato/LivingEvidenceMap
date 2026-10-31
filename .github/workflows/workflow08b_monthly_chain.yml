@@ -119,10 +119,17 @@ jobs:
             "$RUNNER_TEMP/release.json" "$STATE"
           Rscript scripts/workflow08b/record_routing_event.R completed \
             "$RUNNER_TEMP/release.json" "$STATE"
+          Rscript scripts/workflow08b/finish_monthly_checkpoint.R \
+            docs/workflow08b/monthly_checkpoint_registry.json \
+            "$UPDATE_MONTH" \
+            "$(jq -r '.w08_run_id' "$RUNNER_TEMP/release.json")" \
+            "$(jq -r '.w08_canonical_sha256' "$RUNNER_TEMP/release.json")" \
+            "$RUNNER_TEMP/next_registry.json"
+          mv "$RUNNER_TEMP/next_registry.json" docs/workflow08b/monthly_checkpoint_registry.json
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add "$STATE"
-          git commit -m "W08b: no new eligible bibliography, finish original generation"
+          git add "$STATE" docs/workflow08b/monthly_checkpoint_registry.json
+          git commit -m "W08b: no new bibliography, final W08 and monthly checkpoint accepted"
           git pull --rebase origin workflow01-final-architecture
           git push origin HEAD:workflow01-final-architecture
           gh workflow run report_workflow09_figures.yml \
