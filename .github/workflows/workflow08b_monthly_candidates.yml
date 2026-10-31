@@ -1,0 +1,228 @@
+name: W08b monthly new-candidate bibliography and W01 review handoff
+on:
+  workflow_dispatch:
+    inputs:
+      update_month:
+        description: "Accepted monthly source update YYYY-MM"
+        required: true
+        type: string
+      discovery_checkpoint_zenodo_id:
+        description: "Verified complete W08b discovery checkpoint"
+        required: true
+        type: string
+      execute_bibliography:
+        description: "Enable provider NOT queries and bibliography retrieval (false = preflight)"
+        required: true
+        type: boolean
+        default: false
+      max_novel_provider_ids:
+        description: "Cost guard: maximum novel provider IDs in this execution"
+        required: true
+        type: number
+        default: 5000
+permissions:
+  contents: read
+  actions: write
+concurrency:
+  group: w08b-monthly-bibliography-${{ inputs.update_month }}
+  cancel-in-progress: false
+jobs:
+  bibliography:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install R libraries
+        run: Rscript -e 'install.packages(c("jsonlite","httr2","digest","data.table","stringi"))'
+      - name: Require a complete checksum-matched monthly discovery checkpoint
+        env:
+          UPDATE_MONTH: ${{ inputs.update_month }}
+          DISCOVERY_ZENODO_ID: ${{ inputs.discovery_checkpoint_zenodo_id }}
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ "$DISCOVERY_ZENODO_ID" =~ ^[0-9]+$ ]] || { echo "Invalid discovery checkpoint ID"; exit 1; }
+          Rscript scripts/workflow08b/resolve_monthly_release.R \
+            docs/current_run/current_run_status.json docs/workflow08/zenodo_registry.csv \
+            docs/deduplication/zenodo "$UPDATE_MONTH" "$RUNNER_TEMP/release.json"
+          Rscript scripts/workflow08b/restore_discovery.R \
+            "$DISCOVERY_ZENODO_ID" "$RUNNER_TEMP/w08b_checkpoint"
+          Rscript -e '
+            library(jsonlite)
+            root<-Sys.getenv("RUNNER_TEMP")
+            rel<-fromJSON(file.path(root,"release.json"))
+            st<-fromJSON(file.path(root,"w08b_checkpoint/monthly_discovery_status.json"))
+            stopifnot(st$provider_discovery_complete,
+              st$queries_remaining==0L,
+              identical(as.character(st$update_month),Sys.getenv("UPDATE_MONTH")),
+              identical(tolower(as.character(st$w08_canonical_sha256)),
+                        tolower(as.character(rel$w08_canonical_sha256))))
+            cat("PASS: complete discovery, original monthly release SHA and update ID match\n")'
+      - name: Restore current authoritative W01 identities for duplicate precheck
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          POINTER="$(jq -r '.w01_pointer' "$RUNNER_TEMP/release.json")"
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer "$POINTER" --pointer-dir docs/deduplication/zenodo \
+            --output-root "$RUNNER_TEMP/w08b_current_w01"
+          test -s "$RUNNER_TEMP/w08b_current_w01/canonical/records.jsonl"
+      - name: Drop previously indexed IDs without dropping their historical citation relationships
+        env:
+          MAX_NOVEL: ${{ inputs.max_novel_provider_ids }}
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/w08b_checkpoint"
+          Rscript scripts/workflow08b/filter_existing_w01.R \
+            "$RUNNER_TEMP/w08b_current_w01/canonical/records.jsonl" \
+            "$ROOT/delta/new_provider_candidate_ids.csv" "$RUNNER_TEMP/w01_precheck"
+          Rscript scripts/workflow08b/prepare_new_candidates.R \
+            "$ROOT/delta/new_provider_candidate_ids.csv" \
+            "$ROOT/delta/new_candidate_citation_edges.csv" \
+            "$RUNNER_TEMP/w01_precheck/candidates_not_matched_by_provider_id.csv" \
+            "$RUNNER_TEMP/w08b_candidates"
+          Rscript -e '
+            x<-jsonlite::fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"w08b_candidates/summary.json"))
+            n<-as.integer(Sys.getenv("MAX_NOVEL"))
+            stopifnot(!is.na(n),n>=0L,x$require_provider_not_filter<=n)
+            cat("PASS: provider NOT search cost guard: ",x$require_provider_not_filter,
+                " candidate IDs <= ",n,"\n",sep="")'
+          cat "$RUNNER_TEMP/w08b_candidates/summary.json"
+      - name: Provider-side Lens species AND NOT farm-term eligible-ID search
+        id: lens_not
+        if: ${{ inputs.execute_bibliography }}
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/w08b_candidates"
+          mkdir -p "$RUNNER_TEMP/lens_eligible"
+          if [ "$(Rscript -e 'cat(nrow(read.csv(file.path(Sys.getenv("RUNNER_TEMP"),"w08b_candidates/lens_new_candidate_ids.csv"))))')" -gt 0 ]; then
+            Rscript scripts/workflow08b/lens_species_not_farming_ids.R \
+              "$ROOT/lens_new_candidate_ids.csv" "$ROOT/lens_new_citation_edges.csv" \
+              user_input/workflow00_search_strategy.json "$RUNNER_TEMP/lens_eligible"
+          else
+            Rscript -e '
+              library(jsonlite)
+              dir<-file.path(Sys.getenv("RUNNER_TEMP"),"lens_eligible")
+              write.csv(data.frame(provider=character(),related_provider_id=character()),
+                file.path(dir,"eligible_lens_ids.csv"),row.names=FALSE)
+              write.csv(data.frame(seed_record_id=character(),provider=character(),
+                related_provider_id=character(),direction=character()),
+                file.path(dir,"eligible_lens_citation_edges.csv"),row.names=FALSE)
+              writeLines(toJSON(list(schema="w08b-lens-eligible-ids-v1",
+                candidate_ids=0L,eligible_ids=0L,eligible_edges=0L,
+                provider_side_species_and_not_farming=TRUE),auto_unbox=TRUE),
+                file.path(dir,"summary.json"))'
+          fi
+      - name: Provider-side OpenAlex species AND NOT farm-term eligible-ID search
+        id: openalex_not
+        if: ${{ inputs.execute_bibliography }}
+        env:
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/w08b_candidates"
+          mkdir -p "$RUNNER_TEMP/openalex_eligible"
+          if [ "$(Rscript -e 'cat(nrow(read.csv(file.path(Sys.getenv("RUNNER_TEMP"),"w08b_candidates/openalex_new_candidate_ids.csv"))))')" -gt 0 ]; then
+            Rscript scripts/workflow08b/harvest_openalex_eligible.R \
+              "$ROOT/openalex_new_candidate_ids.csv" "$ROOT/openalex_new_citation_edges.csv" \
+              user_input/workflow00_search_strategy.json "$RUNNER_TEMP/openalex_eligible"
+          else
+            Rscript -e '
+              library(jsonlite)
+              dir<-file.path(Sys.getenv("RUNNER_TEMP"),"openalex_eligible")
+              write.csv(data.frame(provider=character(),related_provider_id=character()),
+                file.path(dir,"eligible_openalex_ids.csv"),row.names=FALSE)
+              write.csv(data.frame(seed_record_id=character(),provider=character(),
+                related_provider_id=character(),direction=character()),
+                file.path(dir,"eligible_openalex_citation_edges.csv"),row.names=FALSE)
+              writeLines(toJSON(list(schema="w08b-openalex-eligible-v1",
+                candidate_ids=0L,eligible_ids=0L,eligible_edges=0L,
+                provider_side_species_and_not_farming=TRUE),auto_unbox=TRUE),
+                file.path(dir,"summary.json"))'
+          fi
+      - name: Check eligible-ID totals and explicit empty-provider case
+        id: eligibility
+        if: ${{ inputs.execute_bibliography }}
+        run: |
+          set -euo pipefail
+          Rscript -e '
+            r<-Sys.getenv("RUNNER_TEMP")
+            l<-read.csv(file.path(r,"lens_eligible/eligible_lens_ids.csv"))
+            o<-read.csv(file.path(r,"openalex_eligible/eligible_openalex_ids.csv"))
+            stopifnot(!anyDuplicated(l),!anyDuplicated(o))
+            cat(paste0("LENS_ELIGIBLE=",nrow(l),"\nOPENALEX_ELIGIBLE=",nrow(o),"\n"),
+                file=file.path(r,"eligible_counts.env"))
+            cat("PASS: eligible provider IDs: Lens=",nrow(l),", OpenAlex=",nrow(o),"\n")'
+          cat "$RUNNER_TEMP/eligible_counts.env" >> "$GITHUB_ENV"
+      - name: Retrieve full provider bibliographies with citation-edge provenance
+        id: bibliographies
+        if: ${{ inputs.execute_bibliography && steps.eligibility.outcome == 'success' && (env.LENS_ELIGIBLE != '0' || env.OPENALEX_ELIGIBLE != '0') }}
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/w08b_bibliography_to_w01.R \
+            "$RUNNER_TEMP/lens_eligible/eligible_lens_ids.csv" \
+            "$RUNNER_TEMP/openalex_eligible/eligible_openalex_ids.csv" \
+            "$RUNNER_TEMP/lens_eligible/eligible_lens_citation_edges.csv" \
+            "$RUNNER_TEMP/openalex_eligible/eligible_openalex_citation_edges.csv" \
+            "$RUNNER_TEMP/w08b_bibliography"
+          test -f "$RUNNER_TEMP/w08b_bibliography/lens/records.jsonl"
+          test -f "$RUNNER_TEMP/w08b_bibliography/openalex/openalex_sidecar_records.jsonl"
+          cat "$RUNNER_TEMP/w08b_bibliography/manifest.json"
+      - name: Save discovery, eligibility and bibliographic summary
+        if: always()
+        env:
+          UPDATE_MONTH: ${{ inputs.update_month }}
+          RUN_BIBLIOGRAPHY: ${{ inputs.execute_bibliography }}
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          r<-Sys.getenv("RUNNER_TEMP")
+          load<-function(p)if(file.exists(p))fromJSON(p,simplifyVector=FALSE)else NULL
+          x<-list(schema="workflow08b-monthly-candidate-stage-v1",
+            month=Sys.getenv("UPDATE_MONTH"),
+            enabled=identical(Sys.getenv("RUN_BIBLIOGRAPHY"),"true"),
+            input=load(file.path(r,"w08b_candidates/summary.json")),
+            lens=load(file.path(r,"lens_eligible/summary.json")),
+            openalex=load(file.path(r,"openalex_eligible/summary.json")),
+            bibliography=load(file.path(r,"w08b_bibliography/manifest.json")),
+            current_w01_unchanged=TRUE)
+          writeLines(toJSON(x,auto_unbox=TRUE,pretty=TRUE,null="null"),
+            "w08b_monthly_candidate_summary.json")
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: w08b-monthly-candidate-summary-${{ github.run_id }}
+          path: w08b_monthly_candidate_summary.json
+          retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: ${{ inputs.execute_bibliography && steps.bibliographies.outcome == 'success' && steps.bibliographies.conclusion == 'success' }}
+        with:
+          name: w08b-complete-bibliographies-${{ github.run_id }}
+          path: ${{ runner.temp }}/w08b_bibliography/
+          retention-days: 30
+          if-no-files-found: error
+      - name: Automatically dispatch existing dedup and Shiny review only after successful eligible bibliography
+        if: ${{ inputs.execute_bibliography && steps.bibliographies.outcome == 'success' && steps.bibliographies.conclusion == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          W01_POINTER="$(jq -r '.w01_pointer' "$RUNNER_TEMP/release.json")"
+          test -s "$W01_POINTER"
+          gh workflow run workflow08b_lightweight_dedup.yml \
+            --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture \
+            -f bibliography_run="$GITHUB_RUN_ID" \
+            -f previous_w01_pointer="$W01_POINTER"
+          echo 'PASS: successfully staged new citation bibliographies for W01/Shiny deduplication'
