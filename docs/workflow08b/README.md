@@ -179,3 +179,23 @@ The new discovery/candidate workflows are **bounded and fail closed** by default
 **A separate GitHub Actions deployment blocker was identified and must not be ignored.** The repository's default branch is `main`, while new W08b workflow files exist only on `workflow01-final-architecture`. Invoking a newly authored branch-only workflow through `gh workflow run ... --ref workflow01-final-architecture` returned **HTTP 422, workflow does not have workflow_dispatch trigger** (run `41242124173`). Therefore several newly written W08b stage-to-stage `gh workflow run` transitions are **not usable as-is**. Do not turn on auto-triggering or claim a complete W08b→W01→W09 sequence. Separately, invoking a newly authored child workflow through `workflow_call` from a branch-local parent **succeeded** (run `41242394450`), demonstrating a supported route that does not require modifying `main`.
 
 The branch's `docs/workflow08b/monthly_activation.json` explicitly remains in **staged** mode, with both automatic launch flags false. The two standard W08 finalisation workflows now consult that flag but continue their existing W08→W09 route when staged. A November normal W08 would therefore **not automatically start W08b yet**. Before 19 November, replace all new branch-only `workflow_dispatch` stage handoffs with tested branch-local reusable `workflow_call` orchestration, test the zero-human-review and real-human-review continuation across W01/Shiny, verify W09/W10 citation-chasing and source counts, then separately change the activation mode following a fully successful dry-run. Do not modify `main` as a workaround.
+
+## Guarded activation for 19 November (31 October 2026)
+
+**Status: ACTIVATED for source updates dated 19 November 2026 or later on `workflow01-final-architecture`.** The authoritative switch is `docs/workflow08b/monthly_activation.json`. It sets both automatic routing and provider execution true, but the source-update date guard ensures October and earlier November W08 releases still follow their original direct W09 publication path. This does not change `main`.
+
+The new `workflow08b_monthly_chain.yml` is called as a **branch-local reusable workflow** by the standard W08 and Shiny-resumed W08 entry points. It first registers a unique citation generation, runs live all-manifestation citation discovery, archives restricted restart checkpoints before/during the lengthy OpenAlex phase, registers the complete monthly checkpoint for the next month, applies novel-candidate filters and retrieves bibliographies, performs deterministic W01 deduplication, then either pauses for real human Shiny review or proceeds through a verified zero-human-review W01 canonical handoff. W01 launches the existing registered W02 pathway. Final supplemental W08 bypasses W08b entirely and dispatches W09, which in turn publishes W10. A valid zero-new-bibliography chase publishes the unchanged original W08 directly to W09. Prior month final W08 checksum is required before the following month's chase.
+
+Evidence before activation:
+- Real DOI/Lens/OpenAlex provider retrieval and same-month idempotence: Actions `41240514374` (pass)
+- Live Lens and OpenAlex NOT-filter and full bibliography metadata: `41241939813` (pass)
+- Controlled W01 cross-provider dedup and nonrecursive one-generation routing: `41240746934` (pass)
+- Routing, Shiny zero-review and supplemental W01 lineage simulation: `41241720811` (pass)
+- Branch-local reusable workflow invocation: `41242394450` (pass)
+- GitHub Action workflow semantic validation: `41244596902` (pass)
+- October→November→December checkpoint registration, immutability and previous month finalisation guard: `41244371159` (pass)
+- Source update date boundary (Oct, 1 Nov, 18 Nov → W09; 19/20 Nov → W08b): `41244533264` (pass)
+
+**Unavoidable acceptance limit:** No new 19 November source release existed during these tests, so a full unattended 27k-seed live citation-chasing cycle through W01–W10 has **not yet been exercised**. The first routine source update on/after 19 November is the live integration acceptance test, not a proven completed production run. Rate limit, incomplete provider history, Zenodo failure, unverified W01/W08 lineage or pending Shiny adjudication must fail closed without claiming W09/W10 publication. The saved rollback switch is `docs/workflow08b/monthly_activation.json` from commit `365a5b10f45518fe828eda3fdcf55abebb68f245`, restoring `mode=staged` and both automatic flags false. Do not roll back newer unrelated commits.
+
+The October checkpoint remains the authoritative predecessor until the November release successfully registers its own immutable citation checkpoint and final W08 checksum. Temporary testing workflows were deleted after passing.
