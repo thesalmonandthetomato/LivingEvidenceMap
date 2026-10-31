@@ -195,6 +195,19 @@ jobs:
                 halted_early=TRUE,halt_reason="not_yet_executed",
                 test_fixture_mode=FALSE),auto_unbox=TRUE),p)'
           fi
+          # Preliminary state identity is required to resume an intermediate,
+          # checksum-verified restricted provider checkpoint safely.
+          Rscript -e '
+            library(jsonlite)
+            r<-Sys.getenv("RUNNER_TEMP")
+            rel<-fromJSON(file.path(r,"w08_release.json"))
+            p<-file.path(r,"w08b/state/monthly_discovery_status.json")
+            if(!file.exists(p))writeLines(toJSON(list(
+              schema="workflow08b-monthly-discovery-check-v1",
+              update_month=rel$update_month,
+              w08_canonical_sha256=rel$w08_canonical_sha256,
+              provider_discovery_complete=FALSE,queries_remaining=NULL),
+              auto_unbox=TRUE,pretty=TRUE,null="null"),p)'
       - name: Resolve all DOI manifestations to every matching Lens ID
         id: doi
         if: ${{ inputs.execute_provider_queries }}
@@ -231,11 +244,15 @@ jobs:
           OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
           UPDATE_MONTH: ${{ inputs.update_month }}
           MAX_WORKS: ${{ inputs.max_openalex_works }}
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
           ROOT="$RUNNER_TEMP/w08b"
-          # All Work IDs must be completed within this reusable job; do not
-          # depend on workflow_dispatch for bounded retries on a nondefault branch.
+          # Persist a recoverable, SHA-bound checkpoint before the long
+          # OpenAlex phase. Then archive every 2,500 completed Works.
+          Rscript scripts/workflow08b/archive_discovery.R \
+            "$ROOT/state" "$GITHUB_RUN_ID-pre-oa" "$RUNNER_TEMP/w08b-pre-oa-receipt.json"
+          echo "CHECKPOINT_PRE_OA=$(jq -r '.zenodo_record_id' "$RUNNER_TEMP/w08b-pre-oa-receipt.json")"
           for iteration in $(seq 1 60); do
             Rscript scripts/workflow08b/run_openalex_manifest.R \
               "$ROOT/expanded/seed_identifier_queries.csv" "$ROOT/state" \
@@ -244,6 +261,12 @@ jobs:
               z<-jsonlite::fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"w08b/state/openalex_summary.json"))
               cat(as.integer(z$completed_this_run)+as.integer(z$not_found_this_run))')"
             if [ "$WORKS" -eq 0 ]; then break; fi
+            if [ "$((iteration % 5))" -eq 0 ]; then
+              Rscript scripts/workflow08b/archive_discovery.R \
+                "$ROOT/state" "$GITHUB_RUN_ID-oa-$iteration" \
+                "$RUNNER_TEMP/w08b-oa-$iteration-receipt.json"
+              echo "CHECKPOINT_OA_$iteration=$(jq -r '.zenodo_record_id' "$RUNNER_TEMP/w08b-oa-$iteration-receipt.json")"
+            fi
             if [ "$iteration" -eq 60 ]; then
               echo "OpenAlex remains incomplete after 60 bounded iterations" >&2
               exit 1
