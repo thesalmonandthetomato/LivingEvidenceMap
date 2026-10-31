@@ -1,4 +1,4 @@
-name: Temporary - audit publication type combinations
+name: Temporary - audit canonical keyword fields
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,89 +37,56 @@ jobs:
           set -euo pipefail
           mkdir -p tmp_keyword_audit
           Rscript scripts/updater/workflow_10_restore_canonical_from_zenodo.R \
-            --pointer docs/workflow08/zenodo/run-40656599532.json \
+            --pointer docs/workflow08/zenodo/run-36442875006.json \
             --output tmp_keyword_audit/canonical.jsonl
 
-      - name: Count publication type combinations across canonical records
+      - name: Audit keyword-like fields
         shell: Rscript {0}
         run: |
           suppressPackageStartupMessages(library(jsonlite))
-          `%||%` <- function(x,y) if(is.null(x)||length(x)==0L)y else x
-          norm <- function(x) tolower(trimws(gsub("[[:space:]]+"," ",x)))
-          classify <- function(x){
-            x <- norm(x)
-            composites <- list(
-              "journal article conference paper"=c("Journal article","Conference paper"),
-              "conference paper journal article"=c("Journal article","Conference paper"),
-              "book chapter journal article"=c("Book chapter","Journal article"),
-              "thesis journal article"=c("Thesis","Journal article"),
-              "annual report journal article"=c("Report","Journal article"),
-              "book chapter conference paper"=c("Book chapter","Conference paper"),
-              "conference paper book chapter"=c("Book chapter","Conference paper"),
-              "journal article correspondence"="Journal article",
-              "bulletin article conference paper"="Conference paper",
-              "conference proceedings article"="Conference paper",
-              "conference-abstract"="Conference paper",
-              "conference proceedings"="Conference paper"
-            )
-            if(x %in% names(composites))return(composites[[x]])
-            if(x %in% c("article","jour","journal article","review","research article","peer-reviewed article","journal article [online]"))return("Journal article")
-            if(x %in% c("dissertation","thes","thesis","ph.d.","ph.d","m.sc.","m.s.","master's","m.a.","d.phil.","m.phil.","dr.sc."))return("Thesis")
-            if(x=="preprint")return("Preprint")
-            if(x %in% c("cpaper","conference-paper","conference paper","conf","conference proceedings article"))return("Conference paper")
-            if(x %in% c("book-chapter","book chapter","chap"))return("Book chapter")
-            if(x %in% c("report","rprt","reports","annual report"))return("Report")
-            return("Other")
+          f <- 'tmp_keyword_audit/canonical.jsonl'
+          con <- file(f,'rt',encoding='UTF-8'); on.exit(close(con))
+          n <- 0L
+          canonical_keys <- character()
+          keyword_paths <- list()
+          examples <- list()
+          add_path <- function(path,val,rid){
+            keyword_paths[[path]] <<- (keyword_paths[[path]] %||% 0L) + 1L
+            if(is.null(examples[[path]])) examples[[path]] <<- list(record_id=rid,value=val)
           }
-          counts <- new.env(parent=emptyenv())
-          raw_counts <- new.env(parent=emptyenv())
-          all_conflicts <- new.env(parent=emptyenv())
-          journal_unknown <- new.env(parent=emptyenv())
-          n<-0L; multi<-0L; synonyms<-0L; journal_multis<-0L; journal_conflicts<-0L; journal_conflicts_all<-0L; genuine_conflicts<-0L
-          inc <- function(env,key){if(exists(key,envir=env,inherits=FALSE))assign(key,get(key,envir=env)+1L,envir=env)else assign(key,1L,envir=env)}
-          con<-file("tmp_keyword_audit/canonical.jsonl","rt")
-          on.exit(close(con))
-          repeat {
-            lines<-readLines(con,n=200L,warn=FALSE)
-            if(!length(lines))break
-            for(line in lines){
-              if(!nzchar(trimws(line)))next
-              r<-fromJSON(line,simplifyVector=FALSE)
-              n<-n+1L
-              vals<-as.character(unlist(r$canonical$publication_type,use.names=FALSE))
-              vals<-unique(vals[!is.na(vals)&nzchar(trimws(vals))])
-              if(!length(vals))next
-              cats<-sort(unique(unlist(lapply(vals,classify),use.names=FALSE)))
-              recognized<-setdiff(cats,"Other")
-              key<-paste(cats,collapse=" + ")
-              if(length(recognized)>1L)genuine_conflicts<-genuine_conflicts+1L
-              if(length(cats)>1L)inc(all_conflicts,key)
-              if("Journal article" %in% cats){
-                if(length(cats)>1L)journal_conflicts_all<-journal_conflicts_all+1L
-                for(v in vals)if(identical(classify(v),"Other"))inc(journal_unknown,v)
-              }
-              if(length(vals)>1L){
-                multi<-multi+1L
-                inc(counts,key)
-                inc(raw_counts,paste(sort(vals),collapse=" || "))
-                if(length(cats)==1L)synonyms<-synonyms+1L
-                if("Journal article" %in% cats){
-                  journal_multis<-journal_multis+1L
-                  if(length(cats)>1L)journal_conflicts<-journal_conflicts+1L
-                }
-              }
+          `%||%` <- function(x,y) if(is.null(x)||length(x)==0L)y else x
+          walk <- function(x,path='',rid=''){
+            if(!is.list(x)||is.data.frame(x)) return(invisible(NULL))
+            nms <- names(x)
+            if(is.null(nms)) return(invisible(NULL))
+            for(nm in nms){
+              p <- if(nzchar(path)) paste0(path,'.',nm) else nm
+              if(grepl('keyword|subject|mesh|concept|term',nm,ignore.case=TRUE)) add_path(p,x[[nm]],rid)
+              if(is.list(x[[nm]])) walk(x[[nm]],p,rid)
             }
           }
-          stopifnot(n==27726L)
-          cat(sprintf("SUMMARY records=%d multi_labels=%d one_category=%d cross_category=%d journal_multi=%d journal_conflicts=%d raw_combos=%d category_combos=%d\n",n,multi,synonyms,multi-synonyms,journal_multis,journal_conflicts,length(ls(raw_counts)),length(ls(counts))))
-          sorted<-function(env){k<-ls(env);v<-vapply(k,function(x)get(x,envir=env),integer(1));k[order(-v,k)]}
-          cat("ALL CATEGORY COMBINATIONS:\n")
-          for(k in sorted(counts))cat(get(k,envir=counts)," | ",k,"\n",sep="")
-          cat("TOP 75 RAW COMBINATIONS:\n")
-          for(k in head(sorted(raw_counts),75L))cat(get(k,envir=raw_counts)," | ",k,"\n",sep="")
-          cat(sprintf("SECONDARY SUMMARY genuine_recognized_cross_type_all_records=%d journal_with_other_category_all=%d\n",genuine_conflicts,journal_conflicts_all))
-          cat("ALL CROSS-CATEGORY COMBINATIONS, INCLUDING SINGLE COMPOSITE LABELS:\n")
-          for(k in sorted(all_conflicts))cat(get(k,envir=all_conflicts)," | ",k,"\n",sep="")
-          cat("UNKNOWN SUPPLEMENTARY LABELS CO-OCCURRING WITH JOURNAL ARTICLE:\n")
-          for(k in sorted(journal_unknown))cat(get(k,envir=journal_unknown)," | ",k,"\n",sep="")
-          cat("PASS: read-only canonical type combination audit\n")
+          repeat{
+            lines <- readLines(con,n=500L,warn=FALSE)
+            if(!length(lines)) break
+            for(line in lines){
+              if(!nzchar(trimws(line))) next
+              rec <- fromJSON(line,simplifyVector=FALSE)
+              n <- n+1L
+              rid <- as.character((rec$identity %||% list())$record_id %||% '')
+              can <- rec$canonical %||% list()
+              canonical_keys <- union(canonical_keys,names(can))
+              walk(can,'canonical',rid)
+              walk(rec,'',rid)
+            }
+          }
+          cat('RECORDS=',n,'\n',sep='')
+          cat('CANONICAL_KEYS=',paste(sort(canonical_keys),collapse=' | '),'\n',sep='')
+          if(!length(keyword_paths)){
+            cat('KEYWORD_LIKE_FIELDS=NONE\n')
+          } else {
+            cat('KEYWORD_LIKE_FIELDS:\n')
+            for(p in sort(names(keyword_paths))){
+              cat(sprintf('  %s: %d records\n',p,keyword_paths[[p]]))
+              cat('    example: ',toJSON(examples[[p]],auto_unbox=TRUE,null='null'),'\n',sep='')
+            }
+          }
