@@ -1,0 +1,121 @@
+name: TEMP W08b controlled dedup and one-generation route validation
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/tmp_w08b_handoff_route_validation_20261031.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install R packages
+        shell: Rscript {0}
+        run: install.packages(c("jsonlite","data.table","stringi"))
+      - name: Validate controlled W01 identity and cross-provider deduplication
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          dir.create("test_handoff")
+          old<-list(identity=list(record_id="existingA"),
+            canonical=list(title="Existing historical work",doi="10.1/old",
+              abstract="An old paper about marine systems and salmon aquaculture."),
+            manifestations=list(list(source="lens",source_record_id="L-old",
+              doi="10.1/old",manifestation_metadata=list(
+                source_identity=list(lens_id="L-old")))))
+          writeLines(toJSON(old,auto_unbox=TRUE),
+            "test_handoff/w01.jsonl")
+          l1<-list(identity=list(lens_id="L-old"),canonical=list(
+            title="Existing historical work",doi="10.1/old",year=2020,
+            abstract="Historic study about salmon fisheries.",
+            authors=list(list(display_name="One Author"))))
+          l2<-list(identity=list(lens_id="L-new"),canonical=list(
+            title="A novel primary record",doi="10.1/new",year=2026,
+            abstract="New and independent salmon aquaculture evidence.",
+            authors=list(list(display_name="Another Author"))))
+          w<-list(sidecar_identity=list(openalex_id="W99",doi="10.1/new"),
+            mapped_fields=list(title="A novel primary record",doi="10.1/new",
+              year=2026,abstract="New and independent salmon aquaculture evidence.",
+              authors=list(list(display_name="Another Author"))))
+          writeLines(c(toJSON(l1,auto_unbox=TRUE),toJSON(l2,auto_unbox=TRUE)),
+            "test_handoff/lens.jsonl")
+          writeLines(toJSON(w,auto_unbox=TRUE),"test_handoff/openalex.jsonl")
+          e<-data.frame(seed_record_id=c("seedA","seedB"),
+            provider="lens",related_provider_id=c("L-old","L-new"),
+            direction=c("backward","forward"))
+          o<-data.frame(seed_record_id="seedA",provider="openalex",
+            related_provider_id="W99",direction="forward")
+          write.csv(e,"test_handoff/lens_edges.csv",row.names=FALSE)
+          write.csv(o,"test_handoff/openalex_edges.csv",row.names=FALSE)
+          script<-"scripts/workflow08b/deduplicate_citations.R"
+          result<-system2("Rscript",c(script,
+            "test_handoff/lens.jsonl","test_handoff/openalex.jsonl",
+            "test_handoff/w01.jsonl","test_handoff/lens_edges.csv",
+            "test_handoff/openalex_edges.csv","test_handoff/out"))
+          stopifnot(result==0L)
+          x<-fromJSON("test_handoff/out/summary.json")
+          stopifnot(x$provider_manifestations==3L,x$distinct_clusters==2L,
+            x$new_clusters==1L,x$historical_clusters==1L,
+            x$ambiguous_clusters==0L,x$fuzzy_pairs_generated==FALSE,
+            x$llm_calls==0L)
+          d<-read.csv("test_handoff/out/citation_provenance_crosswalk.csv")
+          stopifnot(nrow(d)==3L)
+          reps<-readLines("test_handoff/out/new_representative_records.jsonl")
+          stopifnot(length(reps)==1L)
+          cat("PASS: historical W01 matching, DOI cross-provider merge, one novel work and citation provenance\n")
+      - name: Verify first-generation, duplicate original and supplemental route gate
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          dir.create("test_route")
+          reg<-"docs/workflow08b/monthly_checkpoint_registry.json"
+          release<-list(update_month="2026-11",update_id="w00-run-555",
+            w08_run_id="555",w08_canonical_sha256=paste(rep("a",64),collapse=""))
+          writeLines(toJSON(release,auto_unbox=TRUE),"test_route/release.json")
+          run<-function(mode,state,expect_success=TRUE){
+            if(is.null(state)){path<-"test_route/missing.json";if(file.exists(path))file.remove(path)}
+            else{
+              path<-"test_route/state.json"
+              writeLines(toJSON(state,auto_unbox=TRUE),"test_route/state.json")
+            }
+            dest<-file.path("test_route","result.json")
+            if(file.exists(dest))file.remove(dest)
+            status<-suppressWarnings(system2("Rscript",c(
+              "scripts/workflow08b/route_after_w08.R",
+              "test_route/release.json",reg,path,mode,dest)))
+            if(expect_success)stopifnot(status==0L,file.exists(dest))
+            else stopifnot(status!=0L,!file.exists(dest))
+            if(expect_success)fromJSON(dest)else NULL
+          }
+          x<-run("original",NULL)
+          stopifnot(x$dispatch_w08b,!x$dispatch_w09,
+            x$transition=="start_first_citation_generation")
+          started<-list(schema="workflow08b-monthly-routing-state-v1",
+            update_id="w00-run-555",update_month="2026-11",
+            original_w08_run_id="555",
+            original_w08_sha256=paste(rep("a",64),collapse=""),
+            stage="citation_chasing_started")
+          x<-run("original",started)
+          stopifnot(!x$dispatch_w08b,!x$dispatch_w09,
+            x$transition=="await_existing_citation_generation")
+          run("supplemental",started,FALSE)
+          started$stage<-"supplemental_w01_started"
+          started$supplemental_w01_run_id<-"777"
+          run("supplemental",started,FALSE)
+          release$w08_run_id<-"556"
+          release$w08_canonical_sha256<-paste(rep("b",64),collapse="")
+          writeLines(toJSON(release,auto_unbox=TRUE),"test_route/release.json")
+          x<-run("supplemental",started)
+          stopifnot(!x$dispatch_w08b,x$dispatch_w09,
+            x$transition=="publish_final_w09_w10",
+            x$second_citation_generation_forbidden)
+          run("original",started,FALSE)
+          cat("PASS: exactly one citation generation, original retry idempotent, supplemental W08 bypasses W08b and publishes W09\n")
