@@ -17,12 +17,17 @@ if(!identical(as.character(z$status),"verified_archive"))stop("Previous checkpoi
 id<-as.character(z$discovery_zenodo_record_id)
 if(!grepl("^[0-9]+$",id))stop("Invalid previous checkpoint Zenodo ID")
 if(as.integer(z$provider_candidate_ids)<0L||as.integer(z$direction_edges)<0L)stop("Missing candidate/edge counts")
+final_run<-as.character(z$post_chasing_w08_source_run_id)
+final_sha<-tolower(as.character(z$post_chasing_w08_sha256))
+if(length(final_run)!=1L||!grepl("^[0-9]+$",final_run)||
+   length(final_sha)!=1L||!grepl("^[a-f0-9]{64}$",final_sha))
+ stop("Previous month citation chasing is not finally accepted in W08; fail closed")
 result<-list(schema="workflow08b-previous-checkpoint-selection-v1",
  target_month=month,previous_month=previous,zenodo_record_id=id,
  inventory_run_id=as.character(z$archive_inventory_run_id),
  previous_provider_candidates=as.integer(z$provider_candidate_ids),
  previous_direction_edges=as.integer(z$direction_edges),
- previous_w08_sha256=as.character(z$post_chasing_w08_sha256),
+ previous_w08_sha256=final_sha,
  provider_calls_authorised=FALSE,archive_integrity_check_required=TRUE)
 dir.create(dirname(output),recursive=TRUE,showWarnings=FALSE)
 writeLines(toJSON(result,auto_unbox=TRUE,pretty=TRUE,null="null"),output)
