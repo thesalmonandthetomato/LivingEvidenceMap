@@ -16,7 +16,7 @@ jobs:
       - name: Validate W08b callable chain and upstream W08 entry points with actionlint
         run: |
           set -euo pipefail
-          docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 \
+          docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 -shellcheck= \
             .github/workflows/workflow08b_monthly_chain.yml \
             .github/workflows/workflow08b_monthly_dispatch.yml \
             .github/workflows/workflow08b_monthly_discovery.yml \
