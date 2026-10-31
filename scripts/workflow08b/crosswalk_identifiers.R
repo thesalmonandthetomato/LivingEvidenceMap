@@ -41,8 +41,10 @@ repeat {lines<-readLines(con,n=500L,warn=FALSE);if(!length(lines))break
       oa<-c(oa,normoa(mid$identifiers$openalex_id));dois<-c(dois,normdoi(m$doi))
     }
     lens<-distinct(lens);oa<-distinct(oa);doi<-distinct(dois)
+    # Multiple valid manifestation identifiers are query targets, not an
+    # exclusion reason. Preserve all IDs; downstream expansion deduplicates.
     conflict<-any(grepl("|",c(lens,oa,doi),fixed=TRUE))
-    route<-if(conflict)"identity_conflict" else if(nzchar(lens))"lens" else if(nzchar(doi))"lens_doi_lookup" else if(nzchar(oa))"openalex" else "unresolved"
+    route<-if(nzchar(lens))"lens" else if(nzchar(doi))"lens_doi_lookup" else if(nzchar(oa))"openalex" else "unresolved"
     assign(id,list(record_id=id,lens_id=lens,openalex_id=oa,doi=doi,preferred_route=route,
                    identifier_conflict=conflict,manifestation_count=length(mans)),envir=found)
   }}
@@ -55,6 +57,7 @@ routes<-as.list(table(factor(df$preferred_route,levels=c("lens","openalex","lens
 names(routes)<-c("lens","openalex","lens_doi_lookup","unresolved","identity_conflict")
 summary<-list(schema="workflow08b-w01-w08-crosswalk-v1",w08_records=length(seeds),w01_matches=nrow(df),
               routes=routes,has_lens=sum(nzchar(df$lens_id)),has_openalex=sum(nzchar(df$openalex_id)),
-              has_doi=sum(nzchar(df$doi)),identifier_conflicts=sum(df$identifier_conflict))
+              has_doi=sum(nzchar(df$doi)),multiple_identifiers=sum(df$identifier_conflict),
+              multiple_identifiers_are_queryable=TRUE)
 writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE),file.path(out,"summary.json"))
 cat("PASS: matched",nrow(df),"included W08 IDs to W01 manifestations\n")
