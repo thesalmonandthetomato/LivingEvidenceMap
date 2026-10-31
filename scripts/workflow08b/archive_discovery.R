@@ -11,6 +11,12 @@ ledger<-file.path(root,"lens_seed_status.jsonl")
 if(!file.exists(state)||!file.exists(ledger))stop("Incomplete checkpoint directory")
 info<-fromJSON(state,simplifyVector=FALSE)
 if(!identical(info$schema,"workflow08b-lens-discovery-dev-v1"))stop("Unrecognised W08b state")
+if(isTRUE(info$test_fixture_mode))stop("Refusing to archive fixture-based Lens discovery")
+for(p in c("openalex_summary.json","doi_resolution_summary.json")){
+ q<-file.path(root,p)
+ if(file.exists(q)&&isTRUE(fromJSON(q,simplifyVector=FALSE)$test_fixture_mode))
+   stop("Refusing to archive fixture-based provider discovery: ",p)
+}
 archive<-file.path(tempdir(),paste0("w08b-discovery-run-",run,".tar.gz"))
 files<-list.files(root,recursive=TRUE,all.files=TRUE,no..=TRUE)
 if(!length(files))stop("Empty checkpoint")
