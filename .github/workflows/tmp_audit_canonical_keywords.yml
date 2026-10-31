@@ -1,4 +1,4 @@
-name: Temporary - audit canonical keyword fields
+name: Temporary - inspect Icelandic salmon news publication metadata
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,56 +37,37 @@ jobs:
           set -euo pipefail
           mkdir -p tmp_keyword_audit
           Rscript scripts/updater/workflow_10_restore_canonical_from_zenodo.R \
-            --pointer docs/workflow08/zenodo/run-36442875006.json \
+            --pointer docs/workflow08/zenodo/run-40656599532.json \
             --output tmp_keyword_audit/canonical.jsonl
 
-      - name: Audit keyword-like fields
+      - name: Inspect exact canonical publication type and originating manifestations
         shell: Rscript {0}
         run: |
           suppressPackageStartupMessages(library(jsonlite))
-          f <- 'tmp_keyword_audit/canonical.jsonl'
-          con <- file(f,'rt',encoding='UTF-8'); on.exit(close(con))
-          n <- 0L
-          canonical_keys <- character()
-          keyword_paths <- list()
-          examples <- list()
-          add_path <- function(path,val,rid){
-            keyword_paths[[path]] <<- (keyword_paths[[path]] %||% 0L) + 1L
-            if(is.null(examples[[path]])) examples[[path]] <<- list(record_id=rid,value=val)
-          }
-          `%||%` <- function(x,y) if(is.null(x)||length(x)==0L)y else x
-          walk <- function(x,path='',rid=''){
-            if(!is.list(x)||is.data.frame(x)) return(invisible(NULL))
-            nms <- names(x)
-            if(is.null(nms)) return(invisible(NULL))
-            for(nm in nms){
-              p <- if(nzchar(path)) paste0(path,'.',nm) else nm
-              if(grepl('keyword|subject|mesh|concept|term',nm,ignore.case=TRUE)) add_path(p,x[[nm]],rid)
-              if(is.list(x[[nm]])) walk(x[[nm]],p,rid)
+          `%||%` <- function(x,y) if(is.null(x))y else x
+          con<-file("tmp_keyword_audit/canonical.jsonl","rt",encoding="UTF-8")
+          on.exit(close(con))
+          matches<-0L
+          repeat {
+            lines<-readLines(con,n=300L,warn=FALSE)
+            if(!length(lines))break
+            for(line in lines) {
+              if(!grepl("Icelandic land-based salmon",line,ignore.case=TRUE,fixed=TRUE))next
+              r<-fromJSON(line,simplifyVector=FALSE)
+              ttl<-as.character(r$canonical$title %||% "")
+              if(!grepl("boost for Icelandic land-based salmon producer",ttl,ignore.case=TRUE,fixed=TRUE))next
+              matches<-matches+1L
+              cat("MATCH ",matches,"\n",sep="")
+              cat("ID: ",r$identity$record_id,"\n",sep="")
+              cat("TITLE: ",ttl,"\n",sep="")
+              cat("YEAR: ",r$canonical$year,"\n",sep="")
+              cat("JOURNAL: ",r$canonical$journal,"\n",sep="")
+              cat("DOI: ",r$canonical$doi,"\n",sep="")
+              cat("CANONICAL PUBLICATION_TYPE: ",toJSON(r$canonical$publication_type,auto_unbox=FALSE,null="null"),"\n",sep="")
+              cat("PUBLICATION_TYPE PROVENANCE: ",toJSON(r$canonical$field_provenance$publication_type,auto_unbox=FALSE,null="null"),"\n",sep="")
+              cat("MANIFESTATIONS: ",toJSON(r$manifestations,auto_unbox=TRUE,null="null",pretty=TRUE),"\n",sep="")
+              cat("SOURCE_KEYS: ",paste(names(r),collapse=", "),"\n",sep="")
             }
           }
-          repeat{
-            lines <- readLines(con,n=500L,warn=FALSE)
-            if(!length(lines)) break
-            for(line in lines){
-              if(!nzchar(trimws(line))) next
-              rec <- fromJSON(line,simplifyVector=FALSE)
-              n <- n+1L
-              rid <- as.character((rec$identity %||% list())$record_id %||% '')
-              can <- rec$canonical %||% list()
-              canonical_keys <- union(canonical_keys,names(can))
-              walk(can,'canonical',rid)
-              walk(rec,'',rid)
-            }
-          }
-          cat('RECORDS=',n,'\n',sep='')
-          cat('CANONICAL_KEYS=',paste(sort(canonical_keys),collapse=' | '),'\n',sep='')
-          if(!length(keyword_paths)){
-            cat('KEYWORD_LIKE_FIELDS=NONE\n')
-          } else {
-            cat('KEYWORD_LIKE_FIELDS:\n')
-            for(p in sort(names(keyword_paths))){
-              cat(sprintf('  %s: %d records\n',p,keyword_paths[[p]]))
-              cat('    example: ',toJSON(examples[[p]],auto_unbox=TRUE,null='null'),'\n',sep='')
-            }
-          }
+          cat("TOTAL EXACT TITLE MATCHES: ",matches,"\n",sep="")
+          stopifnot(matches>=1L)
