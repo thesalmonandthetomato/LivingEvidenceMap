@@ -32,11 +32,25 @@ keep<-vapply(seq_len(nrow(d)),function(i){
  (nzchar(update)&&!identical(as.character(z$update_id %||% ""),update))
 },logical(1))
 d<-head(d[keep,,drop=FALSE],limit)
+fixture_dir<-Sys.getenv("W08B_OPENALEX_TEST_FIXTURES","")
+test_mode<-nzchar(fixture_dir) && identical(Sys.getenv("W08B_TEST_MODE",""),"1")
+if(nzchar(fixture_dir)&&!test_mode)stop("OpenAlex fixture requires W08B_TEST_MODE=1")
+if(test_mode&&!dir.exists(fixture_dir))stop("OpenAlex fixture directory missing")
 api_key<-Sys.getenv("OPENALEX_API_KEY","")
 email<-Sys.getenv("OPENALEX_MAILTO","")
 normal<-function(x){x<-toupper(sub("^https?://openalex[.]org/","",as.character(x),ignore.case=TRUE));if(grepl("^W[0-9]+$",x))x else ""}
 now<-function()format(Sys.time(),"%Y-%m-%dT%H:%M:%SZ",tz="UTC")
 query<-function(url,params=list()){
+ if(test_mode){
+   if(grepl("/works/W[0-9]+$",url)){
+     wid<-sub("^.*/works/","",url)
+     return(fromJSON(file.path(fixture_dir,paste0(wid,"_work.json")),simplifyVector=FALSE))
+   }
+   filter<-as.character(params$filter %||% "")
+   wid<-sub("^cites:","",filter)
+   if(!grepl("^W[0-9]+$",wid))stop("Unexpected OpenAlex mock citation filter")
+   return(fromJSON(file.path(fixture_dir,paste0(wid,"_citations.json")),simplifyVector=FALSE))
+ }
  r<-request(url)|>req_user_agent("W08b citation discovery (research)")|>req_timeout(120)
  if(nzchar(email))r<-req_url_query(r,mailto=email)
  if(nzchar(api_key))r<-req_url_query(r,api_key=api_key)
@@ -109,7 +123,8 @@ if(file.exists(edges)&&file.info(edges)$size>0){
 }
 summary<-list(schema="workflow08b-openalex-fallback-v1",completed_this_run=complete,
   requests_this_run=requests,not_found_this_run=not_found,halted=!is.null(halt),halt_reason=halt,
-  all_manifestation_openalex_ids=TRUE,w01_handoff_authorised=FALSE)
+  all_manifestation_openalex_ids=TRUE,w01_handoff_authorised=FALSE,
+  test_fixture_mode=test_mode)
 writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null="null"),file.path(out,"openalex_summary.json"))
 cat("W08b OpenAlex fallback: completed=",complete," requests=",requests," halted=",!is.null(halt),"\n",sep="")
 if(!is.null(halt))quit(save="no",status=2L)
