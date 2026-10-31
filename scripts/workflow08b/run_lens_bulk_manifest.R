@@ -14,8 +14,12 @@ max_batches<-if(length(a)>=3L)as.integer(a[[3]]) else 1L
 update<-if(length(a)>=4L)as.character(a[[4]]) else ""
 if(is.na(max_batches)||max_batches<1L||max_batches>100L)stop("max_batches outside 1..100")
 if(nzchar(update)&&!grepl("^[A-Za-z0-9._-]+$",update))stop("Invalid update ID")
+fixture<-Sys.getenv("W08B_LENS_TEST_FIXTURE","")
+test_mode<-nzchar(fixture) && identical(Sys.getenv("W08B_TEST_MODE",""),"1")
+if(nzchar(fixture)&&!test_mode)stop("A test fixture requires W08B_TEST_MODE=1")
+if(test_mode && !file.exists(fixture))stop("Lens fixture not found")
 token<-Sys.getenv("LENS_API_TOKEN","")
-if(!nzchar(token))stop("Missing Lens token")
+if(!test_mode&&!nzchar(token))stop("Missing Lens token")
 required<-c("seed_record_id","provider","identifier_type","query_identifier")
 if(!all(required%in%names(d))||anyDuplicated(d[,required]))stop("Invalid identifier manifest")
 dir.create(out,recursive=TRUE,showWarnings=FALSE)
@@ -63,19 +67,19 @@ for(indices in chunks){
  payload<-list(query=list(terms=list(lens_id=as.list(ids))),size=500L,
   include=c("lens_id","references","references_count","references_resolved_count",
             "scholarly_citations","scholarly_citations_count"))
- resp<-tryCatch(request("https://api.lens.org/scholarly/search") |>
+ resp<-if(test_mode) NULL else tryCatch(request("https://api.lens.org/scholarly/search") |>
   req_headers(Authorization=paste("Bearer",token),Accept="application/json") |>
   req_body_json(payload,auto_unbox=TRUE) |> req_timeout(180) |>
   req_error(is_error=function(x)FALSE) |> req_perform(),error=identity)
  requests<-requests+1L
  if(inherits(resp,"error")){halt<-paste0("transport_error: ",conditionMessage(resp));break}
- code<-resp_status(resp)
+ code<-if(test_mode)200L else resp_status(resp)
  if(code!=200L){
   failures<-c(failures,code);halt<-paste0("Lens HTTP ",code,"; response=",substr(resp_body_string(resp),1L,500L))
   # A batch HTTP failure must not be misattributed to 500 individual seeds.
   break
  }
- body<-resp_body_json(resp,simplifyVector=FALSE)
+ body<-if(test_mode)fromJSON(fixture,simplifyVector=FALSE) else resp_body_json(resp,simplifyVector=FALSE)
  records<-body$data %||% list()
  actual<-vapply(records,function(x)as.character(x$lens_id %||% ""),character(1))
  if(anyDuplicated(actual)||any(!nzchar(actual))){
@@ -140,7 +144,8 @@ summary<-list(schema="workflow08b-lens-discovery-dev-v1",
   complete_seeds=sum(vapply(previous,function(z)identical(z$status,"complete"),logical(1))),
   incomplete_seeds=sum(vapply(previous,function(z)!identical(z$status,"complete"),logical(1))),
   halted_early=!is.null(halt),halt_reason=halt,http_status_counts=as.list(table(failures)),
-  openalex_not_queried=TRUE,candidate_bibliography_not_downloaded=TRUE,w01_handoff_not_enabled=TRUE)
+  openalex_not_queried=TRUE,candidate_bibliography_not_downloaded=TRUE,w01_handoff_not_enabled=TRUE,
+  test_fixture_mode=test_mode)
 writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null="null"),file.path(out,"discovery_summary.json"))
 cat("W08b bulk Lens: requests=",requests,"; completed_this_execution=",completed,
  "; halted=",if(is.null(halt))"no" else halt,"\n",sep="")
