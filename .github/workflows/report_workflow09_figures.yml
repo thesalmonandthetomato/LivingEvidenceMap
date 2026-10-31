@@ -511,6 +511,8 @@ jobs:
           cp outputs/workflow09_manuscript/methods.{md,html,docx,pdf} "$PUB/manuscript/"
           cp outputs/workflow09_manuscript/results.{md,html,docx,pdf} "$PUB/manuscript/"
           cp scripts/reporting/export_canonical_ris.R "$PUB/data/export_canonical_ris.R"
+          # Publish the immutable display-classification contract for W10.
+          cp scripts/reporting/workflow09_article_type_translator.R "$PUB/data/workflow09_article_type_translator.R"
           cp scripts/reporting/workflow09_human_validation_report.R "$PUB/data/human_validation/workflow09_human_validation_report.R"
 
       - name: Validate Workflow 09 publication package
@@ -543,6 +545,12 @@ jobs:
           }
           close(con)
           stopifnot(canonical_n == expected_n)
+
+          translator_file <- "docs/reporting/workflow_09/data/workflow09_article_type_translator.R"
+          stopifnot(file.exists(translator_file))
+          source(translator_file, local=TRUE)
+          stopifnot(identical(workflow09_article_type(c("THES","Preprint","JOUR")), "Journal article"))
+          stopifnot(identical(workflow09_article_type(c("CPAPER","book-chapter")), "Book chapter"))
 
           ris_manifest <- fromJSON("docs/reporting/workflow_09/data/living_evidence_map_canonical_final.ris.manifest.json")
           stopifnot(as.integer(ris_manifest$records) == expected_n)
