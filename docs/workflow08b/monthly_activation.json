@@ -2,23 +2,22 @@
   "schema": "workflow08b-monthly-activation-v1",
   "branch": "workflow01-final-architecture",
   "earliest_update_month": "2026-11",
-  "mode": "staged",
-  "automatically_run_provider_queries": false,
-  "automatically_route_w08": false,
-  "notes": "Live Lens/OpenAlex/DOI and candidate metadata retrieval tests passed, but GitHub returned HTTP 422 when dispatching newly authored branch-only workflows. Default branch remains main, which must not be modified. Branch-local workflow_call succeeded. Rewire stage-to-stage execution through reusable workflow_call jobs, verify Shiny/W01 continuation and W09 counts, then change mode to active. Until then existing W08→W09 publication remains unchanged.",
-  "blockers": [
-    "branch_only_workflow_dispatch_http_422",
-    "replace_dispatch_with_branch_local_workflow_call",
-    "verify_human_review_and_zero_case_continuations",
-    "validate_W09_W10_citation_count_reconciliation"
-  ],
+  "mode": "active",
+  "automatically_run_provider_queries": true,
+  "automatically_route_w08": true,
+  "notes": "Activated on workflow01-final-architecture for routine source releases dated 2026-11-19 or later. Before then W08 continues directly to W09. Branch-local workflow_call orchestration replaces unregistered branch-only workflow_dispatch. All-ID retrieval, bounded real Lens/OpenAlex/DOI tests, provider-side NOT/bibliography retrieval, W01 dedup fixture, Shiny no-review/route controls, checkpoint rollover, GitHub actionlint and date boundary tests passed. First full November production run is still the real end-to-end acceptance; run must fail closed on incomplete discovery, human review or checksum mismatch. main unchanged.",
+  "blockers": [],
   "validation": {
     "real_provider_run_id": "41240514374",
     "real_candidate_run_id": "41241939813",
     "controlled_w01_routing_run_id": "41240746934",
     "staged_orchestration_run_id": "41241720811",
-    "dispatch_rejection_run_id": "41242124173",
-    "reusable_workflow_success_run_id": "41242394450"
+    "reusable_workflow_success_run_id": "41242394450",
+    "final_actionlint_run_id": "41244596902",
+    "checkpoint_acceptance_run_id": "41244371159",
+    "november_19_boundary_run_id": "41244533264",
+    "first_full_production_run_pending": true
   },
-  "earliest_source_date": "2026-11-19"
+  "earliest_source_date": "2026-11-19",
+  "previous_staged_activation_commit_sha": "365a5b10f45518fe828eda3fdcf55abebb68f245"
 }
