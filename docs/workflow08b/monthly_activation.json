@@ -19,5 +19,6 @@
     "staged_orchestration_run_id": "41241720811",
     "dispatch_rejection_run_id": "41242124173",
     "reusable_workflow_success_run_id": "41242394450"
-  }
+  },
+  "earliest_source_date": "2026-11-19"
 }
