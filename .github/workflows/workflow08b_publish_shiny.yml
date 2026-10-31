@@ -22,7 +22,7 @@ on:
     paths: [docs/workflow08b/.run_publish_shiny]
 permissions:
   contents: write
-  actions: read
+  actions: write
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -52,8 +52,8 @@ jobs:
           gh run download "$DEDUP_RUN" --repo "$GITHUB_REPOSITORY" \
             --name "w08b-lightweight-dedup-$DEDUP_RUN" --dir "$RUNNER_TEMP/dedup"
           test -s "$RUNNER_TEMP/dedup/identity_crosswalk.csv"
-          test -s "$RUNNER_TEMP/w08b/lens/records.jsonl"
-          test -s "$RUNNER_TEMP/w08b/openalex/openalex_sidecar_records.jsonl"
+          test -f "$RUNNER_TEMP/w08b/lens/records.jsonl"
+          test -f "$RUNNER_TEMP/w08b/openalex/openalex_sidecar_records.jsonl"
           Rscript -e 'x<-jsonlite::fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"dedup/summary.json"));stopifnot(x$ambiguous_clusters>=0L,x$provider_manifestations>0L,identical(x$candidate_handoff_authorised,FALSE))'
       - name: Restore authoritative historical W01 records read-only
         env:
@@ -80,11 +80,26 @@ jobs:
             "$RUNNER_TEMP/w01/canonical/records.jsonl" \
             "$RUNNER_TEMP/w08b_shiny"
           cat "$RUNNER_TEMP/w08b_shiny/review_queue_manifest.json"
+      - name: Archive valid zero-human-review decisions without fabricating adjudication
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          STATUS="$(jq -r '.status' "$RUNNER_TEMP/w08b_shiny/review_queue_manifest.json")"
+          if [ "$STATUS" = "no_review_required" ]; then
+            Rscript scripts/workflow08b/archive_empty_review.R \
+              "$RUNNER_TEMP/w08b_shiny/review_queue_manifest.json" \
+              "$RUNNER_TEMP/w08b_shiny/empty_review_receipt.json"
+            test -s "$RUNNER_TEMP/w08b_shiny/empty_review_receipt.json"
+          else
+            test "$STATUS" = "published_to_shiny"
+          fi
       - name: Save immutable W08b review-source provenance for automatic handoff
         env:
           DEDUP_RUN: ${{ inputs.dedup_run || '40198092478' }}
           BIB_RUN: ${{ inputs.bibliography_run || '40182796865' }}
           PREV_W01: ${{ inputs.previous_w01_pointer || 'docs/deduplication/zenodo/run-39990028078.json' }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
@@ -93,7 +108,7 @@ jobs:
           Rscript -e '
             library(jsonlite)
             z<-fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"w08b_shiny/review_queue_manifest.json"))
-            stopifnot(z$status=="published_to_shiny")
+            stopifnot(z$status%in%c("published_to_shiny","no_review_required"))
             status<-fromJSON("docs/current_run/current_run_status.json")
             w02run<-as.character(status$workflow_runs$W02)
             stopifnot(length(w02run)==1L,grepl("^[0-9]+$",w02run))
@@ -110,11 +125,35 @@ jobs:
               previous_w01_pointer=Sys.getenv("PREV_W01"),
               previous_w02_pointer=prev_w02)
             writeLines(toJSON(out,pretty=TRUE,auto_unbox=TRUE),"docs/workflow08b/review_provenance.json")
+            if(identical(z$status,"no_review_required")){
+              receipt<-fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),
+                "w08b_shiny/empty_review_receipt.json"))
+              stopifnot(receipt$cases==0L,receipt$decisions==0L,
+                identical(as.character(receipt$queue_sha256),as.character(z$queue_sha256)),
+                grepl("^[0-9]+$",as.character(receipt$restricted_zenodo_record_id)))
+              marker<-list(batch_id=z$batch_id,queue_sha256=z$queue_sha256,
+                review_zenodo_id=as.character(receipt$restricted_zenodo_record_id),
+                dedup_run=Sys.getenv("DEDUP_RUN"),bib_run=Sys.getenv("BIB_RUN"),
+                previous_w01_pointer=Sys.getenv("PREV_W01"),
+                previous_w02_pointer=prev_w02,
+                no_human_review_required=TRUE,
+                source_export_run=Sys.getenv("GITHUB_RUN_ID"))
+              writeLines(toJSON(marker,auto_unbox=TRUE,pretty=TRUE),
+                "docs/workflow08b/.run_canonical_handoff")
+            }
           '
           git add docs/workflow08b/review_provenance.json
+          if test -s "$RUNNER_TEMP/w08b_shiny/empty_review_receipt.json"; then
+            git add docs/workflow08b/.run_canonical_handoff
+          fi
           if ! git diff --cached --quiet; then
             git commit -m "Register W08b review queue source lineage"
             git push origin HEAD:workflow01-final-architecture
+          fi
+          if test -s "$RUNNER_TEMP/w08b_shiny/empty_review_receipt.json"; then
+            gh workflow run workflow08b_canonical_to_w02.yml \
+              --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture
+            echo "PASS: dispatched verified zero-ambiguity W01 canonical handoff"
           fi
       - name: Preserve queue provenance
         if: always()
