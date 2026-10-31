@@ -1,0 +1,254 @@
+name: W08b incremental monthly citation discovery (checkpointed)
+on:
+  workflow_dispatch:
+    inputs:
+      update_month:
+        description: "Completed W00-W08 source release month, YYYY-MM"
+        required: true
+        type: string
+      execute_provider_queries:
+        description: "Enable bounded real Lens/OpenAlex requests (false = read-only)"
+        type: boolean
+        default: false
+        required: true
+      max_doi_batches:
+        description: "Maximum DOI-resolution batches of 500"
+        type: number
+        default: 1
+      max_lens_batches:
+        description: "Maximum Lens-ID batches of 500"
+        type: number
+        default: 1
+      max_openalex_works:
+        description: "Maximum OpenAlex Works (1-500) in this checkpoint"
+        type: number
+        default: 20
+permissions:
+  contents: read
+concurrency:
+  group: w08b-monthly-discovery-${{ inputs.update_month }}
+  cancel-in-progress: false
+jobs:
+  discovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install R packages
+        run: Rscript -e 'install.packages(c("jsonlite","httr2","digest","data.table"))'
+      - name: Verify versioned release and previous-month history
+        env:
+          UPDATE_MONTH: ${{ inputs.update_month }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/resolve_monthly_release.R \
+            docs/current_run/current_run_status.json docs/workflow08/zenodo_registry.csv \
+            docs/deduplication/zenodo "$UPDATE_MONTH" "$RUNNER_TEMP/w08_release.json"
+          Rscript scripts/workflow08b/resolve_previous_checkpoint.R \
+            docs/workflow08b/monthly_checkpoint_registry.json \
+            "$UPDATE_MONTH" "$RUNNER_TEMP/previous_w08b.json"
+          jq -r '.w08_pointer' "$RUNNER_TEMP/w08_release.json" > "$RUNNER_TEMP/w08_pointer"
+          jq -r '.w01_pointer' "$RUNNER_TEMP/w08_release.json" > "$RUNNER_TEMP/w01_pointer"
+          jq -r '.zenodo_record_id' "$RUNNER_TEMP/previous_w08b.json" > "$RUNNER_TEMP/previous_zenodo_id"
+      - name: Restore complete authoritative identities and accepted historical citation state
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/w08b"
+          Rscript scripts/updater/workflow_10_restore_canonical_from_zenodo.R \
+            --pointer "$(cat "$RUNNER_TEMP/w08_pointer")" \
+            --output "$RUNNER_TEMP/w08b/current_w08.jsonl"
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer "$(cat "$RUNNER_TEMP/w01_pointer")" \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root "$RUNNER_TEMP/w08b/current_w01"
+          Rscript scripts/workflow08b/restore_discovery.R \
+            "$(cat "$RUNNER_TEMP/previous_zenodo_id")" "$RUNNER_TEMP/w08b/previous"
+      - name: Expand and plan every source identifier
+        env:
+          UPDATE_MONTH: ${{ inputs.update_month }}
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/w08b"
+          Rscript scripts/workflow08b/crosswalk_identifiers.R \
+            "$ROOT/current_w08.jsonl" "$ROOT/current_w01/canonical/records.jsonl" "$ROOT/crosswalk"
+          Rscript scripts/workflow08b/expand_seed_identifiers.R \
+            "$ROOT/crosswalk/seed_identifier_crosswalk.csv" "$ROOT/expanded"
+          Rscript scripts/workflow08b/plan_identifier_checks.R \
+            "$ROOT/expanded/seed_identifier_queries.csv" "$ROOT/previous" \
+            "$UPDATE_MONTH" "$ROOT/query_plan"
+          Rscript -e '
+            library(jsonlite)
+            r<-Sys.getenv("RUNNER_TEMP")
+            rel<-fromJSON(file.path(r,"w08_release.json"))
+            c<-fromJSON(file.path(r,"w08b/crosswalk/summary.json"))
+            e<-fromJSON(file.path(r,"w08b/expanded/summary.json"))
+            p<-fromJSON(file.path(r,"w08b/query_plan/summary.json"))
+            stopifnot(rel$w08_included_seeds==c$w01_matches,
+              c$w08_records==e$canonical_seeds,
+              e$seed_identifier_edges==p$seed_identifier_associations,
+              p$provider_calls_performed==FALSE)'
+          mkdir -p "$ROOT/state"
+          for name in lens_seed_status.jsonl openalex_seed_status.jsonl lens_doi_resolution.jsonl; do
+            if test -f "$ROOT/previous/$name"; then cp "$ROOT/previous/$name" "$ROOT/state/$name"; fi
+          done
+          Rscript -e '
+            library(jsonlite)
+            p<-file.path(Sys.getenv("RUNNER_TEMP"),"w08b/state/discovery_summary.json")
+            writeLines(toJSON(list(schema="workflow08b-lens-discovery-dev-v1",
+              requests_this_execution=0L,complete_seeds=0L,incomplete_seeds=0L,
+              halted_early=TRUE,halt_reason="not_yet_executed",
+              test_fixture_mode=FALSE),auto_unbox=TRUE),p)'
+      - name: Resolve all DOI manifestations to every matching Lens ID
+        id: doi
+        if: ${{ inputs.execute_provider_queries }}
+        continue-on-error: true
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+          UPDATE_MONTH: ${{ inputs.update_month }}
+          MAX_BATCHES: ${{ inputs.max_doi_batches }}
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/w08b"
+          Rscript scripts/workflow08b/resolve_lens_doi_manifest.R \
+            "$ROOT/expanded/seed_identifier_queries.csv" "$ROOT/state" \
+            "$MAX_BATCHES" "$UPDATE_MONTH"
+      - name: Discover Lens references and citing IDs for each resolved Lens manifestation
+        id: lens
+        if: ${{ inputs.execute_provider_queries && steps.doi.outcome == 'success' }}
+        continue-on-error: true
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+          UPDATE_MONTH: ${{ inputs.update_month }}
+          MAX_BATCHES: ${{ inputs.max_lens_batches }}
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/w08b"
+          Rscript scripts/workflow08b/run_lens_bulk_manifest.R \
+            "$ROOT/state/expanded_lens_identifier_queries.csv" "$ROOT/state" \
+            "$MAX_BATCHES" "$UPDATE_MONTH"
+      - name: Discover OpenAlex references and citing IDs for every OpenAlex manifestation
+        id: openalex
+        if: ${{ inputs.execute_provider_queries }}
+        continue-on-error: true
+        env:
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+          UPDATE_MONTH: ${{ inputs.update_month }}
+          MAX_WORKS: ${{ inputs.max_openalex_works }}
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/w08b"
+          Rscript scripts/workflow08b/run_openalex_manifest.R \
+            "$ROOT/expanded/seed_identifier_queries.csv" "$ROOT/state" \
+            "$MAX_WORKS" "$UPDATE_MONTH"
+      - name: Lossless cumulative edge union and new candidate ID delta
+        if: ${{ inputs.execute_provider_queries }}
+        env:
+          UPDATE_MONTH: ${{ inputs.update_month }}
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/w08b"
+          : > "$ROOT/state/new_edges.jsonl"
+          for f in "$ROOT/state/lens_edges_input.jsonl" "$ROOT/state/openalex_edges_input.jsonl"; do
+            if test -s "$f"; then cat "$f" >> "$ROOT/state/new_edges.jsonl"; fi
+          done
+          Rscript scripts/workflow08b/merge_edges.R \
+            "$ROOT/state/new_edges.jsonl" "$ROOT/current_edges"
+          Rscript scripts/workflow08b/merge_monthly_edges.R \
+            "$ROOT/previous/merged/citation_edges.csv" \
+            "$ROOT/current_edges/citation_edges.csv" "$ROOT/state/merged"
+          Rscript scripts/workflow08b/monthly_candidate_delta.R \
+            "$ROOT/state/merged/citation_edges.csv" \
+            "$ROOT/previous/merged/provider_candidate_ids.csv" "$ROOT/state/delta"
+          Rscript scripts/workflow08b/filter_existing_w01.R \
+            "$ROOT/current_w01/canonical/records.jsonl" \
+            "$ROOT/state/delta/new_provider_candidate_ids.csv" "$ROOT/state/existing_w01"
+          cat "$ROOT/state/delta/summary.json"
+          cat "$ROOT/state/existing_w01/summary.json"
+      - name: Check current-month identifier completion without fabricating success
+        if: ${{ inputs.execute_provider_queries }}
+        env:
+          UPDATE_MONTH: ${{ inputs.update_month }}
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          root<-file.path(Sys.getenv("RUNNER_TEMP"),"w08b")
+          # The full set includes DOI-resolved Lens IDs, not only the original
+          # canonical's direct Lens IDs.
+          original<-read.csv(file.path(root,"expanded/seed_identifier_queries.csv"),stringsAsFactors=FALSE)
+          resolved<-file.path(root,"state/expanded_lens_identifier_queries.csv")
+          lens<-if(file.exists(resolved))read.csv(resolved,stringsAsFactors=FALSE)else original[original$identifier_type=="lens",]
+          all<-unique(rbind(lens[,c("seed_record_id","provider","identifier_type","query_identifier")],
+                           original[original$identifier_type!="lens",c("seed_record_id","provider","identifier_type","query_identifier")]))
+          write.csv(all,file.path(root,"expanded/current_all_ids.csv"),row.names=FALSE)
+          out<-file.path(root,"identifier_completion")
+          dir.create(out,showWarnings=FALSE)
+          for(k in c("lens_seed_status.jsonl","openalex_seed_status.jsonl","lens_doi_resolution.jsonl")){
+            src<-file.path(root,"state",k)
+            if(file.exists(src))file.copy(src,file.path(out,k))
+          }
+          system2("Rscript",c("scripts/workflow08b/plan_identifier_checks.R",
+            shQuote(file.path(root,"expanded/current_all_ids.csv")),shQuote(out),
+            Sys.getenv("UPDATE_MONTH"),shQuote(file.path(root,"final_query_plan"))))
+          x<-fromJSON(file.path(root,"final_query_plan/summary.json"))
+          writeLines(toJSON(list(schema="workflow08b-monthly-discovery-check-v1",
+            update_month=Sys.getenv("UPDATE_MONTH"),seed_identifiers=x$seed_identifier_associations,
+            distinct_queries=x$distinct_provider_queries,
+            queries_remaining=x$planned_lens_id_queries+x$planned_openalex_id_queries+x$planned_doi_lookups,
+            provider_discovery_complete=(x$planned_lens_id_queries+x$planned_openalex_id_queries+x$planned_doi_lookups)==0,
+            downstream_bibliographies_authorised=FALSE,
+            downstream_w01_authorised=FALSE),auto_unbox=TRUE,pretty=TRUE),
+            file.path(root,"state/monthly_discovery_status.json"))
+      - name: Archive every genuine bounded discovery attempt to restricted Zenodo
+        id: archive
+        if: ${{ inputs.execute_provider_queries }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/archive_discovery.R \
+            "$RUNNER_TEMP/w08b/state" "$GITHUB_RUN_ID" "$RUNNER_TEMP/w08b-receipt.json"
+          cat "$RUNNER_TEMP/w08b-receipt.json"
+      - name: Preserve aggregated progress and receipt (no licensed citation data)
+        if: always()
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/w08b"
+          Rscript -e '
+            library(jsonlite)
+            root<-file.path(Sys.getenv("RUNNER_TEMP"),"w08b")
+            get<-function(x)if(file.exists(x))fromJSON(x,simplifyVector=FALSE)else NULL
+            out<-list(schema="workflow08b-monthly-discovery-run-summary-v1",
+              update_month=Sys.getenv("UPDATE_MONTH"),
+              preflight=get(file.path(root,"query_plan/summary.json")),
+              discovery=get(file.path(root,"state/monthly_discovery_status.json")),
+              provider_calls_enabled=identical(Sys.getenv("EXECUTE_PROVIDERS"),"true"),
+              run_complete=FALSE)
+            writeLines(toJSON(out,auto_unbox=TRUE,pretty=TRUE,null="null"),
+              "w08b_monthly_discovery_summary.json")'
+        env:
+          UPDATE_MONTH: ${{ inputs.update_month }}
+          EXECUTE_PROVIDERS: ${{ inputs.execute_provider_queries }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: w08b-monthly-discovery-summary-${{ github.run_id }}
+          path: |
+            w08b_monthly_discovery_summary.json
+            ${{ runner.temp }}/w08b-receipt.json
+            ${{ runner.temp }}/w08b/state/monthly_discovery_status.json
+            ${{ runner.temp }}/w08b/state/delta/summary.json
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Fail on provider errors after preserving restricted checkpoint
+        if: ${{ inputs.execute_provider_queries && (steps.doi.outcome == 'failure' || steps.lens.outcome == 'failure' || steps.openalex.outcome == 'failure') }}
+        run: |
+          echo 'One or more provider requests failed. Restricted checkpoint has been archived where possible; no handoff authorised.'
+          exit 1
