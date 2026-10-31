@@ -1,5 +1,6 @@
 name: W08b incremental W01 canonical handoff to W02
 on:
+  workflow_dispatch:
   push:
     branches: [workflow01-final-architecture]
     paths: [docs/workflow08b/.run_canonical_handoff]
@@ -39,6 +40,15 @@ jobs:
           for(p in c(z$previous_w01_pointer,z$previous_w02_pointer)) {
             stopifnot(file.exists(p),identical(fromJSON(p)$status,'published'))
           }
+          status<-fromJSON("docs/current_run/current_run_status.json")
+          expected_w01<-file.path("docs/deduplication/zenodo",
+            paste0("run-",as.character(status$workflow_runs$W01),".json"))
+          expected_w02<-file.path("docs/enrichment/zenodo",
+            paste0("run-",as.character(status$workflow_runs$W02),".json"))
+          stopifnot(identical(as.character(z$previous_w01_pointer),expected_w01),
+            identical(as.character(z$previous_w02_pointer),expected_w02))
+          # A repeated dispatch after W01 publication must fail here, not
+          # reconstruct a second supplemental canonical delta.
           fields<-c(W08B_QUEUE_SHA=z$queue_sha256,W08B_REVIEW_ZENODO=z$review_zenodo_id,
             W08B_DEDUP_RUN=z$dedup_run,W08B_BIB_RUN=z$bib_run,
             W08B_PREV_W01=z$previous_w01_pointer,W08B_PREV_W02=z$previous_w02_pointer)
