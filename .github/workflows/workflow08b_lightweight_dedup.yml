@@ -1,5 +1,21 @@
 name: W08b deterministic lightweight deduplication
 on:
+  workflow_call:
+    inputs:
+      bibliography_run:
+        required: true
+        type: string
+      previous_w01_pointer:
+        required: true
+        type: string
+    secrets:
+      ZENODO_ACCESS_TOKEN:
+        required: true
+    outputs:
+      dedup_completed:
+        value: ${{ jobs.deduplicate.outputs.dedup_completed }}
+      ambiguous_clusters:
+        value: ${{ jobs.deduplicate.outputs.ambiguous_clusters }}
   workflow_dispatch:
     inputs:
       bibliography_run:
@@ -20,6 +36,9 @@ permissions:
   actions: write
 jobs:
   deduplicate:
+    outputs:
+      dedup_completed: ${{ steps.dedup.outputs.complete }}
+      ambiguous_clusters: ${{ steps.dedup.outputs.ambiguous }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
@@ -60,6 +79,7 @@ jobs:
           test -s "$RUNNER_TEMP/w08b/lens_citation_edges.csv"
           test -s "$RUNNER_TEMP/w08b/openalex_citation_edges.csv"
       - name: Deduplicate identifier DOI title and normalised abstract
+        id: dedup
         run: |
           set -euo pipefail
           Rscript scripts/workflow08b/deduplicate_citations.R \
@@ -70,6 +90,8 @@ jobs:
             "$RUNNER_TEMP/w08b/openalex_citation_edges.csv" \
             "$RUNNER_TEMP/w08b_dedup"
           cat "$RUNNER_TEMP/w08b_dedup/summary.json"
+          echo "complete=true" >> "$GITHUB_OUTPUT"
+          echo "ambiguous=$(jq -r '.ambiguous_clusters' "$RUNNER_TEMP/w08b_dedup/summary.json")" >> "$GITHUB_OUTPUT"
       - name: Preserve W08b deterministic dedup outputs
         if: always()
         uses: actions/upload-artifact@v4
@@ -78,16 +100,3 @@ jobs:
           path: ${{ runner.temp }}/w08b_dedup/
           retention-days: 30
           if-no-files-found: warn
-      - name: Automatically publish historical ambiguities to Shiny
-        if: success()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          BIB_RUN: ${{ inputs.bibliography_run || '40182796865' }}
-          W01_POINTER: ${{ inputs.previous_w01_pointer || 'docs/deduplication/zenodo/run-39990028078.json' }}
-        run: |
-          set -euo pipefail
-          gh workflow run workflow08b_publish_shiny.yml --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture \
-            -f dedup_run="$GITHUB_RUN_ID" \
-            -f bibliography_run="$BIB_RUN" \
-            -f previous_w01_pointer="$W01_POINTER"
-          echo "PASS: dispatched W08b Shiny adjudication publication"
