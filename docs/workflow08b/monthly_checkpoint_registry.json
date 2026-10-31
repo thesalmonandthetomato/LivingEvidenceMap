@@ -1,0 +1,20 @@
+{
+  "schema": "workflow08b-monthly-checkpoint-registry-v1",
+  "latest_completed_month": "2026-10",
+  "checkpoints": [
+    {
+      "month": "2026-10",
+      "discovery_zenodo_record_id": "23627417",
+      "archive_inventory_run_id": "41213640453",
+      "status": "verified_archive",
+      "lens_status_entries": 16377,
+      "openalex_status_entries": 1293,
+      "direction_edges": 952077,
+      "provider_candidate_ids": 336264,
+      "post_chasing_w08_source_run_id": "40656599532",
+      "post_chasing_w08_sha256": "778ec0fce106756e5fce7ed3d8092a5c9734ad9927ac4d616dbf88cfa77399ef",
+      "post_chasing_included_records": 27726,
+      "notes": "Existing October discovery checkpoint; following-month included seeds are determined from the newest W08/W01 source crosswalk. The checkpoint is not assumed to contain all later included seeds."
+    }
+  ]
+}
