@@ -1,0 +1,9 @@
+{
+  "schema": "workflow08b-monthly-activation-v1",
+  "branch": "workflow01-final-architecture",
+  "earliest_update_month": "2026-11",
+  "mode": "staged",
+  "automatically_run_provider_queries": false,
+  "automatically_route_w08": false,
+  "notes": "Prepared and tested in isolation. Do not set active until same-update handoff, no-new-candidate bypass and completion/retry semantics are verified. While staged, existing W08→W09 remains unchanged."
+}
