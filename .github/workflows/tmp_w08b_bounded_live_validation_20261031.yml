@@ -1,0 +1,105 @@
+name: TEMP W08b bounded live Lens OpenAlex DOI validation
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/tmp_w08b_bounded_live_validation_20261031.yml']
+permissions:
+  contents: read
+jobs:
+  live_test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install R packages
+        run: Rscript -e 'install.packages(c("jsonlite","httr2","digest"))'
+      - name: Restore verified October checkpoint (read only)
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/restore_discovery.R 23627417 "$RUNNER_TEMP/october"
+      - name: Choose a bounded historical sample without exposing source identifiers
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          root<-Sys.getenv("RUNNER_TEMP")
+          lines<-function(nm)readLines(file.path(root,"october",nm),warn=FALSE)
+          lens<-lapply(lines("lens_seed_status.jsonl"),fromJSON,simplifyVector=FALSE)
+          oa<-lapply(lines("openalex_seed_status.jsonl"),fromJSON,simplifyVector=FALSE)
+          is_ok<-function(z,name,maxcount=30L){
+            id<-as.character(z[[name]] %||% "")
+            count<-suppressWarnings(as.integer(z$scholarly_citations_count %||% 1000000L))
+            identical(z$status,"complete")&&length(id)==1L&&nzchar(id)&&
+              length(count)==1L&&!is.na(count)&&count>0L&&count<=maxcount
+          }
+          `%||%`<-function(x,y)if(is.null(x))y else x
+          lens<-Filter(function(z)is_ok(z,"lens_id"),lens)
+          oa<-Filter(function(z)is_ok(z,"openalex_id"),oa)
+          stopifnot(length(lens)>=2L,length(oa)>=1L)
+          lx<-unique(vapply(lens,function(z)z$lens_id,character(1)))[1:2]
+          ox<-unique(vapply(oa,function(z)z$openalex_id,character(1)))[1]
+          doi_journal<-lapply(lines("lens_doi_resolution.jsonl"),fromJSON,simplifyVector=FALSE)
+          gooddoi<-Filter(function(z){
+             id<-as.character(z$doi%||%"")
+             length(id)==1L&&nzchar(id)&&as.character(z$status%||%"")%in%c("resolved","complete")
+          },doi_journal)
+          stopifnot(length(gooddoi)>0L)
+          doi<-as.character(gooddoi[[1]]$doi)
+          d<-data.frame(seed_record_id=c("liveA","liveA","liveB","liveC"),
+            provider=c("lens","lens","openalex","lens"),
+            identifier_type=c("lens","lens","openalex","doi"),
+            query_identifier=c(lx,ox,doi))
+          write.csv(d,file.path(root,"live_sample.csv"),row.names=FALSE)
+          cat("PASS: selected two validated Lens seeds, one OpenAlex work and one DOI; IDs remain private\n")
+      - name: Real provider calls, bounded; then same-update idempotence
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+          OPENALEX_MAILTO: ${{ secrets.OPENALEX_MAILTO }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/live_state"
+          Rscript scripts/workflow08b/resolve_lens_doi_manifest.R "$RUNNER_TEMP/live_sample.csv" "$RUNNER_TEMP/live_state" 1 live-validation-20261031
+          Rscript scripts/workflow08b/run_lens_bulk_manifest.R "$RUNNER_TEMP/live_state/expanded_lens_identifier_queries.csv" "$RUNNER_TEMP/live_state" 1 live-validation-20261031
+          Rscript scripts/workflow08b/run_openalex_manifest.R "$RUNNER_TEMP/live_sample.csv" "$RUNNER_TEMP/live_state" 1 live-validation-20261031
+          Rscript scripts/workflow08b/resolve_lens_doi_manifest.R "$RUNNER_TEMP/live_sample.csv" "$RUNNER_TEMP/live_state" 1 live-validation-20261031
+          Rscript scripts/workflow08b/run_lens_bulk_manifest.R "$RUNNER_TEMP/live_state/expanded_lens_identifier_queries.csv" "$RUNNER_TEMP/live_state" 1 live-validation-20261031
+          Rscript scripts/workflow08b/run_openalex_manifest.R "$RUNNER_TEMP/live_sample.csv" "$RUNNER_TEMP/live_state" 1 live-validation-20261031
+      - name: Publish aggregate live test counts (no licensed identifiers)
+        if: always()
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          root<-file.path(Sys.getenv("RUNNER_TEMP"),"live_state")
+          get<-function(f){p<-file.path(root,f);if(!file.exists(p))return(NULL);fromJSON(p,simplifyVector=FALSE)}
+          lens<-get("discovery_summary.json")
+          oa<-get("openalex_summary.json")
+          doi<-get("doi_resolution_summary.json")
+          result<-list(schema="w08b-bounded-live-provider-validation-v1",
+            lens_last_run=if(is.null(lens))NULL else list(requests=lens$requests_this_execution,
+              complete_ids=lens$complete_seeds,halted=lens$halted_early),
+            openalex_last_run=if(is.null(oa))NULL else list(requests=oa$requests_this_run,
+              completed=oa$completed_this_run,halted=oa$halted),
+            doi_last_run=if(is.null(doi))NULL else list(requests=doi$requests_this_execution,
+              complete_dois=doi$completed_dois,halted=doi$halted),
+            provider_identifiers_published=FALSE,
+            canonical_unchanged=TRUE,
+            zenodo_archive_not_created=TRUE)
+          writeLines(toJSON(result,pretty=TRUE,auto_unbox=TRUE,null="null"),
+             "w08b_live_validation_summary.json")
+          cat(readLines("w08b_live_validation_summary.json"),sep="\n")
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: w08b-bounded-live-validation
+          path: w08b_live_validation_summary.json
+          retention-days: 14
+          if-no-files-found: error
