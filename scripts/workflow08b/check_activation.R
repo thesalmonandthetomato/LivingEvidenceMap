@@ -36,7 +36,7 @@ if(enabled&&month>=minimum&&source_date>=earliest_date){
 result<-list(schema="workflow08b-activation-decision-v1",
   mode=mode,update_month=month,route=next_stage,
   existing_w09_route_preserved=identical(next_stage,"existing_w09"),
-  provider_execution_requested=enabled&&month>=minimum,
+  provider_execution_requested=identical(next_stage,"w08b_monthly_dispatch"),
   generation_not_inferred=TRUE)
 dir.create(dirname(a[[3]]),recursive=TRUE,showWarnings=FALSE)
 writeLines(toJSON(result,pretty=TRUE,auto_unbox=TRUE),a[[3]])
