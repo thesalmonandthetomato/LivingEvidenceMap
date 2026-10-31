@@ -58,6 +58,8 @@ jobs:
             z$checkpoints[[2]]$post_chasing_w08_sha256=="")
           run("register_monthly_checkpoint.R",c(nxt,args[2:8],
             "w08b_acceptance/idempotent.json"))
+          run("resolve_previous_checkpoint.R",c(nxt,"2026-12",
+            "w08b_acceptance/premature_december.json"),FALSE)
           run("register_monthly_checkpoint.R",c(nxt,"2026-11","987654322",
             args[4:8],"w08b_acceptance/conflict.json"),FALSE)
           completed<-"w08b_acceptance/completed.json"
@@ -88,3 +90,20 @@ jobs:
           stopifnot(x$mode=="staged",!x$automatically_route_w08,
             !x$automatically_run_provider_queries)
           cat("PASS: production activation remains staged pending complete acceptance\n")
+          active<-x
+          active$mode<-"active"
+          active$automatically_route_w08<-TRUE
+          active$automatically_run_provider_queries<-TRUE
+          writeLines(toJSON(active,auto_unbox=TRUE,pretty=TRUE),"w08b_acceptance/active.json")
+          status<-fromJSON("docs/current_run/current_run_status.json")
+          status$search$search_date<-"2026-11-19"
+          status$workflow_runs$W08<-"555555"
+          writeLines(toJSON(status,auto_unbox=TRUE,pretty=TRUE),"w08b_acceptance/november_status.json")
+          stopifnot(system2("Rscript",c("scripts/workflow08b/check_activation.R",
+            "w08b_acceptance/november_status.json",
+            "w08b_acceptance/active.json",
+            "w08b_acceptance/active_route.json"))==0L)
+          route<-fromJSON("w08b_acceptance/active_route.json")
+          stopifnot(route$route=="w08b_monthly_dispatch",
+            route$provider_execution_requested)
+          cat("PASS: November activation would enter W08b; October remains direct W09\n")
