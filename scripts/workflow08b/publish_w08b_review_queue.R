@@ -21,9 +21,15 @@ need<-c("candidate_key","provider","provider_id","cluster","status","matched_w01
 if(!all(need%in%names(d)))stop("Dedup identity crosswalk schema mismatch")
 groups<-unique(d[status=="ambiguous_historical",cluster])
 if(!length(groups)){
- writeLines(toJSON(list(schema="w08b-human-review-queue-v1",case_count=0L,status="no_review_required"),
-  auto_unbox=TRUE,pretty=TRUE),file.path(out,"review_queue_manifest.json"))
- cat("PASS: no ambiguous historical clusters require Shiny adjudication\n")
+ sha<-digest(file=a[[1]],algo="sha256",serialize=FALSE)
+ batch<-paste0("w08b-no-human-review-",substr(sha,1L,12L))
+ write.csv(data.frame(batch_id=character(),queue_sha256=character(),
+    case_index=character(),review_case_id=character(),case_json=character()),
+    file.path(out,"w08b_review_queue.csv"),row.names=FALSE)
+ writeLines(toJSON(list(schema="w08b-human-review-queue-v1",batch_id=batch,
+   queue_sha256=sha,case_count=0L,status="no_review_required"),
+   auto_unbox=TRUE,pretty=TRUE),file.path(out,"review_queue_manifest.json"))
+ cat("PASS: no ambiguous historical clusters require Shiny adjudication; empty queue has deterministic checksum\n")
  quit(status=0L)
 }
 requested<-unique(d[cluster%in%groups,candidate_key])
