@@ -202,9 +202,9 @@ n_topic_uncoded <- metric(w08, "topic_without")
 # Final post-screening exclusions are recorded separately from W04 because they
 # arise during species/topic/final adjudication rather than title/abstract screening.
 n_post_w04_excluded <- n_w04_retained - n_final_included
-# Retrospective W08 reconciliation: numbers in the flow represent the final
-# included population. Original W04 decisions remain in the reporting inputs.
-n_w04_retained_final <- n_final_included
+# W04 screening retention precedes the 418 subsequent exclusions.
+# Keep the initial W04 count distinct from the W08 final included population.
+stopifnot(n_w04_retained == n_final_included + n_post_w04_excluded)
 n_downstream_excluded <- n_post_w04_excluded
 n_final_excluded_after_retractions <- n_w04 + n_downstream_excluded
 
@@ -371,11 +371,11 @@ boxes <- bind_rows(
 
   box("screened", main_x, 6.48, process_box_w, 0.76, paste0("Records screened at title and abstract\nn = ", fmt(n_screened_ta)), "screen"),
   box("excluded_ta", side_x, 6.48, process_box_w, 0.76, paste0("Records excluded at title and abstract\nn = ", fmt(n_w04)), "exclude"),
-  box("retained", main_x, 5.38, process_box_w, 0.76, paste0("Ultimately retained after review\nn = ", fmt(n_w04_retained_final)), "retain"),
+  box("retained", main_x, 5.38, process_box_w, 0.76, paste0("Initially retained after screening\nn = ", fmt(n_w04_retained)), "retain"),
 
   box("species", main_x, 4.18, process_box_w, 0.76, paste0("Species eligible after final review\nn = ", fmt(n_final_included)), "annotate"),
   box("post_screening_exclusions", side_x, 4.18, process_box_w, 0.76,
-      paste0("Further exclusions after screening\\nn = ", fmt(n_post_w04_excluded)), "exclude"),
+      paste0("Further exclusions after species coding\nn = ", fmt(n_post_w04_excluded)), "exclude"),
   box("geography", main_x, 3.13, process_box_w, 0.76, paste0("Records with geography annotation\nn = ", fmt(n_geography_coded)), "annotate"),
   box("geo_uncoded", side_x, 3.13, process_box_w, 0.76, paste0("Included but uncoded for geography\nn = ", fmt(n_geography_uncoded)), "result"),
   box("topic", main_x, 2.08, process_box_w, 0.76, paste0("Records with topic annotation\nn = ", fmt(n_topic_coded)), "annotate"),
@@ -601,7 +601,7 @@ counts <- list(
     retractions_excluded = n_w03,
     title_abstract_screened = n_screened_ta,
     workflow04_exclusions = n_w04,
-    title_abstract_retained = n_w04_retained_final,
+    title_abstract_retained = n_w04_retained,
     title_abstract_retained_provisional = n_w04_retained,
     final_species_eligible = n_final_included,
     post_screening_species_exclusions = n_species_excluded_final,
@@ -673,7 +673,7 @@ readr::write_csv(
       n_w03,
       n_screened_ta,
       n_w04,
-      n_w04_retained_final,
+      n_w04_retained,
       n_species_none,
       n_w07_late,
       n_w08_other_exclusions,

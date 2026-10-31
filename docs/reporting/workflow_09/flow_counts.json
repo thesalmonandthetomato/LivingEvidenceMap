@@ -1,6 +1,6 @@
 {
   "schema": "living-evidence-map-workflow09-flow-counts-v3",
-  "generated_at_utc": "2026-10-31T09:56:14Z",
+  "generated_at_utc": "2026-10-31T16:29:56Z",
   "search_update_date": "2026-10-25",
   "input_mode": "compact_workflow_reporting_snapshots",
   "input_directory": "/home/runner/work/LivingEvidenceMap/LivingEvidenceMap/docs/reporting/workflow_09_inputs/current",
@@ -174,7 +174,7 @@
     "retractions_excluded": 27,
     "title_abstract_screened": 79527,
     "workflow04_exclusions": 51383,
-    "title_abstract_retained": 27726,
+    "title_abstract_retained": 28144,
     "title_abstract_retained_provisional": 28144,
     "final_species_eligible": 27726,
     "post_screening_species_exclusions": 233,
