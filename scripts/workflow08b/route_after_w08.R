@@ -42,17 +42,20 @@ if(generation=="original"){
   if(!identical(as.character(state$original_w08_run_id),w08_run)||
      !identical(tolower(as.character(state$original_w08_sha256)),sha))
    stop("Repeated original W08 does not match accepted original source snapshot")
-  transition<-"await_existing_citation_generation"
+  transition<-if(identical(as.character(state$stage),"completed_without_supplemental"))
+    "publish_final_w09_w10" else "await_existing_citation_generation"
  }
 }else{
  if(is.null(state))stop("Supplemental W08 cannot run without an accepted original citation generation")
- if(!identical(as.character(state$stage),"supplemental_w01_started"))
+ if(identical(as.character(state$stage),"completed"))
+  transition<-"already_published"
+ else if(!identical(as.character(state$stage),"supplemental_w01_started"))
   stop("Supplemental W01 has not been explicitly registered")
  if(identical(as.character(state$original_w08_run_id),w08_run))
   stop("Same W08 run cannot represent both original and supplemental generation")
  if(!grepl("^[0-9]+$",as.character(state$supplemental_w01_run_id%||%"")))
   stop("Supplemental W01 provenance not registered")
- transition<-"publish_final_w09_w10"
+ if(!identical(transition,"already_published"))transition<-"publish_final_w09_w10"
 }
 result<-list(schema="workflow08b-monthly-routing-decision-v1",
  update_month=month,update_id=update,source_w08_run_id=w08_run,
