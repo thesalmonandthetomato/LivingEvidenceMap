@@ -1,0 +1,44 @@
+name: TEMP W08b monthly candidate delta test
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/tmp_w08b_candidate_delta_test_20261031.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - run: Rscript -e 'install.packages("jsonlite")'
+      - name: Offline candidate delta and idempotence tests
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          dir.create("test_delta")
+          previous<-data.frame(provider=c("lens","openalex"),
+            related_provider_id=c("L_OLD","W_EXISTING"))
+          current<-data.frame(seed_record_id=c("seed1","seed2","seed3","seed4","seed1"),
+            provider=c("lens","lens","openalex","openalex","lens"),
+            related_provider_id=c("L_OLD","L_NEW","W_EXISTING","W_NEW","L_NEW"),
+            direction=c("forward","backward","forward","backward","forward"))
+          write.csv(previous,"test_delta/previous.csv",row.names=FALSE)
+          write.csv(current,"test_delta/current.csv",row.names=FALSE)
+          cmd<-function(prev,out)system2("Rscript",c("scripts/workflow08b/monthly_candidate_delta.R","test_delta/current.csv",prev,out))
+          stopifnot(cmd("test_delta/previous.csv","test_delta/out")==0L)
+          s<-fromJSON("test_delta/out/summary.json")
+          n<-read.csv("test_delta/out/new_provider_candidate_ids.csv")
+          e<-read.csv("test_delta/out/new_candidate_citation_edges.csv")
+          stopifnot(s$historical_provider_candidates==2L,s$new_provider_candidates==2L,
+            s$cumulative_provider_candidates==4L,s$new_candidate_direction_edges==3L,
+            nrow(n)==2L,nrow(e)==3L)
+          stopifnot(cmd("test_delta/out/cumulative_provider_candidate_ids.csv","test_delta/rerun")==0L)
+          s2<-fromJSON("test_delta/rerun/summary.json")
+          stopifnot(s2$new_provider_candidates==0L)
+          cat("PASS: only new provider IDs retrieved, all new ID edges retained, rerun idempotent\n")
