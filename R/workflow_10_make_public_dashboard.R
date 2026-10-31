@@ -137,7 +137,7 @@ for(i in seq_along(payload$records)){
 }
 required_table_fields <- c(
   "record_id","title","abstract_snippet","doi","year","authors","journal",
-  "volume","pages","species","countries","iso3","topics","topic_paths",
+  "volume","pages","article_type","species","countries","iso3","topics","topic_paths",
   "topic_stars"
 )
 missing_fields <- unique(unlist(lapply(payload$records,function(r)setdiff(required_table_fields,names(r))),use.names=FALSE))
