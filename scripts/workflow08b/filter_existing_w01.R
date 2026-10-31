@@ -21,10 +21,9 @@ oa_owner<-new.env(hash=TRUE,parent=emptyenv())
 doi_owner<-new.env(hash=TRUE,parent=emptyenv())
 put<-function(env,key,owner){
  if(!nzchar(key))return()
- if(exists(key,envir=env,inherits=FALSE)&&
-    !identical(get(key,envir=env,inherits=FALSE),owner))
-   stop("Historical W01 identifier collision: ",key)
- assign(key,owner,envir=env)
+ current<-if(exists(key,envir=env,inherits=FALSE))
+     get(key,envir=env,inherits=FALSE) else character()
+ assign(key,unique(c(current,owner)),envir=env)
 }
 con<-file(a[[1]],"rt");on.exit(close(con),add=TRUE)
 n<-0L
@@ -52,7 +51,8 @@ repeat{
   }
  }
 }
-get_owner<-function(env,key)if(nzchar(key)&&exists(key,envir=env,inherits=FALSE))get(key,envir=env,inherits=FALSE)else ""
+get_owner<-function(env,key)if(nzchar(key)&&exists(key,envir=env,inherits=FALSE))
+  paste(sort(unique(get(key,envir=env,inherits=FALSE))),collapse="|") else ""
 candidates$existing_w01_record_id<-vapply(seq_len(nrow(candidates)),function(i){
  p<-candidates$provider[[i]];k<-candidates$related_provider_id[[i]]
  if(p=="lens")get_owner(lens_owner,k)else get_owner(oa_owner,norm_oa(k))
@@ -64,6 +64,8 @@ write.csv(candidates[!nzchar(candidates$existing_w01_record_id),,drop=FALSE],
 info<-list(schema="workflow08b-w01-provider-id-precheck-v1",
  historical_w01_canonical=n,provider_candidates=nrow(candidates),
  matched_existing_w01=sum(candidates$identity_status=="already_in_w01"),
+ multi_owner_provider_ids=sum(grepl("|",candidates$existing_w01_record_id,fixed=TRUE)),
+ all_historical_owners_preserved=TRUE,
  requires_metadata_and_doi_check=sum(candidates$identity_status=="needs_bibliographic_identity_check"),
  w01_handoff_authorised=FALSE)
 writeLines(toJSON(info,auto_unbox=TRUE,pretty=TRUE),file.path(out,"summary.json"))
