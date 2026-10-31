@@ -45,6 +45,16 @@ on:
       original_w01_pointer:
         description: Version-matched original W01 pointer
         value: ${{ jobs.discovery.outputs.original_w01_pointer }}
+      archive_sha256:
+        value: ${{ jobs.discovery.outputs.archive_sha256 }}
+      cumulative_candidates:
+        value: ${{ jobs.discovery.outputs.cumulative_candidates }}
+      cumulative_edges:
+        value: ${{ jobs.discovery.outputs.cumulative_edges }}
+      original_w08_run:
+        value: ${{ jobs.discovery.outputs.original_w08_run }}
+      original_w08_sha:
+        value: ${{ jobs.discovery.outputs.original_w08_sha }}
   workflow_dispatch:
     inputs:
       update_month:
@@ -84,6 +94,11 @@ jobs:
       checkpoint_zenodo_id: ${{ steps.archive.outputs.checkpoint }}
       discovery_complete: ${{ steps.completion.outputs.complete }}
       original_w01_pointer: ${{ steps.select.outputs.w01_pointer }}
+      archive_sha256: ${{ steps.archive.outputs.archive_sha256 }}
+      cumulative_candidates: ${{ steps.delta.outputs.cumulative_candidates }}
+      cumulative_edges: ${{ steps.delta.outputs.cumulative_edges }}
+      original_w08_run: ${{ steps.select.outputs.original_w08_run }}
+      original_w08_sha: ${{ steps.select.outputs.original_w08_sha }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
@@ -112,6 +127,8 @@ jobs:
           jq -r '.w01_pointer' "$RUNNER_TEMP/w08_release.json" > "$RUNNER_TEMP/w01_pointer"
           jq -r '.zenodo_record_id' "$RUNNER_TEMP/previous_w08b.json" > "$RUNNER_TEMP/previous_zenodo_id"
           echo "w01_pointer=$(cat "$RUNNER_TEMP/w01_pointer")" >> "$GITHUB_OUTPUT"
+          echo "original_w08_run=$(jq -r '.w08_run_id' "$RUNNER_TEMP/w08_release.json")" >> "$GITHUB_OUTPUT"
+          echo "original_w08_sha=$(jq -r '.w08_canonical_sha256' "$RUNNER_TEMP/w08_release.json")" >> "$GITHUB_OUTPUT"
       - name: Restore complete authoritative identities and accepted historical citation state
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
@@ -256,6 +273,8 @@ jobs:
             "$ROOT/current_w01/canonical/records.jsonl" \
             "$ROOT/state/delta/new_provider_candidate_ids.csv" "$ROOT/state/existing_w01"
           cat "$ROOT/state/delta/summary.json"
+          echo "cumulative_candidates=$(jq -r '.cumulative_provider_candidate_ids' "$ROOT/state/merged/summary.json")" >> "$GITHUB_OUTPUT"
+          echo "cumulative_edges=$(jq -r '.cumulative_direction_edges' "$ROOT/state/merged/summary.json")" >> "$GITHUB_OUTPUT"
           cat "$ROOT/state/existing_w01/summary.json"
       - name: Check current-month identifier completion without fabricating success
         id: completion
@@ -308,6 +327,7 @@ jobs:
             "$RUNNER_TEMP/w08b/state" "$GITHUB_RUN_ID" "$RUNNER_TEMP/w08b-receipt.json"
           cat "$RUNNER_TEMP/w08b-receipt.json"
           echo "checkpoint=$(jq -r '.zenodo_record_id' "$RUNNER_TEMP/w08b-receipt.json")" >> "$GITHUB_OUTPUT"
+          echo "archive_sha256=$(jq -r '.sha256' "$RUNNER_TEMP/w08b-receipt.json")" >> "$GITHUB_OUTPUT"
       - name: Preserve aggregated progress and receipt (no licensed citation data)
         if: always()
         run: |
