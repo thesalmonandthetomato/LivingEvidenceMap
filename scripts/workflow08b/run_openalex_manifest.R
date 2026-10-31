@@ -55,10 +55,27 @@ query<-function(url,params=list()){
  if(nzchar(email))r<-req_url_query(r,mailto=email)
  if(nzchar(api_key))r<-req_url_query(r,api_key=api_key)
  if(length(params))r<-do.call(req_url_query,c(list(r),params))
- v<-tryCatch(req_perform(req_error(r,is_error=function(x)FALSE)),error=identity)
- if(inherits(v,"error"))stop(conditionMessage(v))
- if(resp_status(v)==404L)stop("openalex_not_found")
- if(resp_status(v)!=200L)stop("OpenAlex HTTP ",resp_status(v),": ",substr(resp_body_string(v),1L,200L))
+ # Retry rate limits and transient 5xx errors without ever treating a
+ # partial citation page as complete. A failed Work remains independently
+ # retryable in the per-identifier ledger.
+ v<-NULL
+ for(attempt in seq_len(6L)){
+   v<-tryCatch(req_perform(req_error(r,is_error=function(x)FALSE)),error=identity)
+   code<-if(inherits(v,"error"))NA_integer_ else resp_status(v)
+   if(!is.na(code)&&code==200L)break
+   if(!is.na(code)&&code==404L)stop("openalex_not_found")
+   retryable<-inherits(v,"error")||(!is.na(code)&&code%in%c(408L,429L,500L,502L,503L,504L))
+   if(!retryable){
+     stop("OpenAlex permanent HTTP ",code,": ",substr(resp_body_string(v),1L,200L))
+   }
+   if(attempt==6L){
+     if(inherits(v,"error"))stop("OpenAlex transport failed after six attempts: ",conditionMessage(v))
+     stop("OpenAlex HTTP ",code," after six retries")
+   }
+   delay<-min(64,2^attempt)
+   message("OpenAlex transient request failure; retry ",attempt," of 6 after ",delay," seconds")
+   Sys.sleep(delay)
+ }
  resp_body_json(v,simplifyVector=FALSE)
 }
 append<-function(path,z){con<-file(path,"at");on.exit(close(con));writeLines(toJSON(z,auto_unbox=TRUE,null="null"),con)}
