@@ -35,6 +35,11 @@ jobs:
                      "scripts/workflow08b/plan_monthly.R",
                      "scripts/workflow08b/expand_seed_identifiers.R",
                      "scripts/workflow08b/monthly_candidate_delta.R",
+                     "scripts/workflow08b/plan_identifier_checks.R",
+                     "scripts/workflow08b/run_lens_bulk_manifest.R",
+                     "scripts/workflow08b/resolve_lens_doi_manifest.R",
+                     "scripts/workflow08b/run_openalex_manifest.R",
+                     "scripts/workflow08b/merge_monthly_edges.R",
                      "scripts/workflow08b/restore_discovery.R",
                      "scripts/updater/workflow_10_restore_canonical_from_zenodo.R",
                      "scripts/updater/workflow_01_restore_current_state.R"))
@@ -107,6 +112,16 @@ jobs:
           test -f "$RUNNER_TEMP/w08b/previous/openalex_seed_status.jsonl"
           test -f "$RUNNER_TEMP/w08b/previous/merged/provider_candidate_ids.csv"
           test -f "$RUNNER_TEMP/w08b/previous/merged/citation_edges.csv"
+      - name: Plan every distinct provider identifier independently
+        env:
+          UPDATE_MONTH: ${{ inputs.update_month }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/plan_identifier_checks.R \
+            "$RUNNER_TEMP/w08b/expanded/seed_identifier_queries.csv" \
+            "$RUNNER_TEMP/w08b/previous" "$UPDATE_MONTH" \
+            "$RUNNER_TEMP/w08b/identifier_plan"
+          cat "$RUNNER_TEMP/w08b/identifier_plan/summary.json"
       - name: Build monthly seed plan, without provider calls or canonical changes
         env:
           UPDATE_MONTH: ${{ inputs.update_month }}
@@ -126,9 +141,13 @@ jobs:
                       as.integer(plan$seeds)==as.integer(rel$w08_included_seeds),
                       identical(plan$automatic_downloads_authorised,FALSE))
             expanded<-fromJSON(file.path(root,"w08b/expanded/summary.json"),simplifyVector=FALSE)
+            identifier_plan<-fromJSON(file.path(root,"w08b/identifier_plan/summary.json"),simplifyVector=FALSE)
+            stopifnot(as.integer(identifier_plan$seed_identifier_associations)==as.integer(expanded$seed_identifier_edges),
+                      identical(identifier_plan$provider_calls_performed,FALSE))
             out<-list(schema="workflow08b-monthly-preflight-summary-v1",
                       source_release=rel,previous_checkpoint=prev,
-                      crosswalk=cross,expanded_identifiers=expanded,seed_plan=plan,provider_calls_performed=FALSE,
+                      crosswalk=cross,expanded_identifiers=expanded,identifier_query_plan=identifier_plan,
+                      seed_plan=plan,provider_calls_performed=FALSE,
                       production_w01_w10_unchanged=TRUE)
             writeLines(toJSON(out,auto_unbox=TRUE,pretty=TRUE,null="null"),
                        "w08b_monthly_preflight_summary.json")
