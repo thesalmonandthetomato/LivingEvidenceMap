@@ -1,0 +1,125 @@
+name: W08b monthly preflight (read-only)
+on:
+  workflow_dispatch:
+    inputs:
+      update_month:
+        description: "Month of completed W00-W08 source update (YYYY-MM)"
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: w08b-monthly-preflight-${{ inputs.update_month }}
+  cancel-in-progress: false
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install packages
+        shell: Rscript {0}
+        run: install.packages(c("jsonlite","httr2","digest"))
+      - name: Parse all preflight scripts
+        shell: Rscript {0}
+        run: |
+          for(p in c("scripts/workflow08b/resolve_monthly_release.R",
+                     "scripts/workflow08b/resolve_previous_checkpoint.R",
+                     "scripts/workflow08b/crosswalk_identifiers.R",
+                     "scripts/workflow08b/plan_monthly.R",
+                     "scripts/workflow08b/monthly_candidate_delta.R",
+                     "scripts/workflow08b/restore_discovery.R",
+                     "scripts/updater/workflow_10_restore_canonical_from_zenodo.R",
+                     "scripts/updater/workflow_01_restore_current_state.R"))
+            parse(file=p)
+          cat("PASS: all monthly preflight R files parse\n")
+      - name: Dynamically select matching current W01/W08 and previous month checkpoint
+        env:
+          UPDATE_MONTH: ${{ inputs.update_month }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/resolve_monthly_release.R \
+            docs/current_run/current_run_status.json \
+            docs/workflow08/zenodo_registry.csv \
+            docs/deduplication/zenodo "$UPDATE_MONTH" "$RUNNER_TEMP/current_release.json"
+          Rscript scripts/workflow08b/resolve_previous_checkpoint.R \
+            docs/workflow08b/monthly_checkpoint_registry.json \
+            "$UPDATE_MONTH" "$RUNNER_TEMP/previous_checkpoint.json"
+          jq -r '.w08_pointer' "$RUNNER_TEMP/current_release.json" > "$RUNNER_TEMP/w08_pointer.txt"
+          jq -r '.w01_pointer' "$RUNNER_TEMP/current_release.json" > "$RUNNER_TEMP/w01_pointer.txt"
+          jq -r '.zenodo_record_id' "$RUNNER_TEMP/previous_checkpoint.json" > "$RUNNER_TEMP/previous_zenodo_id.txt"
+      - name: Restore current authoritative W08 and W01 canonical identities
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$ZENODO_ACCESS_TOKEN"
+          mkdir -p "$RUNNER_TEMP/w08b"
+          Rscript scripts/updater/workflow_10_restore_canonical_from_zenodo.R \
+            --pointer "$(cat "$RUNNER_TEMP/w08_pointer.txt")" \
+            --output "$RUNNER_TEMP/w08b/current_w08.jsonl"
+          Rscript scripts/updater/workflow_01_restore_current_state.R \
+            --pointer "$(cat "$RUNNER_TEMP/w01_pointer.txt")" \
+            --pointer-dir docs/deduplication/zenodo \
+            --output-root "$RUNNER_TEMP/w08b/current_w01"
+      - name: Strict W08 included seed identity crosswalk
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/crosswalk_identifiers.R \
+            "$RUNNER_TEMP/w08b/current_w08.jsonl" \
+            "$RUNNER_TEMP/w08b/current_w01/canonical/records.jsonl" \
+            "$RUNNER_TEMP/w08b/crosswalk"
+          Rscript -e '
+            library(jsonlite)
+            expected<-fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"current_release.json"))$w08_included_seeds
+            actual<-fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"w08b/crosswalk/summary.json"))$w01_matches
+            stopifnot(identical(as.integer(actual),as.integer(expected)))
+            cat("PASS: all W08 seeds have W01 manifestation crosswalk\n")'
+      - name: Restore checksum-verified historical W08b citation checkpoint
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/restore_discovery.R \
+            "$(cat "$RUNNER_TEMP/previous_zenodo_id.txt")" "$RUNNER_TEMP/w08b/previous"
+          test -f "$RUNNER_TEMP/w08b/previous/lens_seed_status.jsonl"
+          test -f "$RUNNER_TEMP/w08b/previous/openalex_seed_status.jsonl"
+          test -f "$RUNNER_TEMP/w08b/previous/merged/provider_candidate_ids.csv"
+          test -f "$RUNNER_TEMP/w08b/previous/merged/citation_edges.csv"
+      - name: Build monthly seed plan, without provider calls or canonical changes
+        env:
+          UPDATE_MONTH: ${{ inputs.update_month }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/plan_monthly.R \
+            "$RUNNER_TEMP/w08b/crosswalk/seed_identifier_crosswalk.csv" \
+            "$RUNNER_TEMP/w08b/previous" "$UPDATE_MONTH" "$RUNNER_TEMP/w08b/plan"
+          Rscript -e '
+            library(jsonlite)
+            root<-Sys.getenv("RUNNER_TEMP")
+            rel<-fromJSON(file.path(root,"current_release.json"),simplifyVector=FALSE)
+            prev<-fromJSON(file.path(root,"previous_checkpoint.json"),simplifyVector=FALSE)
+            cross<-fromJSON(file.path(root,"w08b/crosswalk/summary.json"),simplifyVector=FALSE)
+            plan<-fromJSON(file.path(root,"w08b/plan/summary.json"),simplifyVector=FALSE)
+            stopifnot(as.integer(cross$w08_records)==as.integer(rel$w08_included_seeds),
+                      as.integer(plan$seeds)==as.integer(rel$w08_included_seeds),
+                      identical(plan$automatic_downloads_authorised,FALSE))
+            out<-list(schema="workflow08b-monthly-preflight-summary-v1",
+                      source_release=rel,previous_checkpoint=prev,
+                      crosswalk=cross,seed_plan=plan,provider_calls_performed=FALSE,
+                      production_w01_w10_unchanged=TRUE)
+            writeLines(toJSON(out,auto_unbox=TRUE,pretty=TRUE,null="null"),
+                       "w08b_monthly_preflight_summary.json")
+            cat("PASS: verified monthly plan for ",as.character(rel$update_month),"\n",sep="")'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: w08b-monthly-preflight-${{ inputs.update_month }}-${{ github.run_id }}
+          path: w08b_monthly_preflight_summary.json
+          retention-days: 30
+          if-no-files-found: error
