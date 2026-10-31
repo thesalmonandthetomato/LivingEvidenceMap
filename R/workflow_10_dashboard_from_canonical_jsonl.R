@@ -165,7 +165,7 @@ repeat{
       journal=clean(can$journal),
       volume=clean(can$volume),
       pages=clean(can$pages),
-      article_type=workflow09_article_type(can$publication_type),
+      article_type=workflow09_article_type(can$publication_type, can$journal),
       lens_url="",
       species=as.list(species),
       countries=as.list(if(length(isos))isos else country_names),
