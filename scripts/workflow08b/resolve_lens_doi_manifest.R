@@ -15,8 +15,12 @@ stopifnot(!is.na(max_batches),max_batches>=1L,max_batches<=100L)
 if(nzchar(update)&&!grepl("^[A-Za-z0-9._-]+$",update))stop("Invalid update ID")
 needed<-c("seed_record_id","provider","identifier_type","query_identifier")
 if(!all(needed%in%names(d))||anyDuplicated(d[,needed]))stop("Invalid expanded identifier input")
+fixture<-Sys.getenv("W08B_DOI_TEST_FIXTURE","")
+test_mode<-nzchar(fixture) && identical(Sys.getenv("W08B_TEST_MODE",""),"1")
+if(nzchar(fixture)&&!test_mode)stop("DOI test fixture requires W08B_TEST_MODE=1")
+if(test_mode&&!file.exists(fixture))stop("DOI test fixture missing")
 token<-Sys.getenv("LENS_API_TOKEN","")
-if(!nzchar(token))stop("Missing Lens token")
+if(!test_mode&&!nzchar(token))stop("Missing Lens token")
 dir.create(out,recursive=TRUE,showWarnings=FALSE)
 journal<-file.path(out,"lens_doi_resolution.jsonl")
 normal<-function(x){
@@ -60,16 +64,16 @@ halt<-NULL;requests<-0L
 for(batch in batches){
  payload<-list(query=list(terms=list(doi=as.list(batch))),size=500L,
    include=c("lens_id","external_ids"))
- resp<-tryCatch(request("https://api.lens.org/scholarly/search") |>
+ resp<-if(test_mode)NULL else tryCatch(request("https://api.lens.org/scholarly/search") |>
    req_headers(Authorization=paste("Bearer",token),Accept="application/json") |>
    req_body_json(payload,auto_unbox=TRUE) |> req_timeout(180) |>
    req_error(is_error=function(x)FALSE) |> req_perform(),error=identity)
  requests<-requests+1L
  if(inherits(resp,"error")){halt<-conditionMessage(resp);break}
- if(resp_status(resp)!=200L){
+ if((if(test_mode)200L else resp_status(resp))!=200L){
    halt<-paste("Lens DOI HTTP",resp_status(resp),substr(resp_body_string(resp),1,300));break
  }
- body<-resp_body_json(resp,simplifyVector=FALSE)
+ body<-if(test_mode)fromJSON(fixture,simplifyVector=FALSE) else resp_body_json(resp,simplifyVector=FALSE)
  works<-body$data %||% list()
  if(as.integer(body$total %||% length(works))>length(works)){
    halt<-"DOI search returned an incomplete page; reduce batch size before retry";break
@@ -116,7 +120,7 @@ summary<-list(schema="workflow08b-lens-doi-manifest-v1",
  requested_unique_dois=length(dois),completed_dois=sum(vapply(dois,function(doi)
    !is.null(old[[doi]])&&identical(as.character(old[[doi]]$status),"complete"),logical(1))),
  requests_this_execution=requests,halted=!is.null(halt),halt_reason=halt,
- total_lens_seed_associations=nrow(all),multi_lens_dois=sum(vapply(old,function(z)
+ total_lens_seed_associations=nrow(all),test_fixture_mode=test_mode,multi_lens_dois=sum(vapply(old,function(z)
    length(unlist(z$lens_ids %||% list()))>1L,logical(1))),
  all_matching_ids_retained=TRUE)
 writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null="null"),file.path(out,"doi_resolution_summary.json"))
