@@ -142,6 +142,15 @@ jobs:
           Rscript scripts/updater/workflow_current_run_status_observer.R \
             --force-stage W01 --pointer "$POINTER" --stage-status complete
           git add docs/deduplication/zenodo_registry.csv "$POINTER" docs/current_run/current_run_status.json
+          MONTH="$(jq -r '.search.search_date[:7]' docs/current_run/current_run_status.json)"
+          if [[ "$MONTH" > "2026-10" ]]; then
+            UPDATE_ID="$(jq -r '.update_id' docs/current_run/current_run_status.json)"
+            [[ "$UPDATE_ID" =~ ^[A-Za-z0-9._-]+$ ]]
+            STATE="docs/workflow08b/routing/$UPDATE_ID.json"
+            Rscript scripts/workflow08b/mark_supplemental_w01.R \
+              docs/current_run/current_run_status.json "$STATE" "$GITHUB_RUN_ID"
+            git add "$STATE"
+          fi
           git commit -m "W08b: publish W01-compatible incremental handoff $GITHUB_RUN_ID"
           git pull --rebase origin workflow01-final-architecture
           git push origin HEAD:workflow01-final-architecture
