@@ -1,5 +1,15 @@
 name: W08b month-aware W08 publication dispatcher
 on:
+  workflow_call:
+    inputs:
+      source_w08_run_id:
+        required: true
+        type: string
+    outputs:
+      transition:
+        value: ${{ jobs.dispatch.outputs.transition }}
+      update_month:
+        value: ${{ jobs.dispatch.outputs.update_month }}
   workflow_dispatch:
     inputs:
       source_w08_run_id:
@@ -14,6 +24,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   dispatch:
+    outputs:
+      transition: ${{ steps.routing.outputs.transition }}
+      update_month: ${{ steps.routing.outputs.update_month }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -47,6 +60,7 @@ jobs:
           test "$(jq -r '.w08_run_id' "$RUNNER_TEMP/source_release.json")" = "$SOURCE_W08_RUN_ID"
           echo "UPDATE_MONTH=$MONTH" >> "$GITHUB_ENV"
       - name: Decide original, supplemental or already pending generation
+        id: routing
         run: |
           set -euo pipefail
           UPDATE_ID="$(jq -r '.update_id' "$RUNNER_TEMP/source_release.json")"
@@ -69,6 +83,8 @@ jobs:
             "$STATE" "$GENERATION" "$RUNNER_TEMP/routing_decision.json"
           echo "ROUTING_STATE=$STATE" >> "$GITHUB_ENV"
           echo "ROUTING_TRANSITION=$(jq -r '.transition' "$RUNNER_TEMP/routing_decision.json")" >> "$GITHUB_ENV"
+          echo "transition=$(jq -r '.transition' "$RUNNER_TEMP/routing_decision.json")" >> "$GITHUB_OUTPUT"
+          echo "update_month=$UPDATE_MONTH" >> "$GITHUB_OUTPUT"
       - name: Register first generation before triggering citation discovery
         if: ${{ env.ROUTING_TRANSITION == 'start_first_citation_generation' }}
         env:
@@ -83,13 +99,7 @@ jobs:
           git commit -m "W08b: register first citation generation for $UPDATE_MONTH"
           git pull --rebase origin workflow01-final-architecture
           git push origin HEAD:workflow01-final-architecture
-          gh workflow run workflow08b_monthly_discovery.yml \
-            --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture \
-            -f update_month="$UPDATE_MONTH" \
-            -f execute_provider_queries=true \
-            -f max_doi_batches=100 -f max_lens_batches=100 \
-            -f max_openalex_works=500 -f resume_attempt=0
-          echo "PASS: original W08 queued one bounded, checkpointed citation generation"
+          echo "PASS: original W08 generation recorded for reusable discovery"
       - name: Record completed supplemental generation and dispatch W09
         if: ${{ env.ROUTING_TRANSITION == 'publish_final_w09_w10' }}
         env:
