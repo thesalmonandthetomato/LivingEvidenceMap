@@ -5,5 +5,19 @@
   "mode": "staged",
   "automatically_run_provider_queries": false,
   "automatically_route_w08": false,
-  "notes": "Prepared and tested in isolation. Do not set active until same-update handoff, no-new-candidate bypass and completion/retry semantics are verified. While staged, existing W08→W09 remains unchanged."
+  "notes": "Live Lens/OpenAlex/DOI and candidate metadata retrieval tests passed, but GitHub returned HTTP 422 when dispatching newly authored branch-only workflows. Default branch remains main, which must not be modified. Branch-local workflow_call succeeded. Rewire stage-to-stage execution through reusable workflow_call jobs, verify Shiny/W01 continuation and W09 counts, then change mode to active. Until then existing W08→W09 publication remains unchanged.",
+  "blockers": [
+    "branch_only_workflow_dispatch_http_422",
+    "replace_dispatch_with_branch_local_workflow_call",
+    "verify_human_review_and_zero_case_continuations",
+    "validate_W09_W10_citation_count_reconciliation"
+  ],
+  "validation": {
+    "real_provider_run_id": "41240514374",
+    "real_candidate_run_id": "41241939813",
+    "controlled_w01_routing_run_id": "41240746934",
+    "staged_orchestration_run_id": "41241720811",
+    "dispatch_rejection_run_id": "41242124173",
+    "reusable_workflow_success_run_id": "41242394450"
+  }
 }
