@@ -195,6 +195,14 @@ jobs:
           stopifnot(length(internal_payload$records)==expected_n)
           stopifnot(length(payload$records)==expected_n)
           stopifnot(as.integer(payload$metrics$total_records)==expected_n)
+          # Every displayed record must use exactly one W09-approved article type.
+          source('docs/reporting/workflow_09/data/workflow09_article_type_translator.R',local=TRUE)
+          translated_types <- vapply(payload$records,function(r) as.character(r$article_type),character(1))
+          stopifnot(length(translated_types)==expected_n,
+                    all(translated_types %in% workflow09_article_type_order),
+                    all(vapply(seq_along(payload$records),function(i)
+                      identical(as.character(internal_payload$records[[i]]$article_type),
+                                translated_types[[i]]),logical(1))))
           stopifnot(as.integer(payload$metrics$search_results)==as.integer(flow$counts$combined_search_results))
           stopifnot(as.integer(payload$metrics$unique_records_screened)==as.integer(flow$counts$deduplicated_records))
           stopifnot(as.integer(payload$metrics$candidate_search_results_screened)==as.integer(flow$counts$title_abstract_screened))
@@ -253,7 +261,7 @@ jobs:
           stopifnot(isTRUE(payload$public_projection$search))
           stopifnot(isFALSE(payload$public_projection$ris_download))
           stopifnot(isTRUE(payload$public_projection$abstract_index))
-          required_table_fields <- c('record_id','title','abstract_snippet','doi','year','authors','journal','volume','pages','species','countries','iso3','topics','topic_paths','topic_stars')
+          required_table_fields <- c('record_id','title','abstract_snippet','doi','year','authors','journal','volume','pages','article_type','species','countries','iso3','topics','topic_paths','topic_stars')
           stopifnot(all(vapply(payload$records,function(r)all(required_table_fields %in% names(r)),logical(1))))
           stopifnot(all(vapply(payload$records,function(r)is.null(r[['abstract']]),logical(1))))
 
