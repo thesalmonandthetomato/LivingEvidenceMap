@@ -1,0 +1,66 @@
+name: TEMP W08b W01 candidate identity and empty-delta tests
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/tmp_w08b_candidate_identity_contract_20261031.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - run: Rscript -e 'install.packages("jsonlite")'
+      - name: Test multiple existing owners and safe candidate provider partition
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          dir.create("candidate_test")
+          rec<-function(id)list(identity=list(record_id=id),
+            canonical=list(doi=paste0("10.1/",id)),
+            manifestations=list(list(source="lens",source_record_id="L1",
+              manifestation_metadata=list(source_identity=list(lens_id="L1")))))
+          writeLines(c(toJSON(rec("recordA"),auto_unbox=TRUE),
+                      toJSON(rec("recordB"),auto_unbox=TRUE)),
+                     "candidate_test/w01.jsonl")
+          d<-data.frame(provider=c("lens","lens","openalex"),
+            related_provider_id=c("L1","L2","W8"))
+          e<-data.frame(seed_record_id=c("seed1","seed2","seed3"),
+            provider=d$provider,related_provider_id=d$related_provider_id,
+            direction=c("forward","backward","forward"))
+          write.csv(d,"candidate_test/novel_ids.csv",row.names=FALSE)
+          write.csv(e,"candidate_test/novel_edges.csv",row.names=FALSE)
+          run<-function(script,args)stopifnot(system2("Rscript",c(
+            file.path("scripts/workflow08b",script),args))==0L)
+          run("filter_existing_w01.R",c("candidate_test/w01.jsonl",
+            "candidate_test/novel_ids.csv","candidate_test/w01_guard"))
+          z<-read.csv("candidate_test/w01_guard/candidate_identity_precheck.csv")
+          stopifnot(z$existing_w01_record_id[z$related_provider_id=="L1"]=="recordA|recordB")
+          run("prepare_new_candidates.R",c("candidate_test/novel_ids.csv",
+            "candidate_test/novel_edges.csv",
+            "candidate_test/w01_guard/candidates_not_matched_by_provider_id.csv",
+            "candidate_test/partition"))
+          s<-fromJSON("candidate_test/partition/summary.json")
+          stopifnot(s$new_provider_candidate_ids==3L,
+            s$already_present_in_w01==1L,s$lens_candidates==1L,
+            s$openalex_candidates==1L,s$preserved_candidate_direction_edges==2L)
+          # An all-existing-ID result is a valid empty provider workload.
+          write.csv(d[1,,drop=FALSE],"candidate_test/existing_only.csv",row.names=FALSE)
+          write.csv(e[1,,drop=FALSE],"candidate_test/existing_only_edges.csv",row.names=FALSE)
+          empty<-d[FALSE,,drop=FALSE]
+          write.csv(empty,"candidate_test/unmatched_empty.csv",row.names=FALSE)
+          run("prepare_new_candidates.R",c("candidate_test/existing_only.csv",
+            "candidate_test/existing_only_edges.csv",
+            "candidate_test/unmatched_empty.csv",
+            "candidate_test/empty"))
+          s2<-fromJSON("candidate_test/empty/summary.json")
+          stopifnot(s2$require_provider_not_filter==0L,
+            nrow(read.csv("candidate_test/empty/lens_new_candidate_ids.csv"))==0L,
+            nrow(read.csv("candidate_test/empty/openalex_new_candidate_ids.csv"))==0L)
+          cat("PASS: all historical owners retained, only new provider candidates selected, zero-candidate handoff valid\n")
