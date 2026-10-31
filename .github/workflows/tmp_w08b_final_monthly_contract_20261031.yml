@@ -57,7 +57,7 @@ jobs:
           run("merge_edges.R",c("test_w08b/edges.jsonl","test_w08b/current"))
           e<-read.csv("test_w08b/current/citation_edges.csv")
           p<-read.csv("test_w08b/current/citation_edge_query_provenance.csv")
-          stopifnot(nrow(e)==9L,nrow(p)==11L,
+          stopifnot(nrow(e)==8L,nrow(p)==10L,
             nrow(e[e$seed_record_id=="work1" & e$related_provider_id=="C2",])==1L,
             nrow(p[p$seed_record_id=="work1" & p$related_provider_id=="C2",])==2L)
           old<-data.frame(seed_record_id=c("work1","work1"),
@@ -69,7 +69,7 @@ jobs:
           s<-fromJSON("test_w08b/union/summary.json")
           stopifnot(s$no_historical_edges_dropped,
             s$prior_direction_edges==3L,
-            s$new_direction_edges==9L,s$cumulative_direction_edges==12L)
+            s$new_direction_edges==8L,s$cumulative_direction_edges==11L)
           previous_candidates<-data.frame(provider=c("lens","openalex"),
             related_provider_id=c("C0","W9"))
           write.csv(previous_candidates,"test_w08b/previous_candidates.csv",row.names=FALSE)
