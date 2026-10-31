@@ -1,0 +1,95 @@
+name: Temporary canonical news-source audit
+on:
+  push:
+    branches:
+      - workflow01-final-architecture
+    paths:
+      - '.github/workflows/tmp_audit_news_sources_20261031.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install small R dependencies
+        run: Rscript -e 'install.packages(c("jsonlite","httr2","digest"))'
+      - name: Restore checksum-verified authoritative W08 canonical
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          Rscript -e 'r<-read.csv("docs/workflow08/zenodo_registry.csv");s<-r[r$status=="authoritative",];stopifnot(nrow(s)==1);writeLines(paste0("docs/workflow08/zenodo/run-",s$source_run_id,".json"),"audit_pointer_path.txt")'
+          Rscript scripts/updater/workflow_10_restore_canonical_from_zenodo.R --pointer "$(cat audit_pointer_path.txt)" --output "$RUNNER_TEMP/living_evidence_map_canonical_final.jsonl"
+      - name: Audit source titles and missing bibliographic fields
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          source_file <- file.path(Sys.getenv("RUNNER_TEMP"),"living_evidence_map_canonical_final.jsonl")
+          con <- file(source_file,open="r",encoding="UTF-8")
+          on.exit(close(con),add=TRUE)
+          one <- function(x) {
+            if(is.null(x)||!length(x)) return("")
+            z <- as.character(unlist(x,recursive=TRUE,use.names=FALSE))
+            z <- trimws(z[!is.na(z)])
+            z <- z[nzchar(z) & !tolower(z)%in%c("na","null","n/a")]
+            if(length(z)) z[[1]] else ""
+          }
+          rows <- list()
+          repeat {
+            lines<-readLines(con,n=2000,warn=FALSE)
+            if(!length(lines))break
+            for(line in lines[nzchar(trimws(lines))]){
+              r<-fromJSON(line,simplifyVector=FALSE)
+              c<-r$canonical
+              rows[[length(rows)+1L]]<-data.frame(
+                record_id=one(r$identity$record_id),title=one(c$title),
+                journal=one(c$journal),volume=one(c$volume),issue=one(c$issue),
+                pages=one(c$pages),year=one(c$year),doi=one(c$doi),
+                stringsAsFactors=FALSE
+              )
+            }
+          }
+          d<-do.call(rbind,rows)
+          d$missing_volume<-!nzchar(d$volume)
+          d$missing_pages<-!nzchar(d$pages)
+          d$missing_both<-d$missing_volume & d$missing_pages
+          d$missing_journal<-!nzchar(d$journal)
+          dir.create("news_source_audit",showWarnings=FALSE)
+          candidates<-d[d$missing_both,,drop=FALSE]
+          write.csv(candidates,"news_source_audit/candidate_records_missing_volume_pages.csv",row.names=FALSE,na="")
+          j<-d[!d$missing_journal,,drop=FALSE]
+          names_list<-split(seq_len(nrow(j)),tolower(trimws(j$journal)))
+          out<-do.call(rbind,lapply(names(names_list),function(key){
+            z<-j[names_list[[key]],,drop=FALSE]
+            miss<-z[z$missing_both,,drop=FALSE]
+            if(!nrow(miss))return(NULL)
+            data.frame(journal=z$journal[[1]],total_records=nrow(z),
+              records_missing_both=nrow(miss),missing_share=round(nrow(miss)/nrow(z),3),
+              examples=paste(head(miss$title,3),collapse=" || "),stringsAsFactors=FALSE)
+          }))
+          out<-out[order(-out$records_missing_both,out$journal),,drop=FALSE]
+          write.csv(out,"news_source_audit/journal_names_missing_volume_and_pages.csv",row.names=FALSE,na="")
+          known_pattern<-"(?i)(fish site|seafoodsource|intrafish|undercurrent|fish farming expert|fish farmer|salmonbusiness|salmon business|the guardian|the times|new york times|bbc news|reuters|associated press|financial times|the independent|the economist|aquaculture north america|fish farming international|seafood news|world fishing|fish update)"
+          news<-d[grepl(known_pattern,d$journal,perl=TRUE),,drop=FALSE]
+          write.csv(news,"news_source_audit/known_news_trade_source_candidates.csv",row.names=FALSE,na="")
+          cat("TOTAL_CANONICAL_RECORDS:",nrow(d),"\n")
+          cat("MISSING_BOTH_VOLUME_PAGES:",sum(d$missing_both),"\n")
+          cat("MISSING_ALL_JOURNAL_VOLUME_PAGES:",sum(d$missing_both & d$missing_journal),"\n")
+          cat("DISTINCT_SOURCES_WITH_MISSING_BOTH:",nrow(out),"\n")
+          cat("KNOWN_NEWS_SOURCE_CANDIDATES:",nrow(news),"\n")
+          cat("TOP_100_SOURCE_TITLES_WITH_MISSING_BOTH:\n")
+          for(i in seq_len(min(100L,nrow(out))))cat(sprintf("%d\t%s\t%d\t%d\n",i,out$journal[i],out$records_missing_both[i],out$total_records[i]))
+      - uses: actions/upload-artifact@v4
+        with:
+          name: canonical-news-source-audit-20261031
+          path: news_source_audit/*.csv
+          retention-days: 7
