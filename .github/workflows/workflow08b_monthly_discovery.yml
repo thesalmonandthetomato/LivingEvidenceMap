@@ -236,7 +236,7 @@ jobs:
           ROOT="$RUNNER_TEMP/w08b"
           # All Work IDs must be completed within this reusable job; do not
           # depend on workflow_dispatch for bounded retries on a nondefault branch.
-          for iteration in $(seq 1 20); do
+          for iteration in $(seq 1 60); do
             Rscript scripts/workflow08b/run_openalex_manifest.R \
               "$ROOT/expanded/seed_identifier_queries.csv" "$ROOT/state" \
               "$MAX_WORKS" "$UPDATE_MONTH"
@@ -244,8 +244,8 @@ jobs:
               z<-jsonlite::fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"w08b/state/openalex_summary.json"))
               cat(as.integer(z$completed_this_run)+as.integer(z$not_found_this_run))')"
             if [ "$WORKS" -eq 0 ]; then break; fi
-            if [ "$iteration" -eq 20 ]; then
-              echo "OpenAlex remains incomplete after 20 bounded iterations" >&2
+            if [ "$iteration" -eq 60 ]; then
+              echo "OpenAlex remains incomplete after 60 bounded iterations" >&2
               exit 1
             fi
           done
