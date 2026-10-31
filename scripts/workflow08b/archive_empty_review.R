@@ -2,6 +2,7 @@
 # Archive a verified zero-ambiguity W08b review as a restricted, zero-decision
 # receipt, allowing automated W01 canonical handoff without fake human decisions.
 suppressPackageStartupMessages({library(jsonlite);library(httr2)})
+`%||%`<-function(x,y)if(is.null(x)||!length(x))y else x
 a<-commandArgs(trailingOnly=TRUE)
 if(length(a)!=2L)stop("Usage: archive_empty_review.R review_queue_manifest.json receipt.json")
 q<-fromJSON(a[[1]],simplifyVector=FALSE)
@@ -55,7 +56,6 @@ post<-request(base)|>req_auth_bearer_token(token)|>
  req_timeout(120)|>req_perform()|>resp_body_json(simplifyVector=FALSE)
 bucket<-as.character(post$links$bucket %||% "")
 if(!nzchar(bucket))stop("Zenodo did not return an upload bucket")
-`%||%`<-function(x,y)if(is.null(x)||!length(x))y else x
 r<-request(paste0(sub("/$","",bucket),"/w08b-human-decisions.zip"))|>
  req_method("PUT")|>req_auth_bearer_token(token)|>
  req_body_file(zipfile,type="application/octet-stream")|>
