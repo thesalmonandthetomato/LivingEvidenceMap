@@ -55,8 +55,8 @@ jobs:
           gh run download "$W08B_BIB_RUN" --name "w08b-complete-bibliographies-$W08B_BIB_RUN" \
             --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/w08b_bib"
           test -s "$RUNNER_TEMP/w08b_dedup/identity_crosswalk.csv"
-          test -s "$RUNNER_TEMP/w08b_bib/lens/records.jsonl"
-          test -s "$RUNNER_TEMP/w08b_bib/openalex/openalex_sidecar_records.jsonl"
+          test -f "$RUNNER_TEMP/w08b_bib/lens/records.jsonl"
+          test -f "$RUNNER_TEMP/w08b_bib/openalex/openalex_sidecar_records.jsonl"
       - name: Restore human decisions and abstract corrections from published restricted archive
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
