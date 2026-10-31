@@ -398,10 +398,26 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh workflow run report_workflow09_figures.yml \
-            --repo "$GITHUB_REPOSITORY" \
-            --ref "$WORKFLOW08_BRANCH"
-          echo "PASS: triggered Workflow 09 after successful resumed W08 finalisation"
+          Rscript scripts/workflow08b/check_activation.R \
+            docs/current_run/current_run_status.json \
+            docs/workflow08b/monthly_activation.json \
+            "$RUNNER_TEMP/w08b_route.json"
+          ROUTE="$(jq -r '.route' "$RUNNER_TEMP/w08b_route.json")"
+          if [ "$ROUTE" = "existing_w09" ]; then
+            gh workflow run report_workflow09_figures.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref workflow01-final-architecture
+            echo "PASS: existing W08→W09 publication route preserved"
+          elif [ "$ROUTE" = "w08b_monthly_dispatch" ]; then
+            gh workflow run workflow08b_monthly_dispatch.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref workflow01-final-architecture \
+              -f source_w08_run_id="$GITHUB_RUN_ID"
+            echo "PASS: dispatched validated monthly W08b orchestration"
+          else
+            echo "Unsupported W08 routing decision: $ROUTE" >&2
+            exit 1
+          fi
 
       - name: Upload resumed W08 handoff
         uses: actions/upload-artifact@v4
