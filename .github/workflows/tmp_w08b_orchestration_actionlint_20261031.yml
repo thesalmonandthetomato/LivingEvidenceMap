@@ -1,0 +1,33 @@
+name: TEMP W08b full branch-local reusable orchestration actionlint
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/tmp_w08b_orchestration_actionlint_20261031.yml']
+permissions:
+  contents: read
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - name: Validate W08b callable chain and upstream W08 entry points with actionlint
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 \
+            .github/workflows/workflow08b_monthly_chain.yml \
+            .github/workflows/workflow08b_monthly_dispatch.yml \
+            .github/workflows/workflow08b_monthly_discovery.yml \
+            .github/workflows/workflow08b_monthly_candidates.yml \
+            .github/workflows/workflow08b_lightweight_dedup.yml \
+            .github/workflows/workflow08b_publish_shiny.yml \
+            .github/workflows/workflow08b_canonical_to_w02.yml \
+            .github/workflows/workflow08b_export_decisions.yml \
+            .github/workflows/workflow_08_production.yml \
+            .github/workflows/workflow_08_resume_after_shiny.yml \
+            .github/workflows/workflow_07_production.yml \
+            .github/workflows/workflow_06_production.yml \
+            .github/workflows/workflow_05_production.yml \
+            .github/workflows/workflow_04_production.yml
