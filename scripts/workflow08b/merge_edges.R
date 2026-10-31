@@ -11,7 +11,7 @@ dir.create(out,recursive=TRUE,showWarnings=FALSE)
 scalar<-function(x){v<-unlist(x,use.names=FALSE);if(!length(v))return("");trimws(as.character(v[[1L]]))}
 valid_ids<-function(x){z<-trimws(as.character(unlist(x,use.names=FALSE)));unique(z[!is.na(z)&nzchar(z)])}
 con<-file(input,"rt");on.exit(close(con))
-rows<-list(); n<-0L
+rows<-list(); provenance_rows<-list(); n<-0L; pn<-0L
 repeat{
  ls<-readLines(con,n=500L,warn=FALSE);if(!length(ls))break
  for(line in ls){
@@ -21,11 +21,24 @@ repeat{
   if(!nzchar(seed)||!(provider%in%c("lens","openalex")))stop("Invalid seed/provider")
   for(direction in c("backward","forward")){
    ids<-valid_ids(z[[paste0(direction,"_ids")]])
-   for(id in ids){n<-n+1L;rows[[n]]<-data.frame(seed_record_id=seed,provider=provider,
-      related_provider_id=id,direction=direction,stringsAsFactors=FALSE)}
+   for(id in ids){
+     n<-n+1L;rows[[n]]<-data.frame(seed_record_id=seed,provider=provider,
+       related_provider_id=id,direction=direction,stringsAsFactors=FALSE)
+     query_id<-scalar(z$queried_seed_identifier)
+     if(nzchar(query_id)){
+       pn<-pn+1L
+       provenance_rows[[pn]]<-data.frame(seed_record_id=seed,provider=provider,
+         queried_seed_identifier=query_id,related_provider_id=id,
+         direction=direction,stringsAsFactors=FALSE)
+     }
+   }
   }
  }
 }
+provenance_cols<-c("seed_record_id","provider","queried_seed_identifier","related_provider_id","direction")
+provenance<-if(length(provenance_rows))unique(do.call(rbind,provenance_rows)) else
+  as.data.frame(setNames(replicate(length(provenance_cols),character(),simplify=FALSE),provenance_cols))
+write.csv(provenance,file.path(out,"citation_edge_query_provenance.csv"),row.names=FALSE)
 if(!length(rows)){
   # A fully checked seed with zero citations is valid, not an error.
   write.csv(data.frame(seed_record_id=character(),provider=character(),
@@ -39,7 +52,7 @@ if(!length(rows)){
   writeLines(toJSON(list(schema="workflow08b-edges-v1",raw_edges=0L,
     distinct_direction_edges=0L,distinct_seed_candidate_pairs=0L,
     distinct_provider_candidate_ids=0L,pairs_both_directions=0L,
-    candidate_bibliography_downloaded=FALSE),auto_unbox=TRUE,pretty=TRUE),
+    candidate_bibliography_downloaded=FALSE,query_provenance_edges=0L),auto_unbox=TRUE,pretty=TRUE),
     file.path(out,"summary.json"))
   cat("PASS: zero citation edges retained as a valid empty register\\n")
   quit(save="no",status=0L)
@@ -62,6 +75,6 @@ write.csv(direction_by_pair,file.path(out,"seed_candidate_direction.csv"),row.na
 summary<-list(schema="workflow08b-edges-v1",raw_edges=n,distinct_direction_edges=nrow(d),
   distinct_seed_candidate_pairs=nrow(pairs),distinct_provider_candidate_ids=nrow(keys),
   pairs_both_directions=sum(direction_by_pair$direction=="both"),
-  candidate_bibliography_downloaded=FALSE)
+  candidate_bibliography_downloaded=FALSE,query_provenance_edges=nrow(provenance))
 writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE),file.path(out,"summary.json"))
 cat("PASS: offline citation ID deduplication and direction provenance\n")
