@@ -16,6 +16,11 @@ on:
         type: string
         required: false
         default: ''
+      resume_attempt:
+        description: "Bounded automated retry counter (0 for initial run)"
+        type: number
+        required: false
+        default: 0
       max_doi_batches:
         description: "Maximum DOI-resolution batches of 500"
         type: number
@@ -29,7 +34,8 @@ on:
         type: number
         default: 20
 permissions:
-  contents: read
+  contents: write
+  actions: write
 concurrency:
   group: w08b-monthly-discovery-${{ inputs.update_month }}
   cancel-in-progress: false
@@ -170,6 +176,7 @@ jobs:
             "$ROOT/expanded/seed_identifier_queries.csv" "$ROOT/state" \
             "$MAX_WORKS" "$UPDATE_MONTH"
       - name: Lossless cumulative edge union and new candidate ID delta
+        id: delta
         if: ${{ inputs.execute_provider_queries }}
         env:
           UPDATE_MONTH: ${{ inputs.update_month }}
@@ -194,6 +201,7 @@ jobs:
           cat "$ROOT/state/delta/summary.json"
           cat "$ROOT/state/existing_w01/summary.json"
       - name: Check current-month identifier completion without fabricating success
+        id: completion
         if: ${{ inputs.execute_provider_queries }}
         env:
           UPDATE_MONTH: ${{ inputs.update_month }}
@@ -231,7 +239,7 @@ jobs:
             file.path(root,"state/monthly_discovery_status.json"))
       - name: Archive every genuine bounded discovery attempt to restricted Zenodo
         id: archive
-        if: ${{ inputs.execute_provider_queries }}
+        if: ${{ always() && inputs.execute_provider_queries }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         run: |
@@ -239,6 +247,71 @@ jobs:
           Rscript scripts/workflow08b/archive_discovery.R \
             "$RUNNER_TEMP/w08b/state" "$GITHUB_RUN_ID" "$RUNNER_TEMP/w08b-receipt.json"
           cat "$RUNNER_TEMP/w08b-receipt.json"
+      - name: Continue bounded discovery or dispatch novel-candidate stage
+        if: ${{ inputs.execute_provider_queries && steps.archive.outcome == 'success' && steps.delta.outcome == 'success' && steps.completion.outcome == 'success' && steps.doi.outcome == 'success' && steps.lens.outcome == 'success' && steps.openalex.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPDATE_MONTH: ${{ inputs.update_month }}
+          RESUME_ATTEMPT: ${{ inputs.resume_attempt }}
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/w08b"
+          CHECKPOINT="$(jq -r '.zenodo_record_id' "$RUNNER_TEMP/w08b-receipt.json")"
+          [[ "$CHECKPOINT" =~ ^[0-9]+$ ]] || { echo "Invalid restricted checkpoint receipt"; exit 1; }
+          COMPLETE="$(jq -r '.provider_discovery_complete' "$ROOT/state/monthly_discovery_status.json")"
+          if [ "$COMPLETE" = "true" ]; then
+            UPDATE_ID="$(jq -r '.update_id' "$RUNNER_TEMP/w08_release.json")"
+            [[ "$UPDATE_ID" =~ ^[A-Za-z0-9._-]+$ ]]
+            STATE="docs/workflow08b/routing/$UPDATE_ID.json"
+            test -s "$STATE"
+            Rscript scripts/workflow08b/record_routing_event.R candidates_started \
+              "$RUNNER_TEMP/w08_release.json" "$STATE"
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add "$STATE"
+            git commit -m "W08b: complete discovery and begin novel-candidate phase for $UPDATE_ID"
+            git pull --rebase origin workflow01-final-architecture
+            git push origin HEAD:workflow01-final-architecture
+            gh workflow run workflow08b_monthly_candidates.yml \
+              --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture \
+              -f update_month="$UPDATE_MONTH" \
+              -f discovery_checkpoint_zenodo_id="$CHECKPOINT" \
+              -f execute_bibliography=true -f max_novel_provider_ids=50000
+            echo "PASS: completed one monthly discovery generation and triggered new bibliography processing"
+          else
+            [[ "$RESUME_ATTEMPT" =~ ^[0-9]+$ ]]
+            if [ "$RESUME_ATTEMPT" -ge 12 ]; then
+              echo "Maximum resumable discovery cycles reached; no W01/W09 trigger" >&2
+              exit 1
+            fi
+            PROGRESS="$(Rscript -e '
+              library(jsonlite)
+              r<-file.path(Sys.getenv("RUNNER_TEMP"),"w08b/state")
+              get<-function(p,k) {
+                x<-file.path(r,p)
+                if(!file.exists(x))return(0L)
+                z<-fromJSON(x,simplifyVector=FALSE)
+                as.integer(z[[k]] %||% 0L)
+              }
+              `%||%`<-function(x,y)if(is.null(x)||!length(x))y else x
+              n<-get("discovery_summary.json","completed_this_execution")+
+                 get("openalex_summary.json","completed_this_run")+
+                 get("openalex_summary.json","not_found_this_run")+
+                 get("doi_resolution_summary.json","requests_this_execution")
+              cat(n)')"
+            [[ "$PROGRESS" =~ ^[0-9]+$ && "$PROGRESS" -gt 0 ]] || {
+              echo "No progress in bounded discovery; checkpoint preserved, refusing retry loop" >&2
+              exit 1
+            }
+            NEXT=$((RESUME_ATTEMPT+1))
+            gh workflow run workflow08b_monthly_discovery.yml \
+              --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture \
+              -f update_month="$UPDATE_MONTH" -f execute_provider_queries=true \
+              -f resume_checkpoint_zenodo_id="$CHECKPOINT" \
+              -f resume_attempt="$NEXT" \
+              -f max_doi_batches=100 -f max_lens_batches=100 -f max_openalex_works=500
+            echo "PASS: checkpointed incomplete citation chase and dispatched bounded cycle $NEXT"
+          fi
       - name: Preserve aggregated progress and receipt (no licensed citation data)
         if: always()
         run: |
