@@ -89,6 +89,9 @@ jobs:
           git add docs/workflow08b/.run_canonical_handoff
           git commit -m "W08b: continue human deduplication export to W01 delta and W02"
           git push origin HEAD:workflow01-final-architecture
-          gh workflow run workflow08b_canonical_to_w02.yml \
-            --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture
-          echo "PASS: explicitly dispatched W08b W01-compatible canonical handoff"
+          echo "PASS: W08b human decisions validated and canonical handoff marker registered"
+  canonical_after_human_review:
+    needs: export
+    if: ${{ needs.export.result == 'success' }}
+    uses: ./.github/workflows/workflow08b_canonical_to_w02.yml
+    secrets: inherit
