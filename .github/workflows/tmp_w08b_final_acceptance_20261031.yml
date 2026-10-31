@@ -1,0 +1,90 @@
+name: TEMP W08b final acceptance actionlint and checkpoint rollover
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/tmp_w08b_final_acceptance_20261031.yml']
+permissions:
+  contents: read
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - name: Strict GitHub Actions workflow semantics
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 -shellcheck= \
+            .github/workflows/workflow08b_monthly_chain.yml \
+            .github/workflows/workflow08b_monthly_dispatch.yml \
+            .github/workflows/workflow08b_monthly_discovery.yml \
+            .github/workflows/workflow08b_monthly_candidates.yml \
+            .github/workflows/workflow08b_lightweight_dedup.yml \
+            .github/workflows/workflow08b_publish_shiny.yml \
+            .github/workflows/workflow08b_canonical_to_w02.yml \
+            .github/workflows/workflow08b_export_decisions.yml \
+            .github/workflows/workflow_08_production.yml \
+            .github/workflows/workflow_08_resume_after_shiny.yml \
+            .github/workflows/workflow_07_production.yml \
+            .github/workflows/workflow_06_production.yml \
+            .github/workflows/workflow_05_production.yml \
+            .github/workflows/workflow_04_production.yml
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - run: Rscript -e 'install.packages("jsonlite")'
+      - name: Test durable October-to-November-to-December history rollover and immutability
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          dir.create("w08b_acceptance")
+          reg<-"docs/workflow08b/monthly_checkpoint_registry.json"
+          sha<-function(x)paste(rep(x,64L),collapse="")
+          run<-function(script,args,success=TRUE){
+            code<-suppressWarnings(system2("Rscript",c(file.path("scripts/workflow08b",script),
+              args),stdout=FALSE,stderr=FALSE))
+            if(success)stopifnot(code==0L)else stopifnot(code!=0L)
+          }
+          nxt<-"w08b_acceptance/november.json"
+          args<-c(reg,"2026-11","987654321",sha("a"),"340000","980000",
+            "555555",sha("b"),nxt)
+          run("register_monthly_checkpoint.R",args)
+          z<-fromJSON(nxt,simplifyVector=FALSE)
+          stopifnot(z$latest_completed_month=="2026-11",length(z$checkpoints)==2L,
+            z$checkpoints[[1]]$discovery_zenodo_record_id=="23627417",
+            z$checkpoints[[2]]$post_chasing_w08_sha256=="")
+          run("register_monthly_checkpoint.R",c(nxt,args[2:8],
+            "w08b_acceptance/idempotent.json"))
+          run("register_monthly_checkpoint.R",c(nxt,"2026-11","987654322",
+            args[4:8],"w08b_acceptance/conflict.json"),FALSE)
+          completed<-"w08b_acceptance/completed.json"
+          run("finish_monthly_checkpoint.R",c(nxt,"2026-11","777777",
+            sha("c"),completed))
+          run("finish_monthly_checkpoint.R",c(completed,"2026-11","777777",
+            sha("c"),"w08b_acceptance/complete_again.json"))
+          run("finish_monthly_checkpoint.R",c(completed,"2026-11","777778",
+            sha("d"),"w08b_acceptance/wrong.json"),FALSE)
+          run("resolve_previous_checkpoint.R",c(completed,"2026-12",
+            "w08b_acceptance/december_selector.json"))
+          chosen<-fromJSON("w08b_acceptance/december_selector.json")
+          stopifnot(chosen$previous_month=="2026-11",
+            chosen$zenodo_record_id=="987654321",
+            chosen$previous_provider_candidates==340000,
+            chosen$previous_direction_edges==980000)
+          for(p in c("scripts/workflow08b/register_monthly_checkpoint.R",
+            "scripts/workflow08b/finish_monthly_checkpoint.R",
+            "scripts/workflow08b/check_activation.R",
+            "scripts/workflow08b/mark_supplemental_w01.R"))
+            stopifnot(is.expression(parse(file=p)))
+          cat("PASS: accepted October preserved; November idempotent; conflicting overwrite rejected; final SHA immutable; December selects November\n")
+      - name: Validate activation remains safe during tests
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          x<-fromJSON("docs/workflow08b/monthly_activation.json")
+          stopifnot(x$mode=="staged",!x$automatically_route_w08,
+            !x$automatically_run_provider_queries)
+          cat("PASS: production activation remains staged pending complete acceptance\n")
