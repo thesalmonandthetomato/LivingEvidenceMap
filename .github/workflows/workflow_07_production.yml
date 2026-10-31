@@ -21,6 +21,10 @@ on:
         required: true
       LEM_GOOGLE_SERVICE_ACCOUNT_JSON:
         required: false
+      LENS_API_TOKEN:
+        required: false
+      OPENALEX_API_KEY:
+        required: false
 
   workflow_dispatch:
     inputs:
