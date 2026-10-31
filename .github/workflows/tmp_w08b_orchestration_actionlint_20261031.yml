@@ -1,4 +1,4 @@
-name: TEMP W08b full branch-local reusable orchestration actionlint
+name: TEMP W08b final validated reusable orchestration actionlint
 on:
   push:
     branches: [workflow01-final-architecture]
