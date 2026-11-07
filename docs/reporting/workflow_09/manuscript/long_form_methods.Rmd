@@ -73,6 +73,43 @@ Database-specific implementations were derived from the same underlying conceptu
 
 The review focuses on academic literature. Grey literature was eligible where it formed part of the academic record, including preprints, theses, books and book chapters.
 
+### Citation chasing
+
+Forward and backward citation chasing was conducted through The Lens and OpenAlex using included records' Lens IDs, DOIs and OpenAlex IDs, in that order of priority. Records citing, or cited by, eligible included records were retrieved using the citation-network identifiers. To avoid recovering records already returned by conventional bibliographic searches, citation-network results were restricted using the complementary query \`AND (salmon OR salmonid* OR Salmo OR Oncorhynchus OR "rainbow trout") NOT (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial* OR maricultur*)\`. Retrieved identifiers were deduplicated internally by record ID before full bibliographic records were obtained, screened and classified through the established workflow, and eligible records were incorporated into the canonical database. Backward chasing is performed one update in arrears, using records added by the preceding update; forward chasing seeks new citing records for the previously eligible corpus.
+
+\`\`\`{r citation-chasing-report, echo=FALSE, results='asis'}
+# Use validated W09 stage summaries rather than historic values in manuscript text.
+# The available W00 summary represents records retrieved AFTER network searching
+# and query filtering, not the larger raw citation-relationship count.
+w09_input_dir <- here::here("docs", "reporting", "workflow_09_inputs", "current")
+w00_cc_file <- file.path(w09_input_dir, "w00_summary.json")
+w08_cc_file <- file.path(w09_input_dir, "w08_summary.json")
+if (file.exists(w00_cc_file) && file.exists(w08_cc_file)) {
+  w00_cc <- jsonlite::fromJSON(w00_cc_file, simplifyVector = FALSE)
+  w08_cc <- jsonlite::fromJSON(w08_cc_file, simplifyVector = FALSE)
+  valid_cc <- identical(w00_cc$stage, "W00") &&
+    identical(w08_cc$stage, "W08") &&
+    identical(w00_cc$status, "complete") &&
+    identical(w08_cc$status, "complete") &&
+    identical(w00_cc$metrics$search_mode, "citation_chasing") &&
+    identical(as.character(w00_cc$update_id), as.character(w08_cc$update_id))
+  if (valid_cc) {
+    cc_date <- as.Date(w00_cc$metrics$search_date)
+    cc_n <- suppressWarnings(as.integer(w00_cc$metrics$citation_chasing_total_results))
+    map_n <- suppressWarnings(as.integer(w08_cc$metrics$canonical_records))
+    if (!is.na(cc_date) && !is.na(cc_n) && cc_n >= 0L &&
+        !is.na(map_n) && map_n >= 0L) {
+      cat(sprintf(
+        "The most recently registered completed citation-chasing update was on %s. It returned %s bibliographic records after the network-search restrictions, for subsequent processing in a release containing %s finally included records. These counts do not represent the number of initial citation relationships or the number of eligible seed records.\\n\\n",
+        format(cc_date, "%d %B %Y"),
+        format(cc_n, big.mark = ",", scientific = FALSE),
+        format(map_n, big.mark = ",", scientific = FALSE)
+      ))
+    }
+  }
+}
+\`\`\`
+
 ### Comprehensiveness of the search
 
 During development of the original protocol, a benchmark list of 17 articles of known relevance was assembled to test the functionality of the search. The search was considered adequate when all benchmark records indexed within the database could be retrieved. Where a benchmark record was missed, the search terms and indexed terminology were examined and revised where necessary. See the protocol for further details [@haddaway2024status].
