@@ -24,9 +24,9 @@ The methods for this living evidence map are informed by the
 Collaboration for Environmental Evidence Guidelines for systematic
 reviews and maps ([Pullin et al. 2023](#ref-pullin2023collaboration))
 and by established systematic mapping methodology. The original review
-followed methods set out in an a priori protocol ([N. Haddaway et al.
+followed methods set out in an a priori protocol ([Haddaway et al.
 2024](#ref-haddaway2024status)) and has been documented in line with the
-ROSES reporting standards for systematic maps ([N. R. Haddaway et al.
+ROSES reporting standards for systematic maps ([Haddaway et al.
 2018](#ref-haddaway2018roses)). The living evidence map extends that
 protocol through repeated bibliographic updates, reproducible record
 reconciliation, deterministic annotation, model-assisted screening and
@@ -165,7 +165,7 @@ the search. The search was considered adequate when all benchmark
 records indexed within the database could be retrieved. Where a
 benchmark record was missed, the search terms and indexed terminology
 were examined and revised where necessary. See the protocol for further
-details ([N. Haddaway et al. 2024](#ref-haddaway2024status)).
+details ([Haddaway et al. 2024](#ref-haddaway2024status)).
 
 ### Search update
 
@@ -585,15 +585,15 @@ database was calculated for comparison.
 
 # References
 
-Haddaway, Neal R, Biljana Macura, Paul Whaley, and Andrew S Pullin.
-2018. “ROSES RepOrting Standards for Systematic Evidence Syntheses: Pro
-Forma, Flow-Diagram and Descriptive Summary of the Plan and Conduct of
-Environmental Systematic Reviews and Systematic Maps.” *Environmental
-Evidence* 7 (1): 7.
-
 Haddaway, Neal, Matthew Grainger, Marija Sciberras, Ingrid Kelling, and
 Steven Cooke. 2024. “The Status of Academic Research on Salmon Farming:
 A Scoping Review Protocol.”
+
+Haddaway, Neal, Biljana Macura, Paul Whaley, and Andrew S Pullin. 2018.
+“ROSES RepOrting Standards for Systematic Evidence Syntheses: Pro Forma,
+Flow-Diagram and Descriptive Summary of the Plan and Conduct of
+Environmental Systematic Reviews and Systematic Maps.” *Environmental
+Evidence* 7 (1): 7.
 
 Pullin, AS, GK Frampton, B Livoreil, G Petrokofsky, and KE Edelstein.
 2023. “Collaboration for Environmental Evidence. Guidelines and
