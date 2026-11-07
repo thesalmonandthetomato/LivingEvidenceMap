@@ -437,6 +437,32 @@ jobs:
           echo "Monitoring public Pages deployment run $deployment_id"
           gh run watch "$deployment_id" --repo "$PUBLIC_REPO" --exit-status
           echo "PASS: Public GitHub Pages deployment succeeded: $deployment_id"
+          # GitHub Pages success is necessary but not sufficient: confirm the
+          # custom-domain URLs used by readers contain the published changes.
+          SITE="https://thesalmonandthetomato.org/salmonevidencemap"
+          live_ok=0
+          for attempt in $(seq 1 18); do
+            methods_page="$(curl --location --fail --silent --show-error \
+              --connect-timeout 10 --max-time 35 \
+              -H 'Cache-Control: no-cache' \
+              "$SITE/methodology.html?deploy=$published_sha" || true)"
+            results_page="$(curl --location --fail --silent --show-error \
+              --connect-timeout 10 --max-time 35 \
+              -H 'Cache-Control: no-cache' \
+              "$SITE/results.html?deploy=$published_sha" || true)"
+            if grep -Fq 'id="citation-chasing"' <<< "$methods_page" &&
+               grep -Fq 'Among these, the leading Level 3 topics were' <<< "$results_page"; then
+              live_ok=1
+              break
+            fi
+            sleep 10
+          done
+          if [ "$live_ok" -ne 1 ]; then
+            echo "::error::Pages deployed but custom-domain Methods/Results do not contain current W09 changes"
+            exit 1
+          fi
+          echo "PASS: Live Methods and Results verified on custom domain"
+
 
       - name: Mark current-run dashboard stage complete
         env:
