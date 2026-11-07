@@ -128,8 +128,8 @@ topic_records <- master %>%
 topic_rank <- function(level = 1L, n = 1L, level1 = NULL, level2 = NULL, smallest = FALSE) {
   stopifnot(level %in% 1:3, n >= 1)
   d <- topic_records
-  if (!is.null(level1)) d <- d %>% filter(.data$level1 == level1)
-  if (!is.null(level2)) d <- d %>% filter(.data$level2 == level2)
+  if (!is.null(level1)) d <- d %>% filter(.data$level1 == .env$level1)
+  if (!is.null(level2)) d <- d %>% filter(.data$level2 == .env$level2)
   field <- paste0("level", level)
   out <- d %>%
     filter(!is.na(.data[[field]]), .data[[field]] != "") %>%
@@ -147,6 +147,76 @@ topic_count <- function(level, n, level1 = NULL, level2 = NULL, smallest = FALSE
 }
 topic_pct <- function(level, n, level1 = NULL, level2 = NULL, smallest = FALSE) {
   pct(topic_count(level, n, level1, level2, smallest))
+}
+
+# All top-level thematic subsections use the same deterministic Level 2 and
+# Level 3 selection rules. Count each record once per category/path.
+# Pick the largest relative frequency drop (at least 20%) after ranks 3–5;
+# otherwise select five. Tied counts are always reported together.
+natural_cutoff <- function(counts, min_n = 3L, max_n = 5L, drop = 0.20) {
+  stopifnot(length(counts) > 0L, min_n >= 1L, max_n >= min_n,
+            drop >= 0, drop < 1, all(!is.na(counts)),
+            all(diff(counts) <= 0))
+  k <- min(length(counts), max_n)
+  candidates <- seq.int(min_n, max_n)
+  candidates <- candidates[candidates < length(counts)]
+  if (length(candidates)) {
+    declines <- (counts[candidates] - counts[candidates + 1L]) /
+      counts[candidates]
+    qualifying <- candidates[declines >= drop]
+    if (length(qualifying)) {
+      best_drop <- max(declines[declines >= drop])
+      k <- max(candidates[declines == best_drop])
+    }
+  }
+  while (k < length(counts) && counts[k] == counts[k + 1L]) k <- k + 1L
+  k
+}
+rank_theme_level2 <- function(theme) {
+  theme_records <- topic_records %>%
+    filter(.data$level1 == .env$theme)
+  theme_n <- n_distinct(theme_records$record_id)
+  if (!theme_n) stop("No Level 1 records: ", theme, call. = FALSE)
+  ranked <- theme_records %>%
+    filter(!is.na(.data$level2), .data$level2 != "") %>%
+    distinct(record_id, level2) %>%
+    count(level2, name = "n") %>%
+    arrange(desc(n), level2)
+  if (!nrow(ranked)) stop("No Level 2 categories: ", theme, call. = FALSE)
+  ranked <- ranked[seq_len(natural_cutoff(ranked$n)), , drop = FALSE]
+  attr(ranked, "theme_n") <- theme_n
+  ranked
+}
+rank_theme_level3 <- function(theme, selected_level2) {
+  ranked <- topic_records %>%
+    filter(.data$level1 == .env$theme,
+           .data$level2 %in% .env$selected_level2,
+           !is.na(.data$level3), .data$level3 != "") %>%
+    distinct(record_id, level2, level3) %>%
+    count(level2, level3, name = "n") %>%
+    arrange(desc(n), level2, level3)
+  if (!nrow(ranked)) return(ranked)
+  ranked[seq_len(natural_cutoff(ranked$n)), , drop = FALSE]
+}
+theme_summary <- function(theme) {
+  lvl2 <- rank_theme_level2(theme)
+  theme_n <- attr(lvl2, "theme_n")
+  lvl3 <- rank_theme_level3(theme, lvl2$level2)
+  lvl2_labels <- sprintf("%s (%s records; %s)",
+                         lvl2$level2, fmt(lvl2$n),
+                         vapply(lvl2$n, function(n)
+                           pct(n, denominator = theme_n), character(1)))
+  first <- paste0(theme, " accounted for ", fmt(theme_n),
+                  " records (", pct(theme_n),
+                  " of the full evidence map). Its leading Level 2 categories were ",
+                  human_list(lvl2_labels), ".")
+  if (!nrow(lvl3)) return(first)
+  lvl3_labels <- sprintf("%s > %s (%s records; %s)",
+                         lvl3$level2, lvl3$level3, fmt(lvl3$n),
+                         vapply(lvl3$n, function(n)
+                           pct(n, denominator = theme_n), character(1)))
+  paste0(first, " Among these, the leading Level 3 topics were ",
+         human_list(lvl3_labels), ".")
 }
 
 n_topic_coded <- n_distinct(topic_records$record_id)
@@ -373,7 +443,7 @@ include_figure(here::here("visualisations", "topic_hierarchy", "figure_04a_top_l
 
 ### Production
 
-Production research was centred on fish performance and biology, fish health, feed and nutrition, breeding and reproduction, and stress and mortality. The most frequently assigned terminal topic was `r topic_name(3,1,level1="Production")` (`r fmt(topic_count(3,1,level1="Production"))` records; `r topic_pct(3,1,level1="Production")`), followed by `r topic_name(3,2,level1="Production")` (`r fmt(topic_count(3,2,level1="Production"))`; `r topic_pct(3,2,level1="Production")`). Other major concentrations included `r topic_name(3,3,level1="Production")` (`r fmt(topic_count(3,3,level1="Production"))`; `r topic_pct(3,3,level1="Production")`), `r topic_name(3,4,level1="Production")` (`r fmt(topic_count(3,4,level1="Production"))`; `r topic_pct(3,4,level1="Production")`), `r topic_name(3,5,level1="Production")` (`r fmt(topic_count(3,5,level1="Production"))`; `r topic_pct(3,5,level1="Production")`) and `r topic_name(3,6,level1="Production")` (`r fmt(topic_count(3,6,level1="Production"))`; `r topic_pct(3,6,level1="Production")`). Sea lice remained a substantial research cluster, including `r fmt(sea_lice$n[1])` records on `r sea_lice$level3[1]` and `r fmt(sea_lice$n[2])` on `r sea_lice$level3[2]`.
+`r theme_summary("Production")`
 
 ```{r fig-production, fig.cap="***Figure 9.*** *Topic-assignment frequency within the Production theme.*"}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04a_hierarchy_production.png"))
@@ -381,7 +451,7 @@ include_figure(here::here("visualisations", "topic_hierarchy", "figure_04a_hiera
 
 ### Environment
 
-Environmental research was concentrated in `r topic_name(3,1,level1="Environment")` (`r fmt(topic_count(3,1,level1="Environment"))`; `r topic_pct(3,1,level1="Environment")`), `r topic_name(3,2,level1="Environment")` (`r fmt(topic_count(3,2,level1="Environment"))`; `r topic_pct(3,2,level1="Environment")`), `r topic_name(3,3,level1="Environment")` (`r fmt(topic_count(3,3,level1="Environment"))`; `r topic_pct(3,3,level1="Environment")`) and `r topic_name(3,4,level1="Environment")` (`r fmt(topic_count(3,4,level1="Environment"))`; `r topic_pct(3,4,level1="Environment")`).
+`r theme_summary("Environment")`
 
 ```{r fig-environment, fig.cap="***Figure 10.*** *Topic-assignment frequency within the Environment theme.*"}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04b_hierarchy_environment.png"))
@@ -389,7 +459,7 @@ include_figure(here::here("visualisations", "topic_hierarchy", "figure_04b_hiera
 
 ### Methods
 
-Methods research was dominated by `r topic_name(3,1,level1="Methods")` (`r fmt(topic_count(3,1,level1="Methods"))`; `r topic_pct(3,1,level1="Methods")`), followed by `r topic_name(3,2,level1="Methods")` (`r fmt(topic_count(3,2,level1="Methods"))`; `r topic_pct(3,2,level1="Methods")`), `r topic_name(3,3,level1="Methods")` (`r fmt(topic_count(3,3,level1="Methods"))`; `r topic_pct(3,3,level1="Methods")`) and `r topic_name(3,4,level1="Methods")` (`r fmt(topic_count(3,4,level1="Methods"))`; `r topic_pct(3,4,level1="Methods")`).
+`r theme_summary("Methods")`
 
 ```{r fig-methods, fig.cap="***Figure 11.*** *Topic-assignment frequency within the Methods theme.*"}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04c_hierarchy_methods.png"))
@@ -397,7 +467,7 @@ include_figure(here::here("visualisations", "topic_hierarchy", "figure_04c_hiera
 
 ### Industry and governance
 
-Within Industry and governance, `r topic_name(3,1,level1="Industry and governance")` was the largest terminal topic (`r fmt(topic_count(3,1,level1="Industry and governance"))`; `r topic_pct(3,1,level1="Industry and governance")`), followed by `r topic_name(3,2,level1="Industry and governance")` (`r fmt(topic_count(3,2,level1="Industry and governance"))`; `r topic_pct(3,2,level1="Industry and governance")`), `r topic_name(3,3,level1="Industry and governance")` (`r fmt(topic_count(3,3,level1="Industry and governance"))`; `r topic_pct(3,3,level1="Industry and governance")`), `r topic_name(3,4,level1="Industry and governance")` (`r fmt(topic_count(3,4,level1="Industry and governance"))`; `r topic_pct(3,4,level1="Industry and governance")`) and `r topic_name(3,5,level1="Industry and governance")` (`r fmt(topic_count(3,5,level1="Industry and governance"))`; `r topic_pct(3,5,level1="Industry and governance")`).
+`r theme_summary("Industry and governance")`
 
 ```{r fig-industry, fig.cap="***Figure 12.*** *Topic-assignment frequency within the Industry and governance theme.*"}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04d_hierarchy_industry_and_governance.png"))
@@ -405,7 +475,7 @@ include_figure(here::here("visualisations", "topic_hierarchy", "figure_04d_hiera
 
 ### Product
 
-Product research was led by `r topic_name(3,1,level1="Product")` (`r fmt(topic_count(3,1,level1="Product"))`; `r topic_pct(3,1,level1="Product")`), `r topic_name(3,2,level1="Product")` (`r fmt(topic_count(3,2,level1="Product"))`; `r topic_pct(3,2,level1="Product")`) and `r topic_name(3,3,level1="Product")` (`r fmt(topic_count(3,3,level1="Product"))`; `r topic_pct(3,3,level1="Product")`). `r topic_name(3,4,level1="Product")` and `r topic_name(3,5,level1="Product")` were also prominent.
+`r theme_summary("Product")`
 
 ```{r fig-product, fig.cap="***Figure 13.*** *Topic-assignment frequency within the Product theme.*"}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04e_hierarchy_product.png"))
@@ -413,7 +483,7 @@ include_figure(here::here("visualisations", "topic_hierarchy", "figure_04e_hiera
 
 ### People and society
 
-People and society was much smaller than the `r topic_name(1,1)` and `r topic_name(1,2)` evidence bases. The largest terminal topics were `r topic_name(3,1,level1="People and society")` (`r fmt(topic_count(3,1,level1="People and society"))`; `r topic_pct(3,1,level1="People and society")`), `r topic_name(3,2,level1="People and society")` (`r fmt(topic_count(3,2,level1="People and society"))`; `r topic_pct(3,2,level1="People and society")`) and `r topic_name(3,3,level1="People and society")` (`r fmt(topic_count(3,3,level1="People and society"))`; `r topic_pct(3,3,level1="People and society")`). Topics relating to `r human_list(people_under_half$level3)` each represented under 0.5% of the full evidence map.
+`r theme_summary("People and society")`
 
 ```{r fig-people, fig.cap="***Figure 14.*** *Topic-assignment frequency within the People and society theme.*"}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04f_hierarchy_people_and_society.png"))
@@ -421,7 +491,7 @@ include_figure(here::here("visualisations", "topic_hierarchy", "figure_04f_hiera
 
 ### Inputs and resources
 
-Inputs and resources was the smallest high-level theme. `r topic_name(3,1,level1="Inputs and resources")` accounted for `r fmt(topic_count(3,1,level1="Inputs and resources"))` records (`r topic_pct(3,1,level1="Inputs and resources")`) and was more common than `r topic_name(3,2,level1="Inputs and resources")` (`r fmt(topic_count(3,2,level1="Inputs and resources"))`; `r topic_pct(3,2,level1="Inputs and resources")`), and `r topic_name(3,3,level1="Inputs and resources")` (`r fmt(topic_count(3,3,level1="Inputs and resources"))`; `r topic_pct(3,3,level1="Inputs and resources")`). `r topic_name(3,2,level1="Inputs and resources",smallest=TRUE)` and `r topic_name(3,1,level1="Inputs and resources",smallest=TRUE)` were represented in only `r fmt(topic_count(3,2,level1="Inputs and resources",smallest=TRUE))` (`r topic_pct(3,2,level1="Inputs and resources",smallest=TRUE)`) and `r fmt(topic_count(3,1,level1="Inputs and resources",smallest=TRUE))` (`r topic_pct(3,1,level1="Inputs and resources",smallest=TRUE)`) records, respectively.
+`r theme_summary("Inputs and resources")`
 
 ```{r fig-inputs, fig.cap="***Figure 15.*** *Topic-assignment frequency within the Inputs and resources theme.*"}
 include_figure(here::here("visualisations", "topic_hierarchy", "figure_04g_hierarchy_inputs_and_resources.png"))
