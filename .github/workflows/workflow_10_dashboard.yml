@@ -450,8 +450,10 @@ jobs:
               --connect-timeout 10 --max-time 35 \
               -H 'Cache-Control: no-cache' \
               "$SITE/results.html?deploy=$published_sha" || true)"
-            if grep -Fq 'id="citation-chasing"' <<< "$methods_page" &&
-               grep -Fq 'Among these, the leading Level 3 topics were' <<< "$results_page"; then
+            # Pandoc may insert line breaks within a rendered paragraph.
+            # Bash regexes match across those whitespace boundaries.
+            if [[ "$methods_page" == *'id="citation-chasing"'* ]] &&
+               [[ "$results_page" =~ leading[[:space:]]+Level[[:space:]]+3[[:space:]]+topics ]]; then
               live_ok=1
               break
             fi
