@@ -399,6 +399,45 @@ jobs:
           git pull --rebase origin main
           git push origin HEAD:main
 
+      - name: Deploy public GitHub Pages and confirm deployment succeeded
+        env:
+          GH_TOKEN: ${{ secrets.SALMON_EVIDENCE_MAP_PUBLISH_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          PUBLIC_REPO="thesalmonandthetomato/salmonevidencemap"
+          test -n "$GH_TOKEN"
+          # The cross-repository publication token has verified Contents write
+          # permission. repository_dispatch deliberately uses that permission
+          # instead of relying on an automatic push-triggered Pages build.
+          prior_id="$(gh run list --repo "$PUBLIC_REPO" --workflow deploy-pages.yml --limit 1 --json databaseId --jq '.[0].databaseId' || true)"
+          prior_id="${prior_id:-0}"
+          published_sha="$(git -C public-site rev-parse HEAD)"
+          gh api --method POST "repos/$PUBLIC_REPO/dispatches" \
+            -f event_type=w10_publish \
+            -f "client_payload[published_sha]=$published_sha"
+          echo "Dispatched public Pages deployment for $published_sha"
+          deployment_id=""
+          for attempt in $(seq 1 60); do
+            deployment_id="$(gh run list --repo "$PUBLIC_REPO" \
+              --workflow deploy-pages.yml --event repository_dispatch --limit 20 \
+              --json databaseId,headSha \
+              --jq '.[] | select(.headSha == "'"$published_sha"'") | .databaseId' \
+              | head -n 1 || true)"
+            if [ -n "$deployment_id" ] && [ "$deployment_id" -gt "$prior_id" ]; then
+              break
+            fi
+            deployment_id=""
+            sleep 5
+          done
+          if [ -z "$deployment_id" ]; then
+            echo "::error::No new public GitHub Pages deployment run was registered for $published_sha"
+            exit 1
+          fi
+          echo "Monitoring public Pages deployment run $deployment_id"
+          gh run watch "$deployment_id" --repo "$PUBLIC_REPO" --exit-status
+          echo "PASS: Public GitHub Pages deployment succeeded: $deployment_id"
+
       - name: Mark current-run dashboard stage complete
         env:
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
