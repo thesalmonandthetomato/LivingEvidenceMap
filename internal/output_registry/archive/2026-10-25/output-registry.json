@@ -1,6 +1,6 @@
 {
   "schema": "living-evidence-map-internal-output-registry-v1",
-  "generated_at_utc": "2026-10-31T17:05:00Z",
+  "generated_at_utc": "2026-11-07T09:22:19Z",
   "search_date": "2026-10-25",
   "update_id": "w08b-citation-run-40191412234",
   "note": "Internal repository registry. Not intended for publication.",
@@ -887,32 +887,32 @@
       "path": "docs/reporting/workflow_09/manuscript/methods.html",
       "description": "Rendered methods report",
       "format": "HTML",
-      "bytes": 943332,
-      "sha256": "bb8ef97c902dd81f5d69af0e0eb045d53de3171c3dd7ea1b5b61c4d8d90eaa27"
+      "bytes": 944675,
+      "sha256": "6ba47ff8873034afc163a9faade68eba5d5a1004076b6d8f87d728559da29480"
     },
     {
       "category": "Report",
       "path": "docs/reporting/workflow_09/manuscript/methods.pdf",
       "description": "PDF methods report",
       "format": "PDF",
-      "bytes": 117655,
-      "sha256": "c803315d2decb2916b4fccbf49cbfbc063040a4dedf7a4c966db97e4deb8da96"
+      "bytes": 123420,
+      "sha256": "1a8b41bde4ceaa4cd6b4453e0dd521dab3584e4280c3cdef955e36655360e9eb"
     },
     {
       "category": "Report",
       "path": "docs/reporting/workflow_09/manuscript/results.html",
       "description": "Rendered results report",
       "format": "HTML",
-      "bytes": 11718986,
-      "sha256": "17564f143d7d0859d2496da3a1c2357e4570dcc447659fcbead6096d5e8c6bff"
+      "bytes": 11669711,
+      "sha256": "20e28f468239f8f2bb7f225903c5e7295b5df763a9fd5f398279b71e4c9d99a1"
     },
     {
       "category": "Report",
       "path": "docs/reporting/workflow_09/manuscript/results.pdf",
       "description": "PDF results report",
       "format": "PDF",
-      "bytes": 2678404,
-      "sha256": "0b29811f135163ba27e64c90d282c97642fbbf247fa8df484e617724135a85d3"
+      "bytes": 2712794,
+      "sha256": "c95c3605784d2c4e8e3cfae86c3f14380d7e4ee8fec7d9f0dcd645c5b5286124"
     },
     {
       "category": "Metadata",
@@ -920,7 +920,7 @@
       "description": "Workflow flow counts used for reporting",
       "format": "JSON",
       "bytes": 5181,
-      "sha256": "57bff8101cef826a53f02753cd48e520ae10b355ccfe23c76a34291788252191"
+      "sha256": "3e8b3f66ae457aac0b8945ff650e637a9cf277efb00d425d4f63770c2d049b26"
     },
     {
       "category": "Metadata",
@@ -936,7 +936,7 @@
       "description": "Human/model validation summary",
       "format": "JSON",
       "bytes": 835,
-      "sha256": "6f26dd193584e2056e39bcdf8d5e00cad59153ed4c7aa9a6414f1d8a17d0fbdf"
+      "sha256": "6e4987d7dae1d5eb083b89a3c5e8fd5814e3af809bd1ea05f52269159229072f"
     },
     {
       "category": "Validation",
@@ -1007,8 +1007,8 @@
       "path": "docs/reporting/workflow_09/figures/figure_01_flow_diagram.pdf",
       "description": "Workflow 09 figure: figure_01_flow_diagram.pdf",
       "format": "PDF",
-      "bytes": 29099,
-      "sha256": "b97c7a5f553ec6b26e7b5df694982fe98e879ff67a4e94ffff79d8e256f4fd35"
+      "bytes": 29098,
+      "sha256": "4ac922c050cfc32539ab0c2520135a522a32efc8bd24f5b171e7caa28b484134"
     },
     {
       "category": "Figure",
@@ -1016,7 +1016,7 @@
       "description": "Workflow 09 figure: figure_02_database_unique_contribution.pdf",
       "format": "PDF",
       "bytes": 5574,
-      "sha256": "53ad0e07f04b4dd70359c7b4fff41c68c9ec8279e625ad9271071b909d5634d8"
+      "sha256": "f8e6423519c92bf7bb6041839eb767e213f1f5696c7f602cb47e9a3ba898b856"
     },
     {
       "category": "Figure",
@@ -1024,15 +1024,15 @@
       "description": "Workflow 09 figure: figure_03_database_overlap.pdf",
       "format": "PDF",
       "bytes": 456039,
-      "sha256": "a75454a1d0be90da0a53a3d22b27b4dc5b8dbf12745a61102e6e030b1a7c2a3b"
+      "sha256": "0ed1cbacb8c45d8a378c2f3b61cfb3af438ecdaa1b3c6716543dd60e557ab6e8"
     },
     {
       "category": "Figure",
       "path": "docs/reporting/workflow_09/figures/figure_04_publication_year_species.pdf",
       "description": "Workflow 09 figure: figure_04_publication_year_species.pdf",
       "format": "PDF",
-      "bytes": 29883,
-      "sha256": "b45c41becf8c4be39d1a982a5aad429714edf21ecb988c6eea8af32878fe896e"
+      "bytes": 29884,
+      "sha256": "30aa7a0c1da6732984432e12ef784c86f268b9410120f292f5d061e02b212928"
     },
     {
       "category": "Figure",
@@ -1040,23 +1040,23 @@
       "description": "Workflow 09 figure: figure_05_publication_year_topics.pdf",
       "format": "PDF",
       "bytes": 27354,
-      "sha256": "73a1a1afc886e8f7c21cc5ba12a94849cdbb0d57b10555a404b0cb67e9763bbc"
+      "sha256": "1d54b409834003139881668be30ccdc684531d56611052a9c66c392522a617cf"
     },
     {
       "category": "Figure",
       "path": "docs/reporting/workflow_09/figures/figure_06_country_choropleth.pdf",
       "description": "Workflow 09 figure: figure_06_country_choropleth.pdf",
       "format": "PDF",
-      "bytes": 637205,
-      "sha256": "510285c8ce316705bba79bde7c3ede0a6796089950ea857e87b285159605a679"
+      "bytes": 637208,
+      "sha256": "02bfd62570c18f2a0aa4a0b6789b2586cbee44fe8d02e407a72a010dc411f3a9"
     },
     {
       "category": "Figure",
       "path": "docs/reporting/workflow_09/figures/figure_07_country_species.pdf",
       "description": "Workflow 09 figure: figure_07_country_species.pdf",
       "format": "PDF",
-      "bytes": 25865,
-      "sha256": "b86357c774f2efa36fa92dada9191bf21ab764857d2c52adebf3804f0f197b3f"
+      "bytes": 25864,
+      "sha256": "462544642b51597f550b269eef3f4c7938b039354152cc1dda60b995214e0886"
     },
     {
       "category": "Figure",
@@ -1064,15 +1064,15 @@
       "description": "Workflow 09 figure: figure_08_top_level_topics.pdf",
       "format": "PDF",
       "bytes": 24976,
-      "sha256": "b51ce271a7720c17b8ad03a706374a996d7aaa5c0997785bfb1c44542f1c6ffb"
+      "sha256": "9a950a7a9eccfa78c5ad4a2f4784ae95d489828126df88548a725cbf61fcdaf4"
     },
     {
       "category": "Figure",
       "path": "docs/reporting/workflow_09/figures/figure_09_production.pdf",
       "description": "Workflow 09 figure: figure_09_production.pdf",
       "format": "PDF",
-      "bytes": 34795,
-      "sha256": "9d6e69dfe48496a2fbd045041653b608d6e10279d9b821e71d28dbe18948837e"
+      "bytes": 34796,
+      "sha256": "02db26e1376310cfba9f75cee3ff324307cccd2143bab8d326b9900d597e263e"
     },
     {
       "category": "Figure",
@@ -1080,7 +1080,7 @@
       "description": "Workflow 09 figure: figure_10_environment.pdf",
       "format": "PDF",
       "bytes": 32883,
-      "sha256": "4b4f989ba1d7fe247dc375496faf1f8e5a0b3fe6fd13fc0e120632d25ffcf841"
+      "sha256": "4db77ef595583cd16f1aeaf4b26deaba0cfa15a87513cfc439229fed2f2c2685"
     },
     {
       "category": "Figure",
@@ -1088,23 +1088,23 @@
       "description": "Workflow 09 figure: figure_11_methods.pdf",
       "format": "PDF",
       "bytes": 23978,
-      "sha256": "a9f68f8a834466a7be53de07bbaefb833b98ac6910652d78d62c5dd16798d488"
+      "sha256": "8e425445f07349fe3d715313a491dba6e75fbfd380b3c1176985336b3a65c08f"
     },
     {
       "category": "Figure",
       "path": "docs/reporting/workflow_09/figures/figure_12_industry_and_governance.pdf",
       "description": "Workflow 09 figure: figure_12_industry_and_governance.pdf",
       "format": "PDF",
-      "bytes": 25520,
-      "sha256": "558851d9fbc62ef938487143e70b242837b97a66c8e6ea030100fabf9cdfedcf"
+      "bytes": 25521,
+      "sha256": "996730c5939d19347948eed4fbb4e2ddc007e813cd32d4d03e85cba4c872cc3b"
     },
     {
       "category": "Figure",
       "path": "docs/reporting/workflow_09/figures/figure_13_product.pdf",
       "description": "Workflow 09 figure: figure_13_product.pdf",
       "format": "PDF",
-      "bytes": 25712,
-      "sha256": "531320379e0361fced1d9041411cbdc7415392ab3673d0c9dceb3a4c9e40aebf"
+      "bytes": 25714,
+      "sha256": "75b7b4e9decd9291378851a20762055932835f1c5fabf9e0a5323ffdfca5c45f"
     },
     {
       "category": "Figure",
@@ -1112,15 +1112,15 @@
       "description": "Workflow 09 figure: figure_14_people_and_society.pdf",
       "format": "PDF",
       "bytes": 26136,
-      "sha256": "fd6e7972a4637987fd99cbe34e9efa878a8b6e60f5e2fcc4836aae2caf465399"
+      "sha256": "e6142d9bb16d60806b1034315f1403d5d28d4b9fe54de4ffac560b747f633ab0"
     },
     {
       "category": "Figure",
       "path": "docs/reporting/workflow_09/figures/figure_15_inputs_and_resources.pdf",
       "description": "Workflow 09 figure: figure_15_inputs_and_resources.pdf",
       "format": "PDF",
-      "bytes": 24628,
-      "sha256": "a6057ea148018ff0e4520d57af4fda0cdcfe9db82eb6553a3d653e560ea36577"
+      "bytes": 24629,
+      "sha256": "f4f89305e114c7b374ea6736e5675d70551a8d882541f819bb68ed75b6ee4f8a"
     },
     {
       "category": "Figure",
@@ -1128,7 +1128,7 @@
       "description": "Workflow 09 figure: figure_16_umbrella_review.pdf",
       "format": "PDF",
       "bytes": 33087,
-      "sha256": "f1c7d9703bef449e4e83e023e324f64eb78758ff6a2253daa81d82a43d1918a2"
+      "sha256": "51e5d8b73216e351042848cc9f3fd70b26c60e81e364c931a00044c05d404424"
     },
     {
       "category": "Workflow metadata",
@@ -1136,7 +1136,7 @@
       "description": "Compact workflow reporting input: manifest.json",
       "format": "JSON",
       "bytes": 3736,
-      "sha256": "f6649e76db1eb7cdc1d86f1da65d5a651d757143eadce23d7f5c875a1720f096"
+      "sha256": "a921d0df1e403987e91a72480a93430f3e23ff8d25e45214b6e517632e0c0434"
     },
     {
       "category": "Workflow metadata",
@@ -1192,7 +1192,7 @@
       "description": "Compact workflow reporting input: w01_summary.json",
       "format": "JSON",
       "bytes": 605,
-      "sha256": "6ed458a479ae4441c1e2576d0b1ca40da206a0d4970d70dc097de9e704fa471d"
+      "sha256": "020fa0d847cf9a7b3e77dc0be937279fb5834feee677172977f134dd6796107a"
     },
     {
       "category": "Workflow metadata",
@@ -1288,7 +1288,7 @@
       "description": "W10 internal dashboard data payload",
       "format": "JS",
       "bytes": 86918524,
-      "sha256": "f0f1604fd52ffc9bcd3575c2667ae0a81210953e6eff417daa9bf848fb876373"
+      "sha256": "c3446811670ee96b7fe8cc448819c4f347f12e982b79d30bcd16f79a3a396dd1"
     },
     {
       "category": "W10 build artefact",
@@ -1296,7 +1296,7 @@
       "description": "W10 public-projection dashboard data payload",
       "format": "JS",
       "bytes": 51913100,
-      "sha256": "62c75e77f35cbb3a0cb7456068d596202ffb0da6b337b1bb00e4bb7216bc5b6e"
+      "sha256": "f6358cfbfc97bc4dba6a7bf4629e4df95c4a3c9273a1a672d990b53551ac38da"
     },
     {
       "category": "W10 build artefact",
