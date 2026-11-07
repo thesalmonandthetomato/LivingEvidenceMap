@@ -7,16 +7,16 @@ aquaculture?
 
 Our secondary questions are:
 
--   How is research effort distributed across different subfields?
--   Where is the research focused globally?
--   How is research distributed among focal farmed salmon species?
--   How has the thematic composition of the evidence base changed over
-    time? The evidence map has a global scope and includes research on
-    the farming of Atlantic salmon and eligible Pacific salmonids,
-    including rainbow trout. Outcomes are unrestricted and may include
-    direct and indirect biological, ecological, environmental, economic,
-    technological, governance, social, cultural, welfare and
-    public-health outcomes.
+- How is research effort distributed across different subfields?
+- Where is the research focused globally?
+- How is research distributed among focal farmed salmon species?
+- How has the thematic composition of the evidence base changed over
+  time? The evidence map has a global scope and includes research on the
+  farming of Atlantic salmon and eligible Pacific salmonids, including
+  rainbow trout. Outcomes are unrestricted and may include direct and
+  indirect biological, ecological, environmental, economic,
+  technological, governance, social, cultural, welfare and public-health
+  outcomes.
 
 # Methods
 
@@ -37,31 +37,29 @@ classification, and structured human review.
 The principal deviations from the original protocol and subsequent
 methodological developments were:
 
--   Inclusion of all eligible Oncorhynchus mykiss aquaculture research,
-    including freshwater rainbow trout. Differentiating between
-    freshwater and marine populations proved unfeasible at title and
-    abstract.
--   Expansion from the original Lens search to a multi-database search
-    architecture.
--   We combined manual title-and-abstract screening of a substantial
-    proportion of the original search corpus, rather than using
-    machine-learning prioritisation. After the database list was
-    expanded, large language models were used to screen all records,
-    after a demonstrated extremely high rate of agreement with 20,000
-    manual decisions.
--   We made use of additional bibliographic sources to repair and enrich
-    incomplete records before screening and annotation/coding.
--   We developed automated and human-in-the-loop procedures for the
-    screening of subsequent living-map updates, performed at fortnightly
-    intervals.
--   We used a combination of deterministic rules for farmed species
-    annotation, and human-validated large language models for geography
-    and topic coding.
--   Following manual screening, we developed a human-designed,
-    three-level topic ontology to support topic classification of the
-    corpus.
--   We have published versioned outputs, full workflow documentation,
-    and an interactive evidence-map dashboard.
+- Inclusion of all eligible Oncorhynchus mykiss aquaculture research,
+  including freshwater rainbow trout. Differentiating between freshwater
+  and marine populations proved unfeasible at title and abstract.
+- Expansion from the original Lens search to a multi-database search
+  architecture.
+- We combined manual title-and-abstract screening of a substantial
+  proportion of the original search corpus, rather than using
+  machine-learning prioritisation. After the database list was expanded,
+  large language models were used to screen all records, after a
+  demonstrated extremely high rate of agreement with 20,000 manual
+  decisions.
+- We made use of additional bibliographic sources to repair and enrich
+  incomplete records before screening and annotation/coding.
+- We developed automated and human-in-the-loop procedures for the
+  screening of subsequent living-map updates, performed at fortnightly
+  intervals.
+- We used a combination of deterministic rules for farmed species
+  annotation, and human-validated large language models for geography
+  and topic coding.
+- Following manual screening, we developed a human-designed, three-level
+  topic ontology to support topic classification of the corpus.
+- We have published versioned outputs, full workflow documentation, and
+  an interactive evidence-map dashboard.
 
 ## Search strategy
 
@@ -83,22 +81,22 @@ Table 1. Conceptual search strategy
 <col style="width: 50%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Substring number</th>
 <th>Substring</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td>#1</td>
 <td>farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR
 commercial*</td>
 </tr>
-<tr class="even">
+<tr>
 <td>#2</td>
 <td>salmon OR salmonid* OR Salmo OR Oncorhynchus OR “rainbow trout”</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>#3</td>
 <td>#1 AND #2</td>
 </tr>
@@ -109,23 +107,22 @@ The living evidence map was subsequently expanded to retrieve
 bibliographic records independently from seven sources. Five are
 harvested through automated database workflows:
 
--   The Lens
--   OpenAlex
--   Scopus
--   Web of Science (Web of Science Core Collection: Science Citation
-    Index Expanded (SCI-EXPANDED) 1981-present, Social Sciences Citation
-    Index (SSCI) 1981-present, Arts & Humanities Citation Index (AHCI)
-    2017-present, Emerging Sources Citation Index (ESCI) 2005-present;
-    Current Contents Connect; MEDLINE; Preprint Citation Index; Research
-    Commons)
--   AGRICOLA
+- The Lens
+- OpenAlex
+- Scopus
+- Web of Science (Web of Science Core Collection: Science Citation Index
+  Expanded (SCI-EXPANDED) 1981-present, Social Sciences Citation Index
+  (SSCI) 1981-present, Arts & Humanities Citation Index (AHCI)
+  2017-present, Emerging Sources Citation Index (ESCI) 2005-present;
+  Current Contents Connect; MEDLINE; Preprint Citation Index; Research
+  Commons)
+- AGRICOLA
 
 Two further sources are imported from manually exported RIS files
 because they are not harvested through the automated API workflows:
 
--   CAB Abstracts, accessed via CABI Digital Library
--   ProQuest Dissertations & Theses Global (PQD&T), accessed via
-    ProQuest
+- CAB Abstracts, accessed via CABI Digital Library
+- ProQuest Dissertations & Theses Global (PQD&T), accessed via ProQuest
 
 Database-specific implementations were derived from the same underlying
 conceptual search and adapted to the syntax and indexing of each source.
@@ -138,6 +135,27 @@ the project repository.
 The review focuses on academic literature. Grey literature was eligible
 where it formed part of the academic record, including preprints,
 theses, books and book chapters.
+
+### Citation chasing
+
+All records included in the database after a search update in October
+2026 were eligible for citation chasing. Forwards and backwards citation
+chasing was conducted through The Lens and Open Alex using included
+records’ Lens IDs, DOIs, and OpenAlex IDs (in that order of priority).
+All records that were cited by or citing the eligible included records
+were filtered against the search string by combining their ID search
+with {AND (salmon OR salmonid\* OR Salmo OR Oncorhynchus OR “rainbow
+trout”) NOT (farm\* OR cage\* OR pens OR penned OR pen OR aquacultur\*
+OR commercial\* OR maricultur\*)}. This ensured that records from these
+two databases already identified through traditional bibliographic
+searches would not be retrieved. The resulting IDs were then internally
+deduplicated by record ID and retrieved in full, passed through the
+screening and coding pipeline before being added to the canonical
+database. Citation chasing occurs one month in arrears for backwards
+citation chasing - i.e. the monthly update performs backwards citation
+chasing on the records added in the previous month’s update, whilst new
+citations are sought for the full corpus since the last month’s forward
+citation chasing.
 
 ### Comprehensiveness of the search
 
@@ -258,17 +276,17 @@ Table 2. Inclusion criteria for the review
 <col style="width: 50%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Criterion</th>
 <th>Inclusion</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td>Population</td>
 <td>Global scope.</td>
 </tr>
-<tr class="even">
+<tr>
 <td>Phenomenon</td>
 <td>Salmonid farming for the purpose of raising captive fish for
 production, including sea-based open-pen systems, land-based systems,
@@ -277,14 +295,14 @@ commercial or experimental aquaculture systems. Population-enhancement
 hatcheries and ranching are excluded unless an explicit
 aquaculture-production context is present.</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>Phase</td>
 <td>From research and development through feed production, hatchery and
 smolt production, grow-out, harvesting, processing and human
 consumption. Direct and indirect impacts and supply-chain effects are
 eligible.</td>
 </tr>
-<tr class="even">
+<tr>
 <td>Species</td>
 <td>Atlantic salmon (Salmo salar); Chinook salmon (Oncorhynchus
 tshawytscha); coho salmon (O. kisutch); pink salmon (O. gorbuscha);
@@ -293,13 +311,13 @@ keta); and rainbow trout (O. mykiss). Records for which no eligible
 focal species can be assigned are excluded rather than retained under a
 broader unspecified salmonid category.</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>Outcomes</td>
 <td>Any measured or analysed outcome, including biological, ecological,
 environmental, economic, technological, governance, social, cultural,
 welfare and public-health outcomes.</td>
 </tr>
-<tr class="even">
+<tr>
 <td>Study type</td>
 <td>Academic research records meeting the substantive eligibility
 criteria. Eligible publication forms may include journal articles,
@@ -311,22 +329,22 @@ preprints. Non-research and bibliographic artefacts are excluded.</td>
 
 ### Notable exclusions
 
--   Hatchery studies were excluded where it was not clear that fish were
-    being reared for aquaculture rather than for population enhancement,
-    stocking or ranching.
--   Feed, disease, genetics or other studies with potential relevance to
-    aquaculture were excluded where the title or abstract did not
-    establish an explicit farming or aquaculture context.
--   Records referring only to ‘salmonids’ were not assumed to concern
-    eligible farmed species in the absence of sufficient supporting
-    information.
--   Temporary caging of fish for experimental monitoring or exposure
-    studies was excluded unless the cages formed part of an aquaculture
-    facility or the study was explicitly framed as directly relevant to
-    aquaculture.
--   Peer-review reports, reviewer or editor responses, supplementary
-    files, data sheets, library guides and analogous publication
-    artefacts were excluded from the canonical evidence map.
+- Hatchery studies were excluded where it was not clear that fish were
+  being reared for aquaculture rather than for population enhancement,
+  stocking or ranching.
+- Feed, disease, genetics or other studies with potential relevance to
+  aquaculture were excluded where the title or abstract did not
+  establish an explicit farming or aquaculture context.
+- Records referring only to ‘salmonids’ were not assumed to concern
+  eligible farmed species in the absence of sufficient supporting
+  information.
+- Temporary caging of fish for experimental monitoring or exposure
+  studies was excluded unless the cages formed part of an aquaculture
+  facility or the study was explicitly framed as directly relevant to
+  aquaculture.
+- Peer-review reports, reviewer or editor responses, supplementary
+  files, data sheets, library guides and analogous publication artefacts
+  were excluded from the canonical evidence map.
 
 ### Manual screening and validation
 

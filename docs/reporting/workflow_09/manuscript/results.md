@@ -42,7 +42,7 @@ screening comparisons were available. The cumulative raw agreement was
 <col style="width: 14%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th style="text-align: left;">Date</th>
 <th style="text-align: right;">Records</th>
 <th style="text-align: right;">Substantive comparisons</th>
@@ -51,14 +51,14 @@ screening comparisons were available. The cumulative raw agreement was
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td style="text-align: left;">26-09-2026</td>
 <td style="text-align: right;">22,198</td>
 <td style="text-align: right;">21,950</td>
 <td style="text-align: right;">96.8%</td>
 <td style="text-align: right;">0.922</td>
 </tr>
-<tr class="even">
+<tr>
 <td style="text-align: left;"><em>Cumulative</em></td>
 <td style="text-align: right;">22,198</td>
 <td style="text-align: right;">21,950</td>
@@ -195,16 +195,17 @@ records.</em></figcaption>
 
 ### Production
 
-Production research was centred on fish performance and biology, fish
-health, feed and nutrition, breeding and reproduction, and stress and
-mortality. The most frequently assigned terminal topic was Physiology,
-metabolism and biological responses (7,477 records; 27.0%), followed by
-Growth and development (4,839; 17.5%). Other major concentrations
-included Alternative feed ingredients (2,532; 9.1%), Feed additives and
-supplements (2,515; 9.1%), Other diseases - Prevention and treatment
-(2,478; 8.9%) and Anatomy and tissues (2,008; 7.2%). Sea lice remained a
-substantial research cluster, including 850 records on Sea lice control
-and treatment and 598 on Sea lice epidemiology.
+Production accounted for 21,291 records (76.8% of the full evidence
+map). Its leading Level 2 categories were Fish performance and biology
+(10,952 records; 51.4%), Fish health (9,424 records; 44.3%), and Feed
+and nutrition (6,701 records; 31.5%). Among these, the leading Level 3
+topics were Fish performance and biology &gt; Physiology, metabolism and
+biological responses (7,477 records; 35.1%), Fish performance and
+biology &gt; Growth and development (4,839 records; 22.7%), Feed and
+nutrition &gt; Alternative feed ingredients (2,532 records; 11.9%), Feed
+and nutrition &gt; Feed additives and supplements (2,515 records;
+11.8%), and Fish health &gt; Other diseases - Prevention and treatment
+(2,478 records; 11.6%).
 
 <figure>
 <img
@@ -217,10 +218,17 @@ theme.</em></figcaption>
 
 ### Environment
 
-Environmental research was concentrated in Physiology, metabolism and
-biological responses (7,477; 27.0%), Growth and development (4,839;
-17.5%), Alternative feed ingredients (2,532; 9.1%) and Feed additives
-and supplements (2,515; 9.1%).
+Environment accounted for 5,987 records (21.6% of the full evidence
+map). Its leading Level 2 categories were Environmental stressors (1,781
+records; 29.7%), Waste and emissions (1,697 records; 28.3%), Wild
+populations and ecosystems (1,582 records; 26.4%), Environmental
+management (1,305 records; 21.8%), and Physical environment (1,214
+records; 20.3%). Among these, the leading Level 3 topics were
+Environmental stressors &gt; Water and ocean conditions (1,545 records;
+25.8%), Waste and emissions &gt; Nutrients and organic waste (1,282
+records; 21.4%), Wild populations and ecosystems &gt; Biodiversity and
+ecosystem effects (1,216 records; 20.3%), and Environmental management
+&gt; Monitoring and assessment (977 records; 16.3%).
 
 <figure>
 <img
@@ -233,10 +241,14 @@ theme.</em></figcaption>
 
 ### Methods
 
-Methods research was dominated by Physiology, metabolism and biological
-responses (7,477; 27.0%), followed by Growth and development (4,839;
-17.5%), Alternative feed ingredients (2,532; 9.1%) and Feed additives
-and supplements (2,515; 9.1%).
+Methods accounted for 3,034 records (10.9% of the full evidence map).
+Its leading Level 2 categories were Methodological research (3,034
+records; 100.0%). Among these, the leading Level 3 topics were
+Methodological research &gt; Diagnostic and laboratory methods (1,644
+records; 54.2%), Methodological research &gt; Statistical and modelling
+methods (806 records; 26.6%), Methodological research &gt; Monitoring
+and sampling methods (570 records; 18.8%), and Methodological research
+&gt; Sensors, imaging and measurement methods (469 records; 15.5%).
 
 <figure>
 <img
@@ -249,11 +261,18 @@ theme.</em></figcaption>
 
 ### Industry and governance
 
-Within Industry and governance, Physiology, metabolism and biological
-responses was the largest terminal topic (7,477; 27.0%), followed by
-Growth and development (4,839; 17.5%), Alternative feed ingredients
-(2,532; 9.1%), Feed additives and supplements (2,515; 9.1%) and Other
-diseases - Prevention and treatment (2,478; 8.9%).
+Industry and governance accounted for 3,133 records (11.3% of the full
+evidence map). Its leading Level 2 categories were Governance and policy
+(1,290 records; 41.2%), Economics and performance (1,195 records;
+38.1%), Sector development (838 records; 26.7%), and Markets, trade and
+value chains (827 records; 26.4%). Among these, the leading Level 3
+topics were Governance and policy &gt; Policy and regulation (1,094
+records; 34.9%), Economics and performance &gt; Costs and profitability
+(709 records; 22.6%), Sector development &gt; History and regional
+development (595 records; 19.0%), Economics and performance &gt;
+Economic risk, valuation and impact (547 records; 17.5%), and Markets,
+trade and value chains &gt; Supply, demand and prices (540 records;
+17.2%).
 
 <figure>
 <img
@@ -266,11 +285,16 @@ theme.</em></figcaption>
 
 ### Product
 
-Product research was led by Physiology, metabolism and biological
-responses (7,477; 27.0%), Growth and development (4,839; 17.5%) and
-Alternative feed ingredients (2,532; 9.1%). Feed additives and
-supplements and Other diseases - Prevention and treatment were also
-prominent.
+Product accounted for 3,207 records (11.6% of the full evidence map).
+Its leading Level 2 categories were Composition and nutritional value
+(1,645 records; 51.3%), Fillet and carcass quality (1,131 records;
+35.3%), Food safety (576 records; 18.0%), Processing and preservation
+(463 records; 14.4%), and Sensory quality (437 records; 13.6%). Among
+these, the leading Level 3 topics were Composition and nutritional value
+&gt; Nutritional composition (1,105 records; 34.5%), Fillet and carcass
+quality &gt; Physical and visual quality (838 records; 26.1%), and
+Composition and nutritional value &gt; Contaminants and residues (606
+records; 18.9%).
 
 <figure>
 <img
@@ -283,19 +307,14 @@ theme.</em></figcaption>
 
 ### People and society
 
-People and society was much smaller than the Production and Environment
-evidence bases. The largest terminal topics were Physiology, metabolism
-and biological responses (7,477; 27.0%), Growth and development (4,839;
-17.5%) and Alternative feed ingredients (2,532; 9.1%). Topics relating
-to Employment and job creation, Local and rural development, Livelihoods
-and income, Indigenous peoples and rights, Food availability and
-nutritional security, Culture, identity and traditions, Working
-conditions and occupational health, Distribution of benefits and harms,
-Local and Indigenous knowledge, Displacement, disruption and wellbeing,
-Multiple or general social impacts, Environmental justice and human
-rights, Health impacts of aquaculture, Competition with other food uses,
-Labour rights, exploitation and migration, and Affordability and access
-each represented under 0.5% of the full evidence map.
+People and society accounted for 1,152 records (4.2% of the full
+evidence map). Its leading Level 2 categories were Communities and
+livelihoods (430 records; 37.3%), Culture and knowledge (317 records;
+27.5%), and Public health (308 records; 26.7%). Among these, the leading
+Level 3 topics were Public health &gt; Antimicrobial resistance and One
+Health (295 records; 25.6%), Communities and livelihoods &gt; Conflict
+and social licence (271 records; 23.5%), and Culture and knowledge &gt;
+Public discourse and representation (246 records; 21.4%).
 
 <figure>
 <img
@@ -308,12 +327,15 @@ theme.</em></figcaption>
 
 ### Inputs and resources
 
-Inputs and resources was the smallest high-level theme. Physiology,
-metabolism and biological responses accounted for 7,477 records (27.0%)
-and was more common than Growth and development (4,839; 17.5%), and
-Alternative feed ingredients (2,532; 9.1%). Affordability and access and
-Therapeutants and chemicals were represented in only 12 (&lt;0.1%) and 9
-(&lt;0.1%) records, respectively.
+Inputs and resources accounted for 950 records (3.4% of the full
+evidence map). Its leading Level 2 categories were Circularity (714
+records; 75.2%), Feed-resource supply (195 records; 20.5%), and Farm
+inputs (121 records; 12.7%). Among these, the leading Level 3 topics
+were Circularity &gt; By-products and waste as inputs (651 records;
+68.5%), Circularity &gt; Resource efficiency (119 records; 12.5%),
+Feed-resource supply &gt; Novel feed resources (104 records; 10.9%),
+Circularity &gt; Nutrient recovery (93 records; 9.8%), and Feed-resource
+supply &gt; Marine feed resources (86 records; 9.1%).
 
 <figure>
 <img
@@ -340,9 +362,9 @@ biological responses (27.0% of mapped records), Growth and development
 
 Social research was particularly weakly represented in the
 systematic-review literature. In the final canonical map, Antimicrobial
-resistance and One Health accounts for 27.0% of records, Conflict and
-social licence for 17.5%, and Public discourse and representation for
-9.1%; the umbrella review includes one review on antimicrobial
+resistance and One Health accounts for 1.1% of records, Conflict and
+social licence for 1.0%, and Public discourse and representation for
+0.9%; the umbrella review includes one review on antimicrobial
 resistance/One Health and none in most of the other social categories.
 Overall, the comparison continues to indicate that the systematic-review
 evidence covers a narrower subset of the topics represented across the

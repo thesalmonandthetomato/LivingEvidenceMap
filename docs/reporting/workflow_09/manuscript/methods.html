@@ -1324,6 +1324,7 @@ if (window.hljs) {
 div.csl-bib-body { }
 div.csl-entry {
 clear: both;
+margin-bottom: 0em;
 }
 .hanging div.csl-entry {
 margin-left:2em;
@@ -1638,6 +1639,27 @@ records in the project repository.</p>
 <p>The review focuses on academic literature. Grey literature was
 eligible where it formed part of the academic record, including
 preprints, theses, books and book chapters.</p>
+</div>
+<div id="citation-chasing" class="section level3">
+<h3>Citation chasing</h3>
+<p>All records included in the database after a search update in October
+2026 were eligible for citation chasing. Forwards and backwards citation
+chasing was conducted through The Lens and Open Alex using included
+records’ Lens IDs, DOIs, and OpenAlex IDs (in that order of priority).
+All records that were cited by or citing the eligible included records
+were filtered against the search string by combining their ID search
+with {AND (salmon OR salmonid* OR Salmo OR Oncorhynchus OR “rainbow
+trout”) NOT (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR
+commercial* OR maricultur*)}. This ensured that records from these two
+databases already identified through traditional bibliographic searches
+would not be retrieved. The resulting IDs were then internally
+deduplicated by record ID and retrieved in full, passed through the
+screening and coding pipeline before being added to the canonical
+database. Citation chasing occurs one month in arrears for backwards
+citation chasing - i.e. the monthly update performs backwards citation
+chasing on the records added in the previous month’s update, whilst new
+citations are sought for the full corpus since the last month’s forward
+citation chasing.</p>
 </div>
 <div id="comprehensiveness-of-the-search" class="section level3">
 <h3>Comprehensiveness of the search</h3>
@@ -2056,7 +2078,7 @@ evidence database was calculated for comparison.</p>
 </div>
 <div id="bibliography" class="section level1 unnumbered">
 <h1 class="unnumbered">References</h1>
-<div id="refs" class="references csl-bib-body hanging-indent">
+<div id="refs" class="references csl-bib-body hanging-indent" entry-spacing="0">
 <div id="ref-haddaway2018roses" class="csl-entry">
 Haddaway, Neal R, Biljana Macura, Paul Whaley, and Andrew S Pullin.
 2018. <span>“ROSES RepOrting Standards for Systematic Evidence
