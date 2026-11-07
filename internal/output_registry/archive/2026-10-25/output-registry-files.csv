@@ -51,6 +51,6 @@
 "Workflow metadata","docs/reporting/workflow_09/data/workflow_inputs/w08_source_summary.csv","Compact workflow reporting input: w08_source_summary.csv","CSV",1112,"a334da3237e1b1a1b988d071f9a1ad7ec56bc5376dda5f2c2338d819762a1b14"
 "Workflow metadata","docs/reporting/workflow_09/data/workflow_inputs/w08_summary.json","Compact workflow reporting input: w08_summary.json","JSON",906,"38f9ac7f64e455e357cf6bcd0d67e4bb9976b0cf0d9bcac37ac0062e14a4f7ff"
 "W10 build artefact","outputs/workflow10/living_evidence_map-internal.csv","W10 internal dashboard source table","CSV",55189179,"dba1746c0ca471441ccc36da7210dd588049bebdc0b427b409b39015dc6a20fa"
-"W10 build artefact","outputs/workflow10/dashboard-internal-data.js","W10 internal dashboard data payload","JS",86918524,"a5f079fed215901440a4d0cd46c0d068ace09b43caa3e6ac4aa43547ab078371"
-"W10 build artefact","outputs/workflow10/dashboard-data.js","W10 public-projection dashboard data payload","JS",51913100,"f5c17415809d0b524e0b191fc44f441df6ef490d82d6d8def5c3adaeac7ca430"
+"W10 build artefact","outputs/workflow10/dashboard-internal-data.js","W10 internal dashboard data payload","JS",86918524,"532fcd10e10b5cb62f4f1d7398b9f0ada4f9063fdf0510c9538a076b6d28a472"
+"W10 build artefact","outputs/workflow10/dashboard-data.js","W10 public-projection dashboard data payload","JS",51913100,"f743fd82934d65004a0731cfad53904899213d4ef9851c4eec76b625796e7c6c"
 "W10 build artefact","outputs/workflow10/index.html","W10 dashboard HTML build","HTML",66868,"0cf0d41b4b0a5abbdf5db740a14f85837f7e8280b68439afc0013684dd892899"
