@@ -1,0 +1,119 @@
+name: W01-Fast saved-state delta acceptance
+on:
+  push:
+    branches: [w01-fast-integration]
+    paths:
+      - '.github/workflows/w01_fast_saved_state_delta.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: w01-fast-saved-state-delta
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 43
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: w01-fast-integration
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+      - name: Install minimal W01 processing dependencies
+        shell: Rscript {0}
+        run: install.packages(c("data.table","jsonlite","digest","httr2","readr","stringdist","stringi","xml2","yaml"))
+      - name: Recover verified October preparation checkpoint (not Zenodo restoration)
+        uses: actions/download-artifact@v4
+        with:
+          name: w01-fast-frozen-prepare-39643422706
+          run-id: 39643422706
+          repository: thesalmonandthetomato/LivingEvidenceMap
+          github-token: ${{ github.token }}
+          path: .
+      - name: Validate frozen prepared inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f previous_state/canonical/records.jsonl
+          test -f previous_state/canonical/canonical_manifest.json
+          test -f outputs/workflow01_candidates/normalised_metadata.csv
+          test -f outputs/workflow01_union/source_inputs.json
+          test -f previous_state/workflow01_full_five_source/final_pair_decisions.csv
+      - name: W01-Fast scoring phase
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/experimental_w01_fast/run_full_incremental_update.R \
+            --phase scoring \
+            --metadata outputs/workflow01_candidates/normalised_metadata.csv \
+            --prior-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
+            --previous-decisions previous_state/workflow01_full_five_source/final_pair_decisions.csv \
+            --source-manifest outputs/workflow01_union/source_inputs.json \
+            --current-seed-root outputs/workflow01_union \
+            --prior-canonical previous_state/canonical/records.jsonl \
+            --previous-root previous_state \
+            --previous-pointer docs/deduplication/zenodo/run-39140209398.json \
+            --strip-actions previous_state/workflow01_full_five_source/abstract_strip_actions.jsonl \
+            --repairs previous_state/provenance/cumulative_data_quality_repairs.jsonl \
+            --output-dir outputs/experimental_w01_fast/saved_state_delta
+      - name: W01-Fast canonical phase
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/experimental_w01_fast/run_full_incremental_update.R \
+            --phase canonical \
+            --metadata outputs/workflow01_candidates/normalised_metadata.csv \
+            --prior-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
+            --previous-decisions previous_state/workflow01_full_five_source/final_pair_decisions.csv \
+            --source-manifest outputs/workflow01_union/source_inputs.json \
+            --current-seed-root outputs/workflow01_union \
+            --prior-canonical previous_state/canonical/records.jsonl \
+            --previous-root previous_state \
+            --previous-pointer docs/deduplication/zenodo/run-39140209398.json \
+            --strip-actions previous_state/workflow01_full_five_source/abstract_strip_actions.jsonl \
+            --repairs previous_state/provenance/cumulative_data_quality_repairs.jsonl \
+            --output-dir outputs/experimental_w01_fast/saved_state_delta
+      - name: Build and replay original production delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/experimental_w01_fast/run_full_incremental_update.R \
+            --phase delta \
+            --metadata outputs/workflow01_candidates/normalised_metadata.csv \
+            --prior-map previous_state/workflow01_full_five_source/manifestation_cluster_map.csv \
+            --previous-decisions previous_state/workflow01_full_five_source/final_pair_decisions.csv \
+            --source-manifest outputs/workflow01_union/source_inputs.json \
+            --current-seed-root outputs/workflow01_union \
+            --prior-canonical previous_state/canonical/records.jsonl \
+            --previous-root previous_state \
+            --previous-pointer docs/deduplication/zenodo/run-39140209398.json \
+            --strip-actions previous_state/workflow01_full_five_source/abstract_strip_actions.jsonl \
+            --repairs previous_state/provenance/cumulative_data_quality_repairs.jsonl \
+            --output-dir outputs/experimental_w01_fast/saved_state_delta
+      - name: Verify replay artifact and expected frozen counts
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          b <- 'outputs/experimental_w01_fast/saved_state_delta'
+          d <- fromJSON(file.path(b,'delta','delta_manifest.json'))
+          m <- fromJSON(file.path(b,'production_canonical','canonical_manifest.json'))
+          stopifnot(d$schema=='living-evidence-map-workflow01-delta-v1',
+                    m$source_manifestations==136057L,
+                    m$records==50567L,
+                    file.exists(file.path(b,'replayed','canonical','records.jsonl')))
+          cat('PASS: actual frozen October W01-Fast delta and replay\\n')
+      - name: Upload bounded audit only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: w01-fast-saved-state-delta-${{ github.run_id }}
+          path: |
+            outputs/experimental_w01_fast/saved_state_delta/run_report.json
+            outputs/experimental_w01_fast/saved_state_delta/delta/delta_manifest.json
+            outputs/experimental_w01_fast/saved_state_delta/production_canonical/canonical_manifest.json
+          retention-days: 7
+          if-no-files-found: warn
