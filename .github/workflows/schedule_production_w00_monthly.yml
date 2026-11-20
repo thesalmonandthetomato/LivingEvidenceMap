@@ -2,40 +2,79 @@ name: Schedule production W00 monthly update
 
 on:
   schedule:
-    # 09:00 Europe/London: 08:00 UTC during BST, 09:00 UTC during GMT.
-    - cron: '0 8,9 19 * *'
+    # Monthly retry ticks on the 19th; any time that London calendar day is valid.
+    # GitHub schedule runs may be delayed or occasionally dropped.
+    - cron: '0 9,15,21 19 * *'
+    # One-off November 2026 catch-up test: first attempt 14:00 GMT on 20 Nov,
+    # with later same-day fallback ticks. The year is checked below.
+    - cron: '0 14,17,20 20 11 *'
   workflow_dispatch:
 
 permissions:
   actions: write
   contents: read
 
+# Ensure retries cannot dispatch simultaneously within this repository.
+concurrency:
+  group: production-monthly-w00-dispatch
+  cancel-in-progress: false
+
 jobs:
   dispatch-production-w00:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Dispatch only at 09:00 Europe/London
+      - name: Dispatch once within the permitted London date
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           EVENT_NAME: ${{ github.event_name }}
+          SCHEDULE: ${{ github.event.schedule }}
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$EVENT_NAME" == "schedule" ]] && [[ "$(TZ=Europe/London date +%H)" != "09" ]]; then
-            echo "Not 09:00 Europe/London; this UTC schedule tick is intentionally skipped."
-            exit 0
+
+          # The regular monthly schedule has a 24-hour London-calendar-day
+          # window (00:00 through 23:59 on the 19th), not a specific hour.
+          # The catch-up test is restricted to 20 November 2026.
+          LONDON_DATE="$(TZ=Europe/London date +%Y-%m-%d)"
+          LONDON_DAY="$(TZ=Europe/London date +%d)"
+          LONDON_MONTH="$(TZ=Europe/London date +%Y-%m)"
+          if [[ "$EVENT_NAME" == "schedule" ]]; then
+            case "$SCHEDULE" in
+              '0 9,15,21 19 * *')
+                if [[ "$LONDON_DAY" != "19" ]]; then
+                  echo "::notice::Monthly dispatch tick arrived outside the permitted 19th (London); no dispatch."
+                  exit 0
+                fi
+                ;;
+              '0 14,17,20 20 11 *')
+                if [[ "$LONDON_DATE" != "2026-11-20" ]]; then
+                  echo "::notice::One-off catch-up test only runs on 20 November 2026; no dispatch."
+                  exit 0
+                fi
+                ;;
+              *)
+                echo "::error::Unrecognised scheduler event: $SCHEDULE"
+                exit 1
+                ;;
+            esac
           fi
-          if [[ "$EVENT_NAME" == "schedule" ]] && [[ "$(TZ=Europe/London date +%d)" != "19" ]]; then
-            echo "Not the 19th in London; skip."
+
+          # Refuse to launch a second production W00 on the 19th/20th of the
+          # same month. This intentionally treats any W00 workflow_dispatch on
+          # the production branch since the 19th as an existing update.
+          PERIOD_START="$(TZ=Europe/London date -d "$LONDON_MONTH-19 00:00:00" +%s)"
+          PERIOD_START_ISO="$(date -u -d "@$PERIOD_START" +%Y-%m-%dT%H:%M:%SZ)"
+          RUNS="$(gh api "repos/$GH_REPO/actions/workflows/workflow_00_search_orchestrator.yml/runs?branch=workflow01-final-architecture&event=workflow_dispatch&per_page=100")"
+          EXISTING="$(jq -r --arg start "$PERIOD_START_ISO"             '[.workflow_runs[] | select(.created_at >= $start)] | length' <<<"$RUNS")"
+          if [[ "$EXISTING" -gt 0 ]]; then
+            echo "::notice::Production W00 already dispatched this month ($EXISTING run(s) since $PERIOD_START_ISO). No duplicate."
+            echo "Monthly W00: already dispatched; no duplicate launched." >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
-          # A scheduled event runs on main; this explicitly dispatches the
-          # separate, established production workflow on its own branch.
-          gh api --method POST \
-            "repos/$GH_REPO/actions/workflows/workflow_00_search_orchestrator.yml/dispatches" \
-            -f ref='workflow01-final-architecture' \
-            -f 'inputs[run_type]=monthly'
-          echo "Dispatched monthly W00 on workflow01-final-architecture."
+          gh api --method POST             "repos/$GH_REPO/actions/workflows/workflow_00_search_orchestrator.yml/dispatches"             -f ref='workflow01-final-architecture'             -f 'inputs[run_type]=monthly'
+
+          echo "Dispatched monthly W00 on workflow01-final-architecture at $(date -u +%Y-%m-%dT%H:%M:%SZ)."
+          echo "Monthly W00: dispatched on protected production branch; W01 follows W00 success." >> "$GITHUB_STEP_SUMMARY"
