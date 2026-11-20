@@ -1,0 +1,19 @@
+name: Validate monthly W00 scheduler (offline)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/schedule_production_w00_monthly.yml'
+      - 'scripts/validation/test_monthly_scheduler.py'
+      - '.github/workflows/validate_monthly_scheduler.yml'
+permissions:
+  contents: read
+jobs:
+  validate-scheduler:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate scheduled dispatch without GitHub API writes
+        run: python3 scripts/validation/test_monthly_scheduler.py
