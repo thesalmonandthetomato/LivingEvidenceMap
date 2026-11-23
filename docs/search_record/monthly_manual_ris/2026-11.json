@@ -1,0 +1,29 @@
+{
+  "schema": "living-evidence-map-monthly-manual-ris-supplement-v1",
+  "update_month": "2026-11",
+  "authoritative_w00_run_id": "45130154568",
+  "authoritative_w00_doi": "10.5281/zenodo.24458095",
+  "manual_ris_processing_stage": "W01 preparation (following completed W00 API archive)",
+  "status": "restricted_zenodo_drafts_validated_without_publication",
+  "sources": {
+    "cab": {
+      "zenodo_doi": "10.5281/zenodo.24461555",
+      "zenodo_deposition_id": "24461555",
+      "ris_filename": "cabi_20260585823.ris",
+      "parsed_rows": 290,
+      "unique_records_for_handover": 290,
+      "exact_duplicate_rows_removed": 0
+    },
+    "proquest": {
+      "zenodo_doi": "10.5281/zenodo.24461375",
+      "zenodo_deposition_id": "24461375",
+      "ris_filename": "ProQuestDocuments-2026-11-23.ris",
+      "parsed_rows": 6,
+      "unique_records_for_handover": 6,
+      "exact_duplicate_rows_removed": 0
+    }
+  },
+  "validation_method": "scripts/updater/workflow_00_complete_ris_zenodo_draft.R --validate-only true",
+  "validation_result": "PASS for both sources, no Zenodo write or publication performed",
+  "note": "W00 API archive remains immutable. The two validated restricted manual RIS drafts are incorporated into the November W01 handoff using user_input/monthly_manual_ris.json; W01 must not proceed if either fails validation."
+}
