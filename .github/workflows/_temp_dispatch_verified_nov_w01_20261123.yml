@@ -1,0 +1,55 @@
+name: TEMP Dispatch verified November W01 restart
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/_temp_dispatch_verified_nov_w01_20261123.yml']
+permissions:
+  actions: write
+  contents: write
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Dispatch W01 from existing approved November W00 and previous baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          started="$(date -u +%s)"
+          gh workflow run workflow_01_production.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref workflow01-final-architecture \
+            -f workflow00_pointer_path='docs/search_record/zenodo/run-45130154568.json' \
+            -f previous_workflow01_pointer_path='docs/deduplication/zenodo/run-40218882441.json' \
+            -f model='gpt-5.6-luna' \
+            -f auto_threshold='0.95' \
+            -f max_llm_cases='5000'
+          echo "W01_DISPATCH_SENT_FOR_EXISTING_W00_45130154568"
+          result=''
+          for i in {1..20}; do
+            sleep 4
+            runs="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow workflow_01_production.yml --limit 12 --json databaseId,createdAt,event,status,headBranch)"
+            result="$(STARTED="$started" RUNS="$runs" python3 - <<'PY'
+          import json,os,datetime
+          start=int(os.environ['STARTED'])
+          for run in json.loads(os.environ['RUNS']):
+              ts=int(datetime.datetime.fromisoformat(run['createdAt'].replace('Z','+00:00')).timestamp())
+              if run['event']=='workflow_dispatch' and ts>=start-10 and run.get('headBranch')=='workflow01-final-architecture':
+                  print(run['databaseId']);break
+          PY
+            )"
+            if [ -n "$result" ]; then break; fi
+          done
+          test -n "$result" || { echo "W01_RUN_ID_NOT_DETECTED" >&2; exit 3; }
+          echo "W01_NEW_RUN_ID=$result"
+          W01_RUN="$result" python3 - <<'PY'
+          import os,json,base64,urllib.request
+          x={'w01_run_id':int(os.environ['W01_RUN']),'w00_run_id':45130154568,'branch':'workflow01-final-architecture','manual_drafts':{'cab':'10.5281/zenodo.24461555','proquest':'10.5281/zenodo.24461375'},'note':'W01 dispatched after validated union fix and November draft checks.'}
+          content=base64.b64encode(json.dumps(x,indent=2).encode()).decode()
+          url=f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/contents/docs/.temp_w01_restart_receipt_20261123.json"
+          body=json.dumps({'message':'TEMP record verified November W01 dispatch run ID','content':content,'branch':'workflow01-final-architecture'}).encode()
+          req=urllib.request.Request(url,data=body,method='PUT',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','Content-Type':'application/json'})
+          with urllib.request.urlopen(req,timeout=30) as r:print('W01_RECEIPT_WRITTEN',r.status)
+          PY
