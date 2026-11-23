@@ -28,6 +28,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
+          set +e
           set -uo pipefail
           mkdir -p /tmp/w01_test
           (
