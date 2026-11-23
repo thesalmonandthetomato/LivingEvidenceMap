@@ -1,0 +1,56 @@
+name: TEMP Withdraw superseded unauthorised Zenodo record
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/_temp_withdraw_old_zenodo_20261123.yml']
+permissions:
+  contents: write
+jobs:
+  withdraw:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Delete only old unauthorised deposit, preserve DOI tombstone and authoritative replacement
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,json,urllib.request,urllib.error,base64
+          old_id,new_id=24457352,24458095
+          base='https://zenodo.org/api/records/'
+          headers={'Authorization':'Bearer '+os.environ['ZENODO_ACCESS_TOKEN'],'Accept':'application/json'}
+          def get_record(id):
+              with urllib.request.urlopen(urllib.request.Request(base+str(id),headers=headers),timeout=30) as resp:
+                  return json.load(resp)
+          old=get_record(old_id)
+          new=get_record(new_id)
+          assert old['metadata']['title']=='Living Evidence Map search archive | monthly | Workflow 00 run 44821779121'
+          assert new['metadata']['title']=='Living Evidence Map search archive | monthly | Workflow 00 run 45130154568'
+          assert old['status']=='published' and new['status']=='published'
+          payload={'removal_reason':{'id':'replaced'},'note':'Withdrawn: unauthorised, methodologically superseded November search archive. Replaced by authorised full WoS TS expansion and monthly update, DOI 10.5281/zenodo.24458095.'}
+          req=urllib.request.Request(old['links']['self'],data=json.dumps(payload).encode(),method='DELETE',headers={**headers,'Content-Type':'application/json'})
+          result={'old_id':old_id,'authoritative_new_id':new_id,'method':'DELETE','reason':'replaced'}
+          try:
+              with urllib.request.urlopen(req,timeout=60) as resp:
+                  result['delete_http_status']=resp.status
+                  result['delete_response_excerpt']=resp.read(1500).decode('utf-8','replace')
+          except urllib.error.HTTPError as e:
+              result['delete_http_status']=e.code
+              result['delete_response_excerpt']=e.read(1800).decode('utf-8','replace')
+          try:
+              with urllib.request.urlopen(urllib.request.Request(base+str(old_id),headers=headers),timeout=30) as resp:
+                  obj=json.load(resp)
+                  result['after_status']=obj.get('status')
+                  result['after_http_status']=resp.status
+          except urllib.error.HTTPError as e:
+              result['after_http_status']=e.code
+          print('ZENODO_WITHDRAWAL_RESULT',json.dumps(result),flush=True)
+          out=base64.b64encode(json.dumps(result,indent=2).encode()).decode()
+          url=f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/contents/docs/.old_zenodo_withdrawal_20261123.json"
+          dat=json.dumps({'message':'TEMP audit superseded Zenodo record withdrawal result','content':out,'branch':'workflow01-final-architecture'}).encode()
+          r=urllib.request.Request(url,data=dat,method='PUT',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','Content-Type':'application/json'})
+          with urllib.request.urlopen(r,timeout=30) as x:print('WITHDRAWAL_RECEIPT_WRITTEN',x.status)
+          PY
