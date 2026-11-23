@@ -1,6 +1,5 @@
 ebsco_africa_wide:00149357
 ebsco_africa_wide:01137026
-ebsco_africa_wide:01323369
 ebsco_africa_wide:01439898
 ebsco_africa_wide:02221179
 ebsco_africa_wide:02343452
@@ -28,11 +27,9 @@ ebsco_africa_wide:1238293
 ebsco_africa_wide:12636297
 ebsco_africa_wide:12875385
 ebsco_africa_wide:12946013
-ebsco_africa_wide:12967170
 ebsco_africa_wide:1298541
 ebsco_africa_wide:1319333
 ebsco_africa_wide:1377213
-ebsco_africa_wide:1383361
 ebsco_africa_wide:1392904
 ebsco_africa_wide:1395153
 ebsco_africa_wide:1401776-1
@@ -67,7 +64,6 @@ ebsco_africa_wide:1712224
 ebsco_africa_wide:1721644
 ebsco_africa_wide:1722009
 ebsco_africa_wide:17260833
-ebsco_africa_wide:1727502
 ebsco_africa_wide:17370539
 ebsco_africa_wide:17401596
 ebsco_africa_wide:17418885
@@ -92,8 +88,6 @@ ebsco_africa_wide:1874327
 ebsco_africa_wide:1875695
 ebsco_africa_wide:18924375
 ebsco_africa_wide:19014685
-ebsco_africa_wide:1906391
-ebsco_africa_wide:1908646
 ebsco_africa_wide:19754951
 ebsco_africa_wide:19866945
 ebsco_africa_wide:2000-00005178663
@@ -124,7 +118,6 @@ ebsco_africa_wide:22739372
 ebsco_africa_wide:22905164
 ebsco_africa_wide:22931895
 ebsco_africa_wide:23094868
-ebsco_africa_wide:232540
 ebsco_africa_wide:233682-1
 ebsco_africa_wide:23460861
 ebsco_africa_wide:234720-1
@@ -272,7 +265,6 @@ ebsco_africa_wide:368659
 ebsco_africa_wide:368814
 ebsco_africa_wide:36906938
 ebsco_africa_wide:37118604
-ebsco_africa_wide:372819
 ebsco_africa_wide:37293843
 ebsco_africa_wide:37347729
 ebsco_africa_wide:37463774
@@ -291,7 +283,6 @@ ebsco_africa_wide:394508
 ebsco_africa_wide:40028206
 ebsco_africa_wide:40130537
 ebsco_africa_wide:401951
-ebsco_africa_wide:40338041
 ebsco_africa_wide:40560983
 ebsco_africa_wide:40650106
 ebsco_africa_wide:40679555
@@ -311,13 +302,10 @@ ebsco_africa_wide:41561112
 ebsco_africa_wide:41608997
 ebsco_africa_wide:41702960
 ebsco_africa_wide:41892271
-ebsco_africa_wide:41965826
-ebsco_africa_wide:42019245
 ebsco_africa_wide:42027247
 ebsco_africa_wide:42071307
 ebsco_africa_wide:42076719
 ebsco_africa_wide:421536
-ebsco_africa_wide:42292292
 ebsco_africa_wide:423006
 ebsco_africa_wide:425482
 ebsco_africa_wide:425496
@@ -414,13 +402,11 @@ ebsco_africa_wide:TCHA-1290593
 ebsco_africa_wide:TCHA-1332927
 ebsco_africa_wide:TCHA-1403366
 ebsco_africa_wide:TCHA-1586399
-ebsco_africa_wide:TCHA-1804632
 ebsco_africa_wide:TCHA-19050
 ebsco_africa_wide:TCHA-248267
 ebsco_africa_wide:TCHA-255025
 ebsco_africa_wide:TCHA-297932
 ebsco_africa_wide:TCHA-299202
-ebsco_africa_wide:TCHA-30201
 ebsco_africa_wide:TCHA-302119
 ebsco_africa_wide:TCHA-302174
 ebsco_africa_wide:TCHA-302212
@@ -440,7 +426,6 @@ ebsco_africa_wide:TCHA-411231
 ebsco_africa_wide:TCHA-475976
 ebsco_africa_wide:TCHA-815035
 ebsco_africa_wide:TCHA-818684
-ebsco_africa_wide:TCHA-833033
 ebsco_africa_wide:TCHA-973874-1
 ebsco_africa_wide:TCHA-999661
 ebsco_africa_wide:US9619385

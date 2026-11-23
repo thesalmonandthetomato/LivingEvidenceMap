@@ -521,8 +521,6 @@ ebsco_greenfile:197217919
 ebsco_greenfile:197217920
 ebsco_greenfile:197287922
 ebsco_greenfile:197388591
-ebsco_greenfile:198211846
-ebsco_greenfile:198344639
 ebsco_greenfile:20183770
 ebsco_greenfile:20183774
 ebsco_greenfile:20183791

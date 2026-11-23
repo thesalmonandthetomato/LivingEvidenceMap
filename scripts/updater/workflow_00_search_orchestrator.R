@@ -89,10 +89,16 @@ epmc_preprints_query <- europe_pmc_query("PPR")
 wos_component <- function(tag, farm_terms_string) {
   sprintf("%s=((%s) AND (%s))",tag,species,farm_terms_string)
 }
-# WoS Starter supports TS (Topic), but does not accept AB or AK field tags.
-# TS includes Keywords Plus in addition to title, abstract and author keywords.
-wos_new_block <- wos_component("TS",farm)
-wos_old_block <- paste0("TS=(",old_farm,")")
+wos_new_block <- paste0(
+  "(",wos_component("TI",farm),") OR (",
+  wos_component("AB",farm),") OR (",
+  wos_component("AK",farm),")"
+)
+wos_old_block <- paste0(
+  "(TI=(",old_farm,")) OR ",
+  "(AB=(",old_farm,")) OR ",
+  "(AK=(",old_farm,"))"
+)
 wos_query <- if (run_type=="expansion") {
   paste0("(",wos_new_block,") NOT (",wos_old_block,")")
 } else {
@@ -204,9 +210,9 @@ update_methods <- list(
   ),
   wos=list(
     retrieval_filter="WoS Starter modifiedTimeSpan",
-    field_scope=c("title","abstract","author_keywords","keywords_plus"),
+    field_scope=c("title","abstract","author_keywords"),
     window_rule="modifiedTimeSpan from 14 days before run date through run date",
-    limitation="WoS Starter accepts TS but not AB/AK; TS additionally searches Keywords Plus and allows the concepts across topic subfields. Date window uses an API parameter; exact WoS UID reconciliation removes already-known records."
+    limitation="Date window is passed as an API parameter rather than embedded in the query string; exact WoS UID reconciliation removes already-known records."
   )
 )
 
