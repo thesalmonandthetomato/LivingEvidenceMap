@@ -1,0 +1,4 @@
+{
+  "exit_code": 1,
+  "log": "Error in scalar((r$source %||% list())$provider) : \n  could not find function \"scalar\"\nCalls: u_id -> source_kind\nExecution halted\n"
+}
