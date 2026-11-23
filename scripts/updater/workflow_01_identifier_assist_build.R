@@ -135,16 +135,44 @@ if (!all(c("identifier_type","identifier_value") %in% names(guards))) stop("Guar
 guards <- unique(guards[,.(identifier_type=tolower(identifier_type),identifier_value)])
 guard_keys <- paste(guards$identifier_type,guards$identifier_value,sep="::")
 
-registry <- list()
+# Accumulate identifier rows in bounded column buffers rather than allocating
+# one data.table per identifier. This changes only memory use, not identifier
+# coverage, ordering, pair generation, or duplicate decision criteria.
+registry_chunk_size <- 20000L
+registry_buffer <- new.env(parent=emptyenv())
+registry_buffer$n <- 0L
+for (nm in c("manifestation_key","source","identifier_type",
+             "identifier_value","identifier_provenance")) {
+  registry_buffer[[nm]] <- character(registry_chunk_size)
+}
+registry_batches <- list()
+flush_registry <- function() {
+  n <- registry_buffer$n
+  if (!n) return(invisible(NULL))
+  take <- seq_len(n)
+  registry_batches[[length(registry_batches)+1L]] <<- data.table(
+    manifestation_key=registry_buffer$manifestation_key[take],
+    source=registry_buffer$source[take],
+    identifier_type=registry_buffer$identifier_type[take],
+    identifier_value=registry_buffer$identifier_value[take],
+    identifier_provenance=registry_buffer$identifier_provenance[take]
+  )
+  registry_buffer$n <- 0L
+  invisible(NULL)
+}
 add_id <- function(key,source,ns,value,provenance) {
   if (!(exists(key,envir=meta_membership,inherits=FALSE))) return(invisible(NULL))
   z <- normalise(ns,value)
   if (is.null(z)) return(invisible(NULL))
-  registry[[length(registry)+1L]] <<- data.table(
-    manifestation_key=key,source=source,
-    identifier_type=z$identifier_type,identifier_value=z$identifier_value,
-    identifier_provenance=provenance
-  )
+  n <- registry_buffer$n+1L
+  registry_buffer$manifestation_key[[n]] <- key
+  registry_buffer$source[[n]] <- source
+  registry_buffer$identifier_type[[n]] <- z$identifier_type
+  registry_buffer$identifier_value[[n]] <- z$identifier_value
+  registry_buffer$identifier_provenance[[n]] <- provenance
+  registry_buffer$n <- n
+  if (n==registry_chunk_size) flush_registry()
+  invisible(NULL)
 }
 add_named_ids <- function(key,source,x,provenance) {
   if (is.null(x)||!is.list(x)||is.null(names(x))) return(invisible(NULL))
@@ -158,7 +186,14 @@ for (i in which(!is.na(meta$doi_norm)&nzchar(meta$doi_norm))) {
 
 source_counts <- list()
 for (src in names(paths)) {
+  cat(sprintf("IDENTIFIER_ASSIST_SOURCE_START source=%s\n",src))
+  flush.console()
   source_counts[[src]] <- read_jsonl(paths[[src]],function(r,i) {
+    if (i %% 10000L == 0L) {
+      cat(sprintf("IDENTIFIER_ASSIST_PROGRESS source=%s records=%d buffered_batches=%d\n",
+                  src,i,length(registry_batches)))
+      flush.console()
+    }
     rid <- source_record_id(r,src)
     if (!nzchar(rid)) stop(sprintf("%s record %d lacks source record ID",src,i),call.=FALSE)
     key <- paste(src,rid,sep="::")
@@ -192,9 +227,12 @@ for (src in names(paths)) {
       }
     }
   })
+  cat(sprintf("IDENTIFIER_ASSIST_SOURCE_COMPLETE source=%s records=%d\n",src,source_counts[[src]]))
+  flush.console()
 }
 
-reg <- if (length(registry)) unique(rbindlist(registry,use.names=TRUE,fill=TRUE)) else
+flush_registry()
+reg <- if (length(registry_batches)) unique(rbindlist(registry_batches,use.names=TRUE,fill=TRUE)) else
   data.table(manifestation_key=character(),source=character(),identifier_type=character(),
              identifier_value=character(),identifier_provenance=character())
 if (!nrow(reg)) stop("Identifier registry is empty",call.=FALSE)
