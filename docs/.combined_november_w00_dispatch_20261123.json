@@ -1,0 +1,9 @@
+{
+  "schema": "combined-november-2026-w00-dispatch-v1",
+  "run_id": 45130154568,
+  "branch": "workflow01-final-architecture",
+  "run_type": "monthly",
+  "wos_full_ts_expansion": true,
+  "monthly_from_date": "2026-10-15",
+  "note": "Temporary dispatch receipt; remove after retrieving ID."
+}
