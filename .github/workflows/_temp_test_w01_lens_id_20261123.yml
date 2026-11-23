@@ -37,6 +37,7 @@ jobs:
             stopifnot(length(ix)==1L)
             eval(exprs[[ix]],envir=new.env(parent=environment()))
           }
+          scalar<-grab(u,"scalar")
           source_kind<-grab(u,"source_kind")
           u_id<-grab(u,"source_record_id")
           a_id<-grab(i,"source_record_id")
