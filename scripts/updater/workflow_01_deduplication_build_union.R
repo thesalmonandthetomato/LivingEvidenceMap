@@ -89,11 +89,26 @@ ids_for_lines <- function(lines, expected_source) {
 
 legacy_required_sources <- c("lens","scopus","openalex","agricola","wos")
 
+# Preserve all restored source manifestations, including sources absent from this
+# month's W00 harvest (e.g. historical citation-chasing and manual RIS sources).
+# Restrict discovery to the exact canonical source-seed filename suffix.
+seed_suffix <- "_records_for_deduplication.jsonl"
+preserved_files <- list.files(
+  old_dir, pattern=paste0(seed_suffix, "$"),
+  recursive=TRUE, full.names=TRUE
+)
+preserved_names <- sub(paste0(seed_suffix, "$"), "", basename(preserved_files), fixed=FALSE)
+if (anyDuplicated(preserved_names)) {
+  stop("Preserved W01 state contains multiple seed files for the same source", call.=FALSE)
+}
+all_sources <- unique(c(names(current_paths), preserved_names))
+if (!length(all_sources)) stop("No current or preserved sources to union",call.=FALSE)
+
 summary_rows <- list()
 old_total <- 0L
 appended_total <- 0L
 
-for (src in names(current_paths)) {
+for (src in all_sources) {
   old_lines <- character()
   old_ids <- character()
   old_filename <- paste0(src,"_records_for_deduplication.jsonl")
@@ -107,7 +122,9 @@ for (src in names(current_paths)) {
     stop(sprintf("Required preserved source file missing for legacy source %s",src),call.=FALSE)
   }
 
-  cur_lines <- read_lines_nonempty(current_paths[[src]])
+  current_path <- current_paths[[src]]
+  # Historical-only sources must be copied unchanged, not silently omitted.
+  cur_lines <- if (is.null(current_path)) character() else read_lines_nonempty(current_path)
   cur_ids <- ids_for_lines(cur_lines,src)
   if (anyDuplicated(cur_ids)) stop(sprintf("Duplicate current %s source IDs",src),call.=FALSE)
 
