@@ -10,11 +10,13 @@ arg <- function(flag, default=NULL) {
 }
 
 run_type <- arg("--run-type")
+wos_full_ts_expansion <- identical(tolower(arg("--wos-full-ts-expansion","false")),"true")
 additional_search_term <- trimws(arg("--additional-search-term",""))
 config_path <- arg("--config","user_input/workflow00_search_strategy.json")
 ebsco_config_path <- arg("--ebsco-config","config/workflow00_ebsco_sources.json")
 output_dir <- arg("--output-dir","outputs/updater/workflow00_plan")
 
+if (wos_full_ts_expansion && run_type!="monthly") stop("WoS full TS expansion requires monthly run mode",call.=FALSE)
 if (!(run_type %in% c("full","fortnightly","monthly","expansion"))) {
   stop("--run-type must be full, fortnightly, monthly, or expansion", call.=FALSE)
 }
@@ -89,16 +91,12 @@ epmc_preprints_query <- europe_pmc_query("PPR")
 wos_component <- function(tag, farm_terms_string) {
   sprintf("%s=((%s) AND (%s))",tag,species,farm_terms_string)
 }
-wos_new_block <- paste0(
-  "(",wos_component("TI",farm),") OR (",
-  wos_component("AB",farm),") OR (",
-  wos_component("AK",farm),")"
-)
-wos_old_block <- paste0(
-  "(TI=(",old_farm,")) OR ",
-  "(AB=(",old_farm,")) OR ",
-  "(AK=(",old_farm,"))"
-)
+# The WoS Starter API currently rejects AB and AK. TS is a broader Topic
+# search (title, abstract, author keywords, Keywords Plus; cross-field AND).
+# A one-off unfiltered monthly TS backfill is required before TS becomes the
+# regular monthly query, with native-UID reconciliation against the approved registry.
+wos_new_block <- wos_component("TS",farm)
+wos_old_block <- paste0("TS=(",old_farm,")")
 wos_query <- if (run_type=="expansion") {
   paste0("(",wos_new_block,") NOT (",wos_old_block,")")
 } else {
@@ -209,10 +207,10 @@ update_methods <- list(
     limitation="Europe PMC preprint records only (SRC:PPR). Exact PPR source+ID reconciliation removes already-known records; published versions remain available independently for Workflow 01 deduplication."
   ),
   wos=list(
-    retrieval_filter="WoS Starter modifiedTimeSpan",
-    field_scope=c("title","abstract","author_keywords"),
-    window_rule="modifiedTimeSpan from 14 days before run date through run date",
-    limitation="Date window is passed as an API parameter rather than embedded in the query string; exact WoS UID reconciliation removes already-known records."
+    retrieval_filter=if(wos_full_ts_expansion) "none: full historical TS backfill" else "WoS Starter modifiedTimeSpan",
+    field_scope=c("title","abstract","author_keywords","keywords_plus"),
+    window_rule=if(wos_full_ts_expansion) "All dates; no modifiedTimeSpan during this one-off WoS expansion" else "modifiedTimeSpan covers monthly update window",
+    limitation="WoS Starter TS additionally searches Keywords Plus and permits species/farm terms across Topic fields. Full historical TS search reconciles every UID against the last approved WoS registry before W01 cross-database deduplication."
   )
 )
 
@@ -244,6 +242,8 @@ plan <- list(
   status="planned",
   created_at=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"),
   run_type=run_type,
+  wos_full_ts_expansion=wos_full_ts_expansion,
+  wos_search_scope_change=if(wos_full_ts_expansion) list(previous="TI OR AB OR AK",current="TS",keyword_plus_added=TRUE,history_reharvested=TRUE,uid_reconciliation_required=TRUE) else NULL,
   search_version=cfg$search_version,
   immutable_species_terms=species_terms,
   base_farm_terms=farm_terms,
