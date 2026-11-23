@@ -1,0 +1,100 @@
+{
+  "w01_runs": [
+    {
+      "conclusion": "",
+      "createdAt": "2026-11-23T07:37:39Z",
+      "databaseId": 45132479532,
+      "event": "workflow_dispatch",
+      "status": "in_progress"
+    },
+    {
+      "conclusion": "cancelled",
+      "createdAt": "2026-11-23T06:55:24Z",
+      "databaseId": 45127425126,
+      "event": "workflow_dispatch",
+      "status": "completed"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-10-25T12:06:21Z",
+      "databaseId": 40191666251,
+      "event": "workflow_dispatch",
+      "status": "completed"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-10-25T10:25:32Z",
+      "databaseId": 40184717790,
+      "event": "workflow_dispatch",
+      "status": "completed"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-10-19T18:03:09Z",
+      "databaseId": 39299315118,
+      "event": "workflow_dispatch",
+      "status": "completed"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-18T14:40:38Z",
+      "databaseId": 39137065592,
+      "event": "workflow_dispatch",
+      "status": "completed"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-10-18T12:46:30Z",
+      "databaseId": 39128694056,
+      "event": "workflow_dispatch",
+      "status": "completed"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-05T17:20:18Z",
+      "databaseId": 37347666369,
+      "event": "workflow_dispatch",
+      "status": "completed"
+    }
+  ],
+  "former_zenodo_record": {
+    "record_id": 24457352,
+    "http_status": 200,
+    "title": "Living Evidence Map search archive | monthly | Workflow 00 run 44821779121",
+    "access": null,
+    "status": "published",
+    "links_keys": [
+      "self",
+      "self_html",
+      "preview_html",
+      "doi",
+      "self_doi",
+      "self_doi_html",
+      "reserve_doi",
+      "parent",
+      "parent_html",
+      "parent_doi",
+      "parent_doi_html",
+      "self_iiif_manifest",
+      "self_iiif_sequence",
+      "files",
+      "media_files",
+      "latest",
+      "latest_html",
+      "versions",
+      "draft",
+      "access_links",
+      "access_grants",
+      "access_users",
+      "access_request",
+      "access",
+      "communities",
+      "communities-suggestions",
+      "request_deletion",
+      "file_modification",
+      "quota_increase",
+      "requests"
+    ],
+    "is_published": null
+  }
+}
