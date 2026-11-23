@@ -1,0 +1,78 @@
+name: TEMP Validate combined November WoS TS expansion
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/_temp_validate_wos_ts_expansion_20261123.yml']
+permissions:
+  contents: write
+  actions: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - shell: Rscript {0}
+        run: install.packages(c('jsonlite','httr2','digest','readr'))
+      - name: Test monthly plan, WoS live totals, first and last page, native-ID reconciliation
+        env:
+          WOS_STARTER_API: ${{ secrets.WOS_STARTER_API }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p /tmp/lem_wos_tests
+          {
+            echo "baseline_branch=workflow01-final-architecture"
+            echo "baseline_wos_registry_sha256=$(sha256sum data/workflow00/source_id_registry/wos_native_ids.txt | cut -d' ' -f1)"
+            Rscript scripts/updater/workflow_00_search_orchestrator.R --run-type monthly --wos-full-ts-expansion true --from-date 2026-10-15 --to-date 2026-11-23 --output-dir /tmp/lem_wos_tests/plan
+            Rscript -e 'library(jsonlite);p<-fromJSON("/tmp/lem_wos_tests/plan/search_plan.json",simplifyVector=FALSE);stopifnot(isTRUE(p$wos_full_ts_expansion),p$monthly_window$from=="2026-10-15",p$monthly_window$to=="2026-11-23",grepl("^TS=",p$source_queries$wos),length(p$source_queries)>=19L,grepl("maricultur",p$source_queries$wos));cat("PLAN_PASS: combined monthly + historical WoS TS with 19+ source queries; other date windows retained\n")'
+            Rscript scripts/updater/workflow_00_search_orchestrator.R --run-type monthly --wos-full-ts-expansion false --from-date 2026-10-15 --to-date 2026-11-23 --output-dir /tmp/lem_wos_tests/normal
+            Rscript -e 'library(jsonlite);p<-fromJSON("/tmp/lem_wos_tests/normal/search_plan.json",simplifyVector=FALSE);stopifnot(!isTRUE(p$wos_full_ts_expansion),grepl("^TS=",p$source_queries$wos));cat("FUTURE_MONTHLY_PASS: TS query with monthly window is present\n")'
+            WOS_QUERY="$(Rscript -e 'library(jsonlite);x<-fromJSON("/tmp/lem_wos_tests/plan/search_plan.json");cat(x$source_queries$wos)')"
+            Rscript scripts/updater/workflow_00e_wos_starter_ingestion.R --query "$WOS_QUERY" --page-size 50 --count-only true --output-dir /tmp/lem_wos_tests/count
+            n="$(Rscript -e 'library(jsonlite);cat(fromJSON("/tmp/lem_wos_tests/count/manifest.json")$total_results)')"
+            pages=$(((n+49)/50))
+            echo "FULL_TS_TOTAL=$n"
+            echo "FULL_TS_PAGES=$pages"
+            test "$n" -ge 15000
+            test "$pages" -gt 300
+            Rscript scripts/updater/workflow_00e_wos_starter_ingestion.R --query "$WOS_QUERY" --page-size 50 --reported-total "$n" --start-page 1 --end-page 1 --output-dir /tmp/lem_wos_tests/first
+            Rscript scripts/updater/workflow_00e_wos_starter_ingestion.R --query "$WOS_QUERY" --page-size 50 --reported-total "$n" --start-page "$pages" --end-page "$pages" --output-dir /tmp/lem_wos_tests/last
+            Rscript scripts/updater/workflow_01w_wos_starter_sidecar_adapter.R --input-dir /tmp/lem_wos_tests/first --output-dir /tmp/lem_wos_tests/sidecar
+            Rscript scripts/updater/workflow_00_native_id_reconcile.R --source wos --run-type monthly --current-root /tmp/lem_wos_tests/first --registry data/workflow00/source_id_registry/wos_native_ids.txt --output-dir /tmp/lem_wos_tests/delta
+            Rscript -e 'library(jsonlite);a<-fromJSON("/tmp/lem_wos_tests/first/manifest.json");b<-fromJSON("/tmp/lem_wos_tests/last/manifest.json");c<-fromJSON("/tmp/lem_wos_tests/delta/reconciliation_manifest.json");stopifnot(a$status=="success",b$status=="success",a$records_retrieved==50L,a$keywords_plus_included,c$raw_records>=c$new_native_ids);cat(sprintf("LIVE_PAGINATION_AND_RECONCILIATION_PASS: first=%d last=%d known=%d new=%d\n",a$records_retrieved,b$records_retrieved,c$already_known_native_ids,c$new_native_ids))'
+            echo "TEST_STATUS=PASS"
+          } > /tmp/lem_wos_tests/results.txt 2>&1
+          code=$?
+          cat /tmp/lem_wos_tests/results.txt
+          if [ "$code" -ne 0 ]; then echo "TEST_STATUS=FAIL code=$code" >> /tmp/lem_wos_tests/results.txt; fi
+          exit 0
+      - name: Check earlier Shiny restoration result
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow _temp_restore_shiny_baseline_20261123.yml --limit 3 --json databaseId,conclusion,status | tee /tmp/lem_wos_tests/shiny_runs.json || true
+      - name: Record sanitized diagnostic results temporarily
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,json,subprocess,base64,urllib.request
+          root='/tmp/lem_wos_tests'
+          report={'results':open(root+'/results.txt').read()[-12000:],'shiny_runs':json.load(open(root+'/shiny_runs.json')) if os.path.exists(root+'/shiny_runs.json') else []}
+          data=base64.b64encode(json.dumps(report,indent=2).encode()).decode()
+          url=f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/contents/docs/.wos_ts_expansion_validation_20261123.json"
+          payload=json.dumps({'message':'TEMP sanitized WoS TS validation receipt','content':data,'branch':'workflow01-final-architecture'}).encode()
+          req=urllib.request.Request(url,data=payload,method='PUT',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','Content-Type':'application/json'})
+          with urllib.request.urlopen(req,timeout=30) as r:print('VALIDATION_RECEIPT_WRITTEN',r.status)
+          PY
