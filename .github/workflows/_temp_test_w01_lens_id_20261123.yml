@@ -1,0 +1,79 @@
+name: TEMP Validate W01 Lens source ID consistency
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/_temp_test_w01_lens_id_20261123.yml']
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - shell: Rscript {0}
+        run: install.packages(c("jsonlite","data.table"))
+      - name: Compare identifier resolution with union for Lens and sidecars, test fail-closed safeguards
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set +e
+          Rscript - <<'RS' > /tmp/w01_lens_validation.log 2>&1
+          library(jsonlite)
+          `%||%` <- function(x,y) if(is.null(x)) y else x
+          u<-parse(file="scripts/updater/workflow_01_deduplication_build_union.R")
+          i<-parse(file="scripts/updater/workflow_01_identifier_assist_build.R")
+          grab<-function(exprs,name){
+            ix<-which(vapply(exprs,function(x)is.call(x) &&
+              identical(x[[1L]],as.name("<-")) && identical(x[[2L]],as.name(name)),logical(1)))
+            stopifnot(length(ix)==1L)
+            eval(exprs[[ix]],envir=new.env(parent=environment()))
+          }
+          u_id<-grab(u,"source_record_id")
+          a_id<-grab(i,"source_record_id")
+          lens_without_payload<-list(source=list(provider="lens"),identity=list(lens_id="LENS-HIST-24176"))
+          lens_with_payload<-list(lens=list(raw_payload=list()),identity=list(lens_id="LENS-NOV-001"))
+          lens_record_fallback<-list(source=list(provider="lens"),identity=list(record_id="LENS-FALLBACK-001"))
+          scopus_sidecar<-list(source=list(provider="scopus"),sidecar_identity=list(sidecar_record_id="scopus:1234"))
+          wos_sidecar<-list(source=list(provider="wos_starter"),sidecar_identity=list(sidecar_record_id="WOS:00123"))
+          checks<-list(
+            list(r=lens_without_payload,src="lens",want="LENS-HIST-24176"),
+            list(r=lens_with_payload,src="lens",want="LENS-NOV-001"),
+            list(r=lens_record_fallback,src="lens",want="LENS-FALLBACK-001"),
+            list(r=scopus_sidecar,src="scopus",want="scopus:1234"),
+            list(r=wos_sidecar,src="wos",want="WOS:00123")
+          )
+          for(z in checks){
+            x<-u_id(z$r)
+            y<-a_id(z$r,z$src)
+            stopifnot(identical(x,z$want),identical(y,z$want))
+            cat(sprintf("PASS_SOURCE_ID %s: %s\n",z$src,y))
+          }
+          missing<-list(source=list(provider="lens"),identity=list())
+          stopifnot(!nzchar(a_id(missing,"lens")))
+          cat("PASS_FAIL_CLOSED: missing Lens ID remains empty, no synthetic ID generated\n")
+          # Fail-closed source verification in the actual loop remains unchanged.
+          code<-readLines("scripts/updater/workflow_01_identifier_assist_build.R")
+          stopifnot(any(grepl('if (!nzchar(rid)) stop',code,fixed=TRUE)))
+          cat("ALL_IDENTIFIER_TESTS_PASS\n")
+          RS
+          code=$?
+          cat /tmp/w01_lens_validation.log
+          EXIT_CODE="$code" python3 - <<'PY'
+          import os,json,base64,urllib.request
+          x={'exit_code':int(os.environ['EXIT_CODE']),'log':open('/tmp/w01_lens_validation.log').read()}
+          content=base64.b64encode(json.dumps(x,indent=2).encode()).decode()
+          url=f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/contents/docs/.temp_w01_lens_id_validation_20261123.json"
+          body=json.dumps({'message':'TEMP W01 Lens ID source resolution tests','content':content,'branch':'workflow01-final-architecture'}).encode()
+          req=urllib.request.Request(url,data=body,method='PUT',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','Content-Type':'application/json'})
+          with urllib.request.urlopen(req,timeout=30) as r:print('TEST_RECEIPT_WRITTEN',r.status)
+          PY
+          exit "$code"
