@@ -87,8 +87,11 @@ normalise <- function(ns,value) {
   )
   if (is.null(v)) NULL else list(identifier_type=ns,identifier_value=v)
 }
-source_record_id <- function(r) {
-  if (is.list(r$lens)) {
+source_record_id <- function(r, source) {
+  # The validated W01 union is grouped by source, including historical Lens
+  # records that do not carry an r$lens payload. Do not infer identity format
+  # from the presence of that optional payload.
+  if (identical(source,"lens")) {
     return(as.character((r$identity %||% list())$lens_id %||%
                         (r$identity %||% list())$record_id %||% ""))
   }
@@ -156,7 +159,7 @@ for (i in which(!is.na(meta$doi_norm)&nzchar(meta$doi_norm))) {
 source_counts <- list()
 for (src in names(paths)) {
   source_counts[[src]] <- read_jsonl(paths[[src]],function(r,i) {
-    rid <- source_record_id(r)
+    rid <- source_record_id(r,src)
     if (!nzchar(rid)) stop(sprintf("%s record %d lacks source record ID",src,i),call.=FALSE)
     key <- paste(src,rid,sep="::")
     if (!(exists(key,envir=meta_membership,inherits=FALSE))) stop(sprintf("%s record missing from W01 metadata: %s",src,rid),call.=FALSE)
