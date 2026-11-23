@@ -1,0 +1,33 @@
+name: TEMP Restore approved LivingEvidenceMap baseline
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/_temp_restore_unapproved_nov23.yml']
+permissions:
+  contents: write
+jobs:
+  restore:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Restore complete previously approved tree without rewriting history
+        uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Restore and verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          baseline=57cb0a6ef28fad5d17c7fe3b9d6cbcd60af80686
+          git cat-file -e "$baseline^{commit}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git restore --source="$baseline" --staged --worktree -- .
+          git diff --cached --stat
+          git commit -m "Restore approved pre-November baseline after unauthorised W00 recovery"
+          test -z "$(git diff --name-only "$baseline" HEAD)"
+          git push origin HEAD:refs/heads/workflow01-final-architecture
+          echo "RESTORED_EXACT_APPROVED_TREE $baseline"
