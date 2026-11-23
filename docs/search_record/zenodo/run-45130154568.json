@@ -1,0 +1,204 @@
+{
+  "status": "published",
+  "github_run_id": "45130154568",
+  "github_run_url": "https://github.com/thesalmonandthetomato/LivingEvidenceMap/actions/runs/45130154568",
+  "run_type": "monthly",
+  "search_version": "v2",
+  "sources": ["lens", "scopus", "openalex", "agricola", "ethos", "wos", "ebsco_africa_wide", "ebsco_amed", "ebsco_psycinfo", "ebsco_atla_religion", "ebsco_biological_agricultural_index", "ebsco_cinahl", "ebsco_econlit", "ebsco_family_society", "ebsco_greenfile", "ebsco_medline", "ebsco_mla", "ebsco_political_science", "ebsco_waters_oceans"],
+  "handoff_sources": {
+    "lens": {
+      "tree_sha256": "5a2ad74af9f58414434790f037ef1f3947cec357add5fa8b9ae3aa5b508613d8"
+    },
+    "scopus": {
+      "tree_sha256": "e03d85284db887b85b51ae9915e5e5fefba8525ecba8992a453365f67db532df"
+    },
+    "openalex": {
+      "tree_sha256": "628fc34fe6567e49a0ff1c9d96c2223e6b3a0d6aee96bf30488e3699f79c8df0"
+    },
+    "agricola": {
+      "tree_sha256": "d4144ca6bfbd49ac2bb8570bc9ec3100f19cecdc5de71c93532598e7917098a0"
+    },
+    "ethos": {
+      "tree_sha256": "7381e8ce916c2fb20b06b88334880506af526bc7ec7cda0d3d4398ecc8b0631e"
+    },
+    "wos": {
+      "tree_sha256": "e096361ac05d1f7a28a2e847a0864ce654ba924aacce15020cae25ee5d250c38"
+    },
+    "ebsco_africa_wide": {
+      "tree_sha256": "e35afe1380cc9e70eabf88ac377afc002116d384f6581407a2fd4a32a4fb0e13"
+    },
+    "ebsco_amed": {
+      "tree_sha256": "c10b8180fcd9b38a08f1242d53862c31f890714d86f9ffde94a873087a780f4c"
+    },
+    "ebsco_psycinfo": {
+      "tree_sha256": "0826823b3a9b57cef5cb04ea5367483c4af906781c98d785a3048c9c61b4cc5c"
+    },
+    "ebsco_atla_religion": {
+      "tree_sha256": "461b39c111ad671e906acdbe630ff32d7376af76032cc7db1bf0d3b713e9d17c"
+    },
+    "ebsco_biological_agricultural_index": {
+      "tree_sha256": "f59a30f14aa9ffb5eb02e6dff399938288cc81df6b2c70a5105df94ac3180a65"
+    },
+    "ebsco_cinahl": {
+      "tree_sha256": "0a7b68e323dbd22e325fcf37bcd0211b0d242b18380207245c8caf89b9d30aec"
+    },
+    "ebsco_econlit": {
+      "tree_sha256": "5553eda277702d5230920f501a3272922dfc8c11e570014e45aee7ea60a64cbb"
+    },
+    "ebsco_family_society": {
+      "tree_sha256": "6b9eda3ceb0cd86744dac5e3314bd8627eeddeab94eb7a58a80413ce38299ac0"
+    },
+    "ebsco_greenfile": {
+      "tree_sha256": "4ae7f964e023aadf7d7acdd19ec362c7d74f46e7c2690003d25cbf525ec5cadd"
+    },
+    "ebsco_medline": {
+      "tree_sha256": "c2343b4c9e6eb22514975dcc4831423c265625ad62e2042d2c8ecfe2d95b41b0"
+    },
+    "ebsco_mla": {
+      "tree_sha256": "02ad0eada66a691cff6f516d3bbf06391ab06a5c1dad5a56e2000739b24782e4"
+    },
+    "ebsco_political_science": {
+      "tree_sha256": "201b0f309402e54c8550b77b018a2d9492a198d0b0253e2688737e5aa132ea92"
+    },
+    "ebsco_waters_oceans": {
+      "tree_sha256": "aee8374f3bb2c02ac9325c34aed9661b5c9768b1bc696a3c9392f3af75990c02"
+    }
+  },
+  "zenodo_record_id": "24458095",
+  "zenodo_deposition_id": "24458095",
+  "doi": "10.5281/zenodo.24458095",
+  "record_url": "https://zenodo.org/records/24458095",
+  "title": "Living Evidence Map search archive | monthly | Workflow 00 run 45130154568",
+  "visibility": "restricted",
+  "total_bytes": 71006087,
+  "archive_files": [
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-45130154568_lens-harvest.tar.gz",
+      "bytes": 2034655,
+      "sha256": "452a864d900c75a7d726a4fe42d1b32313b67085e34c78b3f54cd31741e9b1ab",
+      "zenodo_checksum": "md5:b9510aafbd271fc785db0e1883d41b91"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-45130154568_scopus-harvest.tar.gz",
+      "bytes": 183137,
+      "sha256": "c26a0c860e184454de757a164b2faee997aab62b963467b20eeb793d36127e43",
+      "zenodo_checksum": "md5:4af7cd87a763408aaa620fe31a6a7f90"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-45130154568_openalex-harvest.tar.gz",
+      "bytes": 8782290,
+      "sha256": "f1116cebeaa0ef206a047b3beee6321504e484a17b4799eb4b56832747226899",
+      "zenodo_checksum": "md5:b7081e63959d2970b57d2e757a3abc5e"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-45130154568_agricola-harvest.tar.gz",
+      "bytes": 11761,
+      "sha256": "81c0e6156952f6f7522b36fa98a773a38520bdf7fb7a6e59bb577ca5cad55572",
+      "zenodo_checksum": "md5:2e23b50bedcd45f594433d4deb43e17d"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-45130154568_ethos-harvest.tar.gz",
+      "bytes": 2869,
+      "sha256": "1b4ae56bec274dd0fe36c2b6a1a22724ae2d7e814f6a0af1305ec65e49254ff6",
+      "zenodo_checksum": "md5:9e49bb48071ea3078b9ce3a34569dacb"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-45130154568_wos-harvest.tar.gz",
+      "bytes": 32406788,
+      "sha256": "a9549ecce53d4917ebc1c471e4e4c75e39b82625433e52c2df649385ed0a33cc",
+      "zenodo_checksum": "md5:e5fbd11914a2ee573f8767f0f009a4fe"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-45130154568_ebsco_africa_wide-harvest.tar.gz",
+      "bytes": 708129,
+      "sha256": "d4b419d8242bc1078bb341f4d7643c08b9e12331ec47a0322042224cf1429c7d",
+      "zenodo_checksum": "md5:788d742f23f20c5f4029502ccd5d370c"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-45130154568_ebsco_amed-harvest.tar.gz",
+      "bytes": 6201,
+      "sha256": "e1efdf253971094087cffb14a823032d3271f5c32820a97e6016e1878fd54c80",
+      "zenodo_checksum": "md5:d1ae5df1b927c62f9a2d5bea8577eade"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-45130154568_ebsco_psycinfo-harvest.tar.gz",
+      "bytes": 194055,
+      "sha256": "0d5602218cec1748a139ce5641a37468f61bc31ca2cf10157c742d7834217ca7",
+      "zenodo_checksum": "md5:99c52ba6a7d24a70c0cb78b2fe8b4d6f"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-45130154568_ebsco_atla_religion-harvest.tar.gz",
+      "bytes": 2855,
+      "sha256": "27023db2f223281da7bb1ebdf3f77556caddb2d478cb39f54901a724258cce9e",
+      "zenodo_checksum": "md5:872a159ceb5ca522d45bd1d3c78dfb1a"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-45130154568_ebsco_biological_agricultural_index-harvest.tar.gz",
+      "bytes": 5731794,
+      "sha256": "a52ff242971e073c38e137aed84ab5e10ac176a4df5a51d2985639cf779a473a",
+      "zenodo_checksum": "md5:de9252bdf27295d376eac916aaa8f3ae"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-45130154568_ebsco_cinahl-harvest.tar.gz",
+      "bytes": 186484,
+      "sha256": "7050003efb8b7d00fc22fdd6baf8b79c713b398ec01022bbb9fc5d28cc3a6791",
+      "zenodo_checksum": "md5:732ac10459ffe19318a3980d9a9506c8"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-45130154568_ebsco_econlit-harvest.tar.gz",
+      "bytes": 388374,
+      "sha256": "a2678c1116e0af5a0c453d5e8bc16a52af8bcbb9afb464137a9c63ab302ef65a",
+      "zenodo_checksum": "md5:c03f1fb78e8c383820a3a233ddea92ce"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-45130154568_ebsco_family_society-harvest.tar.gz",
+      "bytes": 199305,
+      "sha256": "3952e4e9f82b4203787b21187be12929d3a248079ce612052e4f30c3fdbb2a42",
+      "zenodo_checksum": "md5:da1b798df86a7b722876dc19c95ae7d4"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-45130154568_ebsco_greenfile-harvest.tar.gz",
+      "bytes": 1599807,
+      "sha256": "6faaaab3f1d0c260fa7b8f8ef0ff943bb0f86e689ae630d07f7a8698a093d08d",
+      "zenodo_checksum": "md5:f0085734f49330e36d410a5a8f4f68a4"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-45130154568_ebsco_medline-harvest.tar.gz",
+      "bytes": 13375047,
+      "sha256": "cc58f4715e5c66870f4c011936f038629de33f88f685c5b1975d11a5cf514f0f",
+      "zenodo_checksum": "md5:0ab8a574ac1d64728df6c6fa41a3ac80"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-45130154568_ebsco_mla-harvest.tar.gz",
+      "bytes": 6387,
+      "sha256": "9c12e236b8fd4d55099037a8fe34ec805bca251e886c5d71373001e154c323b6",
+      "zenodo_checksum": "md5:3777745bd18acefcbfe86d433cdcd71a"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-45130154568_ebsco_political_science-harvest.tar.gz",
+      "bytes": 84288,
+      "sha256": "a4d64597bf0d7549839af08fdecf2273ef7cb4211c89282fd24fde5865cf5145",
+      "zenodo_checksum": "md5:63269a4340c650005bc4ad37c3821cbf"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-45130154568_ebsco_waters_oceans-harvest.tar.gz",
+      "bytes": 5084120,
+      "sha256": "b50573bf9bf9936efaab88af611347ec11b71767e0ac6c2e17397f0543c0cccb",
+      "zenodo_checksum": "md5:a1c5580b2c172be170ec4aec3c12f088"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-45130154568_search-documentation.tar.gz",
+      "bytes": 8925,
+      "sha256": "d2d1525af9f1f0368811274870691cad54cd4441afa317a103f6e07002b2f55b",
+      "zenodo_checksum": "md5:49cdf0226bd22722edaec49c92f05009"
+    },
+    {
+      "filename": "LivingEvidenceMap_workflow00_run-45130154568_manifest.json",
+      "bytes": 8816,
+      "sha256": "c7196f6756c815fd27bc89c1d8fd6db283114517189e5a5dca6eee8b6bdf379d",
+      "zenodo_checksum": "md5:434cc336ed3bf68e97c65d03af655c66"
+    }
+  ],
+  "manifest_sha256": "c7196f6756c815fd27bc89c1d8fd6db283114517189e5a5dca6eee8b6bdf379d",
+  "published_at_utc": "2026-11-23T07:37:30Z"
+}
