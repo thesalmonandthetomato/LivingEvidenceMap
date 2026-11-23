@@ -138,7 +138,7 @@ guard_keys <- paste(guards$identifier_type,guards$identifier_value,sep="::")
 # Accumulate identifier rows in bounded column buffers rather than allocating
 # one data.table per identifier. This changes only memory use, not identifier
 # coverage, ordering, pair generation, or duplicate decision criteria.
-registry_chunk_size <- 20000L
+registry_chunk_size <- 1000L
 registry_buffer <- new.env(parent=emptyenv())
 registry_buffer$n <- 0L
 for (nm in c("manifestation_key","source","identifier_type",
