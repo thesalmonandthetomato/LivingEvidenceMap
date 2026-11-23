@@ -1,0 +1,21 @@
+{
+  "workflow": "00_native_id_reconciliation",
+  "status": "success",
+  "reconciled_at": "2026-11-23T07:29:04Z",
+  "run_type": "monthly",
+  "source": "wos",
+  "reconciliation_key": "Web of Science UID",
+  "current_raw_records": 27828,
+  "current_unique_records": 27828,
+  "exact_duplicate_ids_suppressed": 0,
+  "duplicate_native_ids": [],
+  "historical_unique_native_ids": 15295,
+  "already_known_native_ids": 15292,
+  "new_native_ids": 12536,
+  "records_passed_downstream": 12536,
+  "filtered_source_root": "filtered_source",
+  "bibliographic_deduplication_performed": false,
+  "doi_matching_performed": false,
+  "fuzzy_matching_performed": false,
+  "downstream_deduplication": "Workflow 01"
+}

@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.2",
+  "recorded_at_utc": "2026-11-23T07:29:05Z",
+  "source": "wos",
+  "run_type": "monthly",
+  "search_version": "v2",
+  "additional_search_term": null,
+  "search_string": "TS=((salmon OR salmonid* OR Salmo OR Oncorhynchus OR \"rainbow trout\") AND (farm* OR cage* OR pens OR penned OR pen OR aquacultur* OR commercial* OR maricultur*)) ; modifiedTimeSpan=2026-10-15+2026-11-23",
+  "database_scope": {
+    "platform": "Web of Science",
+    "api_product": "Web of Science Starter API",
+    "endpoint": "https://api.clarivate.com/apis/wos-starter/v1/documents",
+    "database_parameter": "WOS",
+    "databases_searched": [
+      {
+        "code": "WOS",
+        "name": "Web of Science Core Collection"
+      }
+    ],
+    "selection_method": "Explicit db=WOS API parameter",
+    "recorded_at_utc": "2026-11-23T07:20:35Z",
+    "institutional_coverage_note": "The content, editions and historical coverage available within the Web of Science Core Collection are determined by the institutional/API entitlement active at query time and may change.",
+    "core_collection_editions": "Not exposed or independently verified by this Starter API request"
+  },
+  "search_window": {
+    "from": "2026-10-15",
+    "to": "2026-11-23"
+  },
+  "reported_search_results": 27828,
+  "successfully_downloaded_results": 27828,
+  "complete_download": true,
+  "native_id_reconciliation": {
+    "already_known": 15292,
+    "new": 12536,
+    "matching": "exact source-native identifier",
+    "records_passed_downstream": 12536
+  },
+  "github": {
+    "repository": "thesalmonandthetomato/LivingEvidenceMap",
+    "parent_workflow_run_id": "45130154568",
+    "child_workflow_run_id": "45130154568",
+    "run_attempt": "1",
+    "ref": "workflow01-final-architecture",
+    "triggering_sha": "81fc64a565d6d194393602c5f7938b0873882dc0",
+    "orchestrator_sha": "91a994cbd31748b1dca793b417e285361e8b62db",
+    "source_handler_sha": "91a994cbd31748b1dca793b417e285361e8b62db"
+  },
+  "artifact_name": "workflow00-wos-harvest-45130154568"
+}

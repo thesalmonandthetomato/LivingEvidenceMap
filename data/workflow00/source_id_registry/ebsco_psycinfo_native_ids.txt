@@ -95,3 +95,4 @@ ebsco_psycinfo:2024-59241-001
 ebsco_psycinfo:2025-00023-001
 ebsco_psycinfo:2025-92649-003
 ebsco_psycinfo:2025-98130-004
+ebsco_psycinfo:2027-88861-004
