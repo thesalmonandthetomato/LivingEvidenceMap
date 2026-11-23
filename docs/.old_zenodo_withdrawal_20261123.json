@@ -1,0 +1,10 @@
+{
+  "old_id": 24457352,
+  "authoritative_new_id": 24458095,
+  "method": "DELETE",
+  "reason": "replaced",
+  "delete_http_status": 403,
+  "delete_response_excerpt": "{\"status\": 403, \"message\": \"Permission denied.\"}",
+  "after_status": "published",
+  "after_http_status": 200
+}
