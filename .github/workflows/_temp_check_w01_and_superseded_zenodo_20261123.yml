@@ -1,0 +1,46 @@
+name: TEMP Check W01 dispatch and former Zenodo record
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/_temp_check_w01_and_superseded_zenodo_20261123.yml']
+permissions:
+  actions: read
+  contents: write
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Inspect run IDs and old Zenodo record read-only
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow workflow_01_production.yml --branch workflow01-final-architecture --limit 8 --json databaseId,createdAt,event,status,conclusion > /tmp/w01_runs.json
+          python3 - <<'PY'
+          import os,json,urllib.request,urllib.error,base64
+          runs=json.load(open('/tmp/w01_runs.json'))
+          url='https://zenodo.org/api/records/24457352'
+          headers={'Accept':'application/json'}
+          if os.getenv('ZENODO_ACCESS_TOKEN'):
+              headers['Authorization']='Bearer '+os.environ['ZENODO_ACCESS_TOKEN']
+          req=urllib.request.Request(url,headers=headers)
+          old={'record_id':24457352}
+          try:
+              with urllib.request.urlopen(req,timeout=30) as resp:
+                  d=json.load(resp)
+                  old.update({'http_status':resp.status,'title':d.get('metadata',{}).get('title'),'access':d.get('access'),'status':d.get('status'),'links_keys':list(d.get('links',{}).keys()),'is_published':d.get('is_published')})
+          except urllib.error.HTTPError as ex:
+              old.update({'http_status':ex.code,'error_type':'HTTPError'})
+          except Exception as ex:
+              old.update({'error_type':type(ex).__name__})
+          report={'w01_runs':runs,'former_zenodo_record':old}
+          print('READ_ONLY_RECONCILIATION '+json.dumps(report),flush=True)
+          data=base64.b64encode(json.dumps(report,indent=2).encode()).decode()
+          u=f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/contents/docs/.w01_and_old_zenodo_readonly_20261123.json"
+          payload=json.dumps({'message':'TEMP read-only audit W01 and previously unapproved Zenodo record','content':data,'branch':'workflow01-final-architecture'}).encode()
+          request=urllib.request.Request(u,data=payload,method='PUT',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','Content-Type':'application/json'})
+          with urllib.request.urlopen(request,timeout=30) as res:print('AUDIT_COMMITTED',res.status)
+          PY
