@@ -1,0 +1,44 @@
+name: TEMP Inspect allowed former Zenodo record actions
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/_temp_zenodo_old_record_options_20261123.yml']
+permissions:
+  contents: write
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Read available record actions without mutation
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,json,urllib.request,urllib.error,base64
+          headers={'Accept':'application/json','Authorization':'Bearer '+os.environ['ZENODO_ACCESS_TOKEN']}
+          with urllib.request.urlopen(urllib.request.Request('https://zenodo.org/api/records/24457352',headers=headers),timeout=40) as x:
+              record=json.load(x)
+          links=record.get('links',{})
+          keys=['request_deletion','draft','self']
+          actions={k:links.get(k) for k in keys}
+          result={'record_id':24457352,'title':record.get('metadata',{}).get('title'),'status':record.get('status'),'links':actions}
+          for label,url in actions.items():
+              if not url:continue
+              try:
+                  r=urllib.request.urlopen(urllib.request.Request(url,headers=headers,method='OPTIONS'),timeout=20)
+                  result[label+'_options']={'status':r.status,'allow':r.headers.get('Allow')}
+              except urllib.error.HTTPError as ex:
+                  result[label+'_options']={'status':ex.code,'allow':ex.headers.get('Allow')}
+              except Exception as ex:
+                  result[label+'_options']={'error_type':type(ex).__name__}
+          print('ZENODO_READONLY_OPTIONS',json.dumps(result),flush=True)
+          data=base64.b64encode(json.dumps(result,indent=2).encode()).decode()
+          dest=f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/contents/docs/.zenodo_old_record_options_20261123.json"
+          payload=json.dumps({'message':'TEMP old Zenodo record supported actions read-only','content':data,'branch':'workflow01-final-architecture'}).encode()
+          req=urllib.request.Request(dest,data=payload,method='PUT',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','Content-Type':'application/json'})
+          with urllib.request.urlopen(req,timeout=30) as r:print('OPTIONS_RECEIPT_WRITTEN',r.status)
+          PY
