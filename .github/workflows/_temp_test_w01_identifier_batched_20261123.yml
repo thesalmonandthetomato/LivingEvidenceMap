@@ -1,4 +1,4 @@
-name: TEMP W01 identifier batch equivalence validation
+name: TEMP W01 identifier batch equivalence validation - low memory
 on:
   push:
     branches: [workflow01-final-architecture]
