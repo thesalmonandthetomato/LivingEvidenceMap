@@ -24,6 +24,18 @@ if (any(vapply(list(manifest_path,metadata_path,guard_path,output_dir),is.null,l
 }
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 
+# Lightweight stage diagnostics (Linux GitHub runners). Does not affect data.
+report_identifier_memory <- function(stage) {
+  rss <- "unavailable"
+  if (file.exists("/proc/self/status")) {
+    x <- grep("^VmRSS:",readLines("/proc/self/status",warn=FALSE),value=TRUE)
+    if (length(x)) rss <- trimws(sub("^VmRSS:","",x[[1L]]))
+  }
+  cat(sprintf("IDENTIFIER_ASSIST_STAGE %s rss=%s at=%s\n",
+              stage,rss,format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")))
+  flush.console()
+}
+
 scalar <- function(x) {
   if (is.null(x)||!length(x)) return(NULL)
   y <- trimws(as.character(x[[1L]]))
@@ -232,10 +244,12 @@ for (src in names(paths)) {
 }
 
 flush_registry()
+report_identifier_memory("registry_buffer_complete")
 reg <- if (length(registry_batches)) unique(rbindlist(registry_batches,use.names=TRUE,fill=TRUE)) else
   data.table(manifestation_key=character(),source=character(),identifier_type=character(),
              identifier_value=character(),identifier_provenance=character())
 if (!nrow(reg)) stop("Identifier registry is empty",call.=FALSE)
+report_identifier_memory("registry_combined")
 fwrite(reg,file.path(output_dir,"identifier_registry.csv"))
 
 coverage <- reg[,.(manifestations=uniqueN(manifestation_key),identifier_rows=.N),
@@ -245,6 +259,9 @@ fwrite(coverage,file.path(output_dir,"identifier_coverage.csv"))
 groups <- reg[,.(n_manifestations=uniqueN(manifestation_key),n_sources=uniqueN(source)),
               by=.(identifier_type,identifier_value)]
 shared <- groups[n_manifestations>1L & n_sources>1L]
+cat(sprintf("IDENTIFIER_ASSIST_SHARED_GROUPS count=%d max_manifestations=%d\n",
+            nrow(shared),if(nrow(shared))max(shared$n_manifestations) else 0L))
+report_identifier_memory("shared_groups_ready")
 fwrite(shared,file.path(output_dir,"shared_identifier_groups.csv"))
 
 reg_unique <- unique(reg[,.(manifestation_key,source,identifier_type,identifier_value)])
@@ -254,6 +271,7 @@ if (nrow(shared_reg)) {
                        record_i=manifestation_key,source_i=source)]
   right <- shared_reg[,.(identifier_type,identifier_value,
                         record_j=manifestation_key,source_j=source)]
+  report_identifier_memory("cartesian_join_start")
   raw_pairs <- merge(
     left,right,
     by=c("identifier_type","identifier_value"),
@@ -266,6 +284,8 @@ if (nrow(shared_reg)) {
     hi=pmax(record_i,record_j)
   )]
   raw_pairs <- unique(raw_pairs[,.(record_i=lo,record_j=hi,identifier_type,identifier_value)])
+  cat(sprintf("IDENTIFIER_ASSIST_RAW_PAIRS rows=%d\n",nrow(raw_pairs)))
+  report_identifier_memory("cartesian_join_complete")
 } else {
   raw_pairs <- data.table(
     record_i=character(),record_j=character(),
@@ -317,6 +337,7 @@ pair_ev[
   safe_identifier_preresolve:=TRUE
 ]
 
+report_identifier_memory("identifier_pairs_scored")
 fwrite(pair_ev,file.path(output_dir,"identifier_candidate_pairs.csv"))
 safe <- pair_ev[safe_identifier_preresolve==TRUE & involves_appended==TRUE]
 safe[,pair_key:=paste(pmin(idx_i,idx_j),pmax(idx_i,idx_j),sep="::")]
