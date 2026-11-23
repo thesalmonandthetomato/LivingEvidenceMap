@@ -157,8 +157,14 @@ jobs:
               fi
               ;;
             wos)
-              if [ "$RUN_TYPE" = "fortnightly" ] || [ "$RUN_TYPE" = "monthly" ]; then
-                [ -n "$FORTNIGHTLY_FROM_DATE" ] && [ -n "$FORTNIGHTLY_TO_DATE" ] || { echo "Missing fortnightly date window for WoS" >&2; exit 2; }
+              wos_historical="$(Rscript -e 'x<-jsonlite::fromJSON("parent_search_plan/search_plan.json",simplifyVector=FALSE);cat(identical(x$wos_full_ts_expansion,TRUE))')"
+              if [ "$wos_historical" = "TRUE" ]; then
+                [ "$RUN_TYPE" = "monthly" ] || { echo "Historical WoS TS backfill requires monthly run" >&2; exit 2; }
+                [[ "$SEARCH_QUERY" == TS=* ]] || { echo "Historical WoS backfill requires explicit TS query" >&2; exit 2; }
+                echo "HISTORICAL_WOS_TS_EXPANSION: no modifiedTimeSpan; all WoS dates; baseline UID reconciliation required"
+                Rscript scripts/updater/workflow_00e_wos_starter_ingestion.R --query "$SEARCH_QUERY" --page-size 50 --start-page 1 --output-dir outputs/updater/source_child
+              elif [ "$RUN_TYPE" = "fortnightly" ] || [ "$RUN_TYPE" = "monthly" ]; then
+                [ -n "$FORTNIGHTLY_FROM_DATE" ] && [ -n "$FORTNIGHTLY_TO_DATE" ] || { echo "Missing monthly date window for WoS" >&2; exit 2; }
                 Rscript scripts/updater/workflow_00e_wos_starter_ingestion.R --query "$SEARCH_QUERY" --modified-time-span "$FORTNIGHTLY_FROM_DATE+$FORTNIGHTLY_TO_DATE" --page-size 50 --start-page 1 --output-dir outputs/updater/source_child
               else
                 Rscript scripts/updater/workflow_00e_wos_starter_ingestion.R --query "$SEARCH_QUERY" --page-size 50 --start-page 1 --output-dir outputs/updater/source_child
