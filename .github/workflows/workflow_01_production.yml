@@ -305,10 +305,14 @@ jobs:
                 fromJSON(config_path,simplifyVector=FALSE),
                 error=function(e) {warning(conditionMessage(e));NULL}
               ) else NULL
-              update_month <- format(Sys.Date(),"%Y-%m")
+              # Bind manual RIS to the archived W00 search month, not rerun date.
+              update_month <- substr(as.character(status$search$search_date),1L,7L)
+              if (!grepl("^[0-9]{4}-[0-9]{2}$",update_month)) {
+                stop("Cannot establish the W00 update month for manual RIS",call.=FALSE)
+              }
               if (!is.null(config) && !identical(config$update_month,update_month)) {
-                warning("Monthly manual DOI configuration is for another month; skipping")
-                config <- NULL
+                stop(sprintf("Monthly manual RIS configured for %s but authoritative W00 month is %s",
+                             config$update_month,update_month),call.=FALSE)
               }
               for (source in c("cab","proquest")) {
                 p$sources[[source]] <- NULL
@@ -343,14 +347,12 @@ jobs:
                                    error=function(e) 1L)
                 prepared <- file.path(dir_path,"ingestion","handoff","records.jsonl")
                 if (!identical(as.integer(result),0L) || !file.exists(prepared)) {
-                  warning(sprintf("SKIP optional %s: existing draft validation failed",source))
-                  next
+                  stop(sprintf("Configured November %s restricted Zenodo draft failed validation; refusing incomplete W01 handoff",source),call.=FALSE)
                 }
                 manifest <- fromJSON(file.path(dir_path,"ingestion","manifest.json"),simplifyVector=FALSE)
                 n <- as.integer(manifest$records$unique_records_for_handover)
                 if (length(n)!=1L || is.na(n) || n<0L) {
-                  warning(sprintf("SKIP optional %s: invalid RIS record count",source))
-                  next
+                  stop(sprintf("Configured November %s RIS manifest has invalid record count",source),call.=FALSE)
                 }
                 p$sources[[source]] <- list(
                   kind="workflow00_state",source=source,prepared_path=prepared,
