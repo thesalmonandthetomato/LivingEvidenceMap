@@ -1,0 +1,4 @@
+{
+  "exit_code": 1,
+  "log": "Error in source_kind(r) : could not find function \"source_kind\"\nCalls: u_id\nExecution halted\n"
+}
