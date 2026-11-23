@@ -70,6 +70,14 @@ on:
         required: false
         default: false
         type: boolean
+      wos_full_ts_expansion:
+        required: false
+        default: false
+        type: boolean
+      monthly_from_date:
+        required: false
+        default: ''
+        type: string
 
   workflow_dispatch:
     inputs:
@@ -157,6 +165,16 @@ on:
         required: true
         default: false
         type: boolean
+      wos_full_ts_expansion:
+        description: 'One-off monthly update: full historical TS search in WoS with UID reconciliation'
+        required: true
+        default: false
+        type: boolean
+      monthly_from_date:
+        description: 'Optional inclusive monthly start date YYYY-MM-DD, preserving November overlap'
+        required: false
+        default: ''
+        type: string
 
 concurrency:
   group: workflow00-search-orchestrator
@@ -275,6 +293,8 @@ jobs:
           set -euo pipefail
           Rscript scripts/updater/workflow_00_search_orchestrator.R \
             --run-type '${{ inputs.run_type }}' \
+            --wos-full-ts-expansion '${{ inputs.wos_full_ts_expansion }}' \
+            --from-date '${{ inputs.monthly_from_date }}' \
             --additional-search-term '${{ inputs.additional_search_term }}' \
             --config user_input/workflow00_search_strategy.json \
             --output-dir outputs/updater/workflow00_plan
@@ -295,7 +315,10 @@ jobs:
             'maricultur*' %in% unlist(p$base_farm_terms,use.names=FALSE),
             !is.null(p$monthly_window$from),
             !is.null(p$monthly_window$to),
-            as.Date(p$monthly_window$from)<=as.Date(p$monthly_window$to)
+            as.Date(p$monthly_window$from)<=as.Date(p$monthly_window$to),
+            !is.null(p$wos_full_ts_expansion),
+            grepl('^TS=',p$source_queries$wos),
+            !grepl('(^|[^A-Z])(AB|AK)=',p$source_queries$wos)
           )
           `%||%` <- function(x,y) if(is.null(x)) y else x
           manual_path <- 'user_input/monthly_manual_ris.json'
