@@ -24,6 +24,7 @@ reported_total_arg <- arg("--reported-total", NULL)
 base_url <- arg("--base-url", "https://api.clarivate.com/apis/wos-starter/v1/documents")
 
 if (is.null(query) || !nzchar(trimws(query))) stop("--query is required", call. = FALSE)
+if (grepl("(^|[^[:alnum:]_])(AB|AK)=",query,perl=TRUE)) stop("WoS Starter AB/AK unsupported. Refusing implicit search-scope conversion; generate and document TS query explicitly.",call.=FALSE)
 if (is.na(page_size) || page_size < 1L || page_size > 50L) stop("--page-size must be 1..50 for WoS Starter", call. = FALSE)
 if (is.na(start_page) || start_page < 1L) stop("--start-page must be >= 1", call. = FALSE)
 
@@ -138,8 +139,8 @@ if (count_only) {
     database_scope = database_scope,
     query = query,
     modified_time_span = if (nzchar(modified_time_span)) modified_time_span else NULL,
-    search_scope = c("title", "abstract", "author_keywords"),
-    keywords_plus_included = FALSE,
+    search_scope = c("title", "abstract", "author_keywords", "keywords_plus"),
+    keywords_plus_included = TRUE,
     total_results = reported_total,
     page_size = page_size,
     total_pages = total_pages,
@@ -163,8 +164,8 @@ manifest <- list(
   database_scope = database_scope,
   query = query,
   modified_time_span = if (nzchar(modified_time_span)) modified_time_span else NULL,
-  search_scope = c("title", "abstract", "author_keywords"),
-  keywords_plus_included = FALSE,
+  search_scope = c("title", "abstract", "author_keywords", "keywords_plus"),
+  keywords_plus_included = TRUE,
   reported_total = reported_total,
   page_size = page_size,
   total_pages = total_pages,
