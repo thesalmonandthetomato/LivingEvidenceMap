@@ -1,4 +1,0 @@
-{
-  "exit_code": 0,
-  "log": "PASS_SOURCE_ID lens: LENS-HIST-24176\nPASS_SOURCE_ID lens: LENS-NOV-001\nPASS_SOURCE_ID lens: LENS-FALLBACK-001\nPASS_SOURCE_ID scopus: scopus:1234\nPASS_SOURCE_ID wos: WOS:00123\nPASS_FAIL_CLOSED: missing Lens ID remains empty, no synthetic ID generated\nALL_IDENTIFIER_TESTS_PASS\n"
-}
