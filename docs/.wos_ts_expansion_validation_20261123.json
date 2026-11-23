@@ -1,0 +1,10 @@
+{
+  "results": "baseline_branch=workflow01-final-architecture\nbaseline_wos_registry_sha256=be15ea174e2d130244cb17cfbbbbb5aac4450c4fe04a098001b3500ceccba59f\nPASS: Workflow 00 plan created for run_type=monthly\nPLAN_PASS: combined monthly + historical WoS TS with 19+ source queries; other date windows retained\nPASS: Workflow 00 plan created for run_type=monthly\nFUTURE_MONTHLY_PASS: TS query with monthly window is present\nWOS_TOTAL=27828\nWOS_TOTAL_PAGES=557\nFULL_TS_TOTAL=27828\nFULL_TS_PAGES=557\nRequesting WoS Starter page 1 / 557\nPASS: WoS Starter chunk complete; pages 1-1, 50 records.\nRequesting WoS Starter page 557 / 557\nPASS: WoS Starter chunk complete; pages 557-557, 28 records.\nPASS: wrote 50 WoS Starter sidecar records; canonical JSON untouched.\nPASS: wos native-ID reconciliation: raw=50 unique=50 known=49 new=1\nLIVE_PAGINATION_AND_RECONCILIATION_PASS: first=50 last=28 known=49 new=1\nTEST_STATUS=PASS\n",
+  "shiny_runs": [
+    {
+      "conclusion": "success",
+      "databaseId": 45129524713,
+      "status": "completed"
+    }
+  ]
+}
