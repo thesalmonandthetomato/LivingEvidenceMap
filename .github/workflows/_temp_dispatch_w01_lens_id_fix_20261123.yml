@@ -1,0 +1,53 @@
+name: TEMP Dispatch W01 after validated Lens identifier correction
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/_temp_dispatch_w01_lens_id_fix_20261123.yml']
+permissions:
+  actions: write
+  contents: write
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Dispatch verified W01 from November W00 and immutable historical W01 baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          started="$(date -u +%s)"
+          gh workflow run workflow_01_production.yml \
+            --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture \
+            -f workflow00_pointer_path='docs/search_record/zenodo/run-45130154568.json' \
+            -f previous_workflow01_pointer_path='docs/deduplication/zenodo/run-40218882441.json' \
+            -f model='gpt-5.6-luna' -f auto_threshold='0.95' -f max_llm_cases='5000'
+          echo 'W01_DISPATCH_SENT_WOS_TS_PLUS_CAB_PQDT'
+          result=''
+          for i in {1..20}; do
+            sleep 4
+            runs="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow workflow_01_production.yml --limit 15 --json databaseId,createdAt,event,headBranch)"
+            result="$(STARTED="$started" RUNS="$runs" python3 - <<'PY'
+          import json,os,datetime
+          started=int(os.environ['STARTED'])
+          for x in json.loads(os.environ['RUNS']):
+              ts=int(datetime.datetime.fromisoformat(x['createdAt'].replace('Z','+00:00')).timestamp())
+              if x['event']=='workflow_dispatch' and x.get('headBranch')=='workflow01-final-architecture' and ts>=started-10:
+                  print(x['databaseId'])
+                  break
+          PY
+            )"
+            [ -z "$result" ] || break
+          done
+          test -n "$result"
+          echo "W01_NEW_RUN_ID=$result"
+          W01_RUN="$result" python3 - <<'PY'
+          import os,json,base64,urllib.request
+          data={'w01_run_id':int(os.environ['W01_RUN']),'w00_run_id':45130154568,'previous_w01_run_id':40218882441,'branch':'workflow01-final-architecture','validated_fix':'Source-specific Lens ID resolution in workflow_01_identifier_assist_build.R'}
+          content=base64.b64encode(json.dumps(data,indent=2).encode()).decode()
+          url=f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/contents/docs/.temp_w01_lens_fix_dispatch_20261123.json"
+          body=json.dumps({'message':'TEMP register W01 rerun after validated Lens fix','content':content,'branch':'workflow01-final-architecture'}).encode()
+          request=urllib.request.Request(url,data=body,method='PUT',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','Content-Type':'application/json'})
+          with urllib.request.urlopen(request,timeout=30) as r:print('DISPATCH_RECEIPT_WRITTEN',r.status)
+          PY
