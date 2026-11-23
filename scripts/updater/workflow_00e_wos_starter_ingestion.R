@@ -24,6 +24,16 @@ reported_total_arg <- arg("--reported-total", NULL)
 base_url <- arg("--base-url", "https://api.clarivate.com/apis/wos-starter/v1/documents")
 
 if (is.null(query) || !nzchar(trimws(query))) stop("--query is required", call. = FALSE)
+# Compatibility for archived W00 plans produced before the Starter field-tag fix.
+# The Starter API accepts TS, but rejects AB and AK. These historical clauses
+# are mapped to TS so failed jobs can be retried without regenerating the plan.
+original_query <- query
+legacy_unsupported_tags <- grepl("(^|[^[:alnum:]_])(AB|AK)=", query, perl = TRUE)
+if (legacy_unsupported_tags) {
+  query <- gsub("(^|[^[:alnum:]_])(TI|AB|AK)=", "\\1TS=", query, perl = TRUE)
+  message("WoS Starter: converted archived TI/AB/AK clauses to supported TS field; Topic includes Keywords Plus.")
+}
+
 if (is.na(page_size) || page_size < 1L || page_size > 50L) stop("--page-size must be 1..50 for WoS Starter", call. = FALSE)
 if (is.na(start_page) || start_page < 1L) stop("--start-page must be >= 1", call. = FALSE)
 
@@ -137,9 +147,11 @@ if (count_only) {
     database = "WOS",
     database_scope = database_scope,
     query = query,
+    original_query = original_query,
+    legacy_query_converted = legacy_unsupported_tags,
     modified_time_span = if (nzchar(modified_time_span)) modified_time_span else NULL,
-    search_scope = c("title", "abstract", "author_keywords"),
-    keywords_plus_included = FALSE,
+    search_scope = c("title", "abstract", "author_keywords", "keywords_plus"),
+    keywords_plus_included = TRUE,
     total_results = reported_total,
     page_size = page_size,
     total_pages = total_pages,
@@ -162,9 +174,11 @@ manifest <- list(
   database = "WOS",
   database_scope = database_scope,
   query = query,
+  original_query = original_query,
+  legacy_query_converted = legacy_unsupported_tags,
   modified_time_span = if (nzchar(modified_time_span)) modified_time_span else NULL,
-  search_scope = c("title", "abstract", "author_keywords"),
-  keywords_plus_included = FALSE,
+  search_scope = c("title", "abstract", "author_keywords", "keywords_plus"),
+  keywords_plus_included = TRUE,
   reported_total = reported_total,
   page_size = page_size,
   total_pages = total_pages,
