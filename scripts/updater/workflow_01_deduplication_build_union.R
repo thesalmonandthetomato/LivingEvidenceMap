@@ -122,7 +122,7 @@ for (src in all_sources) {
     stop(sprintf("Required preserved source file missing for legacy source %s",src),call.=FALSE)
   }
 
-  current_path <- current_paths[[src]]
+  current_path <- if (src %in% names(current_paths)) current_paths[[src]] else NULL
   # Historical-only sources must be copied unchanged, not silently omitted.
   cur_lines <- if (is.null(current_path)) character() else read_lines_nonempty(current_path)
   cur_ids <- ids_for_lines(cur_lines,src)
