@@ -1,4 +1,4 @@
-name: TEMP validate November manual RIS and W01 historical union
+name: TEMP validate November manual RIS and W01 historical union (corrected)
 on:
   push:
     branches: [workflow01-final-architecture]
