@@ -1,0 +1,58 @@
+name: TEMP Dispatch approved combined November W00 once
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/_temp_dispatch_combined_november_20261123.yml']
+permissions:
+  actions: write
+  contents: write
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Dispatch one combined monthly update with historical WoS TS backfill
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          started="$(date -u +%s)"
+          gh workflow run workflow_00_search_orchestrator.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref workflow01-final-architecture \
+            -f run_type=monthly \
+            -f group_core_multidisciplinary=true \
+            -f wos_full_ts_expansion=true \
+            -f monthly_from_date=2026-10-15 \
+            -f supersede_incomplete_update=false
+          echo "DISPATCH_SENT: monthly, TS full historical WoS, monthly from 2026-10-15"
+          result=''
+          for i in {1..15}; do
+            sleep 4
+            runs="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow workflow_00_search_orchestrator.yml --limit 12 --json databaseId,createdAt,event,status,headBranch)"
+            result="$(STARTED="$started" RUNS="$runs" python3 - <<'PY'
+          import json,os,datetime
+          now=int(os.environ['STARTED'])
+          for r in json.loads(os.environ['RUNS']):
+              ts=int(datetime.datetime.fromisoformat(r['createdAt'].replace('Z','+00:00')).timestamp())
+              if r['event']=='workflow_dispatch' and ts>=now-10 and r.get('headBranch')=='workflow01-final-architecture':
+                  print(r['databaseId'])
+                  break
+          PY
+            )"
+            if [ -n "$result" ]; then break; fi
+          done
+          [ -n "$result" ] || { echo "DISPATCH_RESULT_NOT_FOUND" >&2; exit 2; }
+          echo "COMBINED_NOVEMBER_W00_RUN_ID=$result"
+          export RESULT_RUN_ID="$result"
+          python3 - <<'PY'
+          import os,json,base64,urllib.request
+          report={'schema':'combined-november-2026-w00-dispatch-v1','run_id':int(os.environ['RESULT_RUN_ID']),'branch':'workflow01-final-architecture','run_type':'monthly','wos_full_ts_expansion':True,'monthly_from_date':'2026-10-15','note':'Temporary dispatch receipt; remove after retrieving ID.'}
+          data=base64.b64encode(json.dumps(report,indent=2).encode()).decode()
+          u=f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/contents/docs/.combined_november_w00_dispatch_20261123.json"
+          payload=json.dumps({'message':'TEMP record authorized combined November run identifier','content':data,'branch':'workflow01-final-architecture'}).encode()
+          req=urllib.request.Request(u,data=payload,method='PUT',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json','Content-Type':'application/json'})
+          with urllib.request.urlopen(req,timeout=30) as resp:
+              print('DISPATCH_RECEIPT_COMMITTED',resp.status)
+          PY
