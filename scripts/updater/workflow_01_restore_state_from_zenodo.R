@@ -91,19 +91,54 @@ dir.create(download_dir,recursive=TRUE,showWarnings=FALSE)
 download_one <- function(e) {
   dest <- file.path(download_dir,e$filename)
   url <- paste0(sub("/$","",bucket),"/",URLencode(e$filename,reserved=TRUE))
-  r <- request(url) |> req_method("GET") |> auth() |> req_timeout(1800) |>
-    req_error(is_error=function(resp)FALSE) |> req_perform(path=dest)
-  if (resp_status(r)!=200L) stop(sprintf("Download failed for %s: HTTP %d",e$filename,resp_status(r)),call.=FALSE)
-  bytes <- unname(file.info(dest)$size)
-  sha <- digest(file=dest,algo="sha256",serialize=FALSE)
-  if (!identical(as.numeric(bytes),as.numeric(e$bytes))) stop(sprintf("Byte-size mismatch for %s",e$filename),call.=FALSE)
-  if (!identical(tolower(sha),tolower(e$sha256))) stop(sprintf("SHA-256 mismatch for %s",e$filename),call.=FALSE)
-  if (!is.na(e$zenodo_checksum)&&nzchar(e$zenodo_checksum)) {
-    md5e <- sub("^md5:","",tolower(e$zenodo_checksum))
-    md5a <- digest(file=dest,algo="md5",serialize=FALSE)
-    if (!identical(md5a,md5e)) stop(sprintf("MD5 mismatch for %s",e$filename),call.=FALSE)
+  max_attempts <- 5L
+  for(attempt in seq_len(max_attempts)){
+    if(file.exists(dest)) unlink(dest)
+    failure <- NULL
+    response <- tryCatch(
+      request(url) |> req_method("GET") |> auth() |> req_timeout(1800) |>
+        req_error(is_error=function(resp)FALSE) |> req_perform(path=dest),
+      error=function(err){failure <<- conditionMessage(err);NULL}
+    )
+    status <- if(is.null(response)) NA_integer_ else resp_status(response)
+    transient <- is.na(status) || status %in% c(200L,408L,425L,429L,500L,502L,503L,504L)
+    if(!is.null(response) && status==200L && file.exists(dest)){
+      bytes <- unname(file.info(dest)$size)
+      if(!identical(as.numeric(bytes),as.numeric(e$bytes))){
+        failure <- sprintf("byte-size mismatch expected=%s actual=%s",e$bytes,bytes)
+      } else {
+        actual_sha <- digest(file=dest,algo="sha256",serialize=FALSE)
+        if(!identical(tolower(actual_sha),tolower(e$sha256))){
+          failure <- sprintf("SHA-256 mismatch expected=%s actual=%s",e$sha256,actual_sha)
+        } else if(!is.na(e$zenodo_checksum)&&nzchar(e$zenodo_checksum)){
+          expected_md5 <- sub("^md5:","",tolower(e$zenodo_checksum))
+          actual_md5 <- digest(file=dest,algo="md5",serialize=FALSE)
+          if(!identical(actual_md5,expected_md5)){
+            failure <- sprintf("MD5 mismatch expected=%s actual=%s",expected_md5,actual_md5)
+          }
+        }
+      }
+      if(is.null(failure)){
+        cat(sprintf("PASS: verified Zenodo W01 baseline file %s attempt=%d/%d\\n",
+                    e$filename,attempt,max_attempts))
+        return(dest)
+      }
+    } else if(is.null(failure)){
+      failure <- sprintf("HTTP %s",if(is.na(status))"unknown" else as.character(status))
+    }
+    if(file.exists(dest)) unlink(dest)
+    if(!transient || attempt==max_attempts){
+      stop(sprintf("Zenodo W01 baseline file %s failed after %d attempt(s): %s",
+                   e$filename,attempt,failure),call.=FALSE)
+    }
+    retry_after <- if(!is.null(response)) suppressWarnings(as.numeric(resp_header(response,"retry-after"))) else NA_real_
+    delay <- if(length(retry_after)==1L && is.finite(retry_after) && retry_after>0) min(120,retry_after) else min(60,3*2^(attempt-1L))
+    cat(sprintf("RETRY: Zenodo W01 baseline file %s attempt=%d/%d reason=%s delay_seconds=%s\\n",
+                e$filename,attempt,max_attempts,failure,format(delay)))
+    flush.console()
+    Sys.sleep(delay)
   }
-  dest
+  stop(sprintf("Zenodo W01 baseline file %s was not verified",e$filename),call.=FALSE)
 }
 
 local <- lapply(expected,download_one)
