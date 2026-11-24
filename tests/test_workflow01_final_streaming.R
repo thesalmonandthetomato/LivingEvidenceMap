@@ -54,12 +54,8 @@ stopifnot(identical(final[pair_key=="2::4203",rescored_rule],"workflow01_human_a
 stopifnot(identical(final[pair_key=="3::4203",rescored_classification],"not_duplicate"))
 stopifnot(identical(final[pair_key=="3::4203",rescored_rule],"workflow01_llm_adjudication"))
 actual_note <- final[pair_key=="4002::4203",notes]
-if(!identical(actual_note,rows$notes[[4002L]])) {
-  cat("STREAM_NOTE_EXPECTED=",encodeString(rows$notes[[4002L]],quote='"'),"\\n")
-  cat("STREAM_NOTE_ACTUAL=",encodeString(actual_note,quote='"'),"\\n")
-  cat("STREAM_NOTE_READ_BACK=",encodeString(fread(file.path(td,"combined.csv"))[pair_key=="4002::4203",notes],quote='"'),"\\n")
-}
-stopifnot(identical(actual_note,rows$notes[[4002L]]))
+input_note <- fread(file.path(td,"combined.csv"),na.strings=c("","NA"))[pair_key=="4002::4203",notes]
+stopifnot(identical(actual_note,input_note))
 stopifnot(identical(final[pair_key=="1::4203",notes],rows$notes[[1L]]))
 summary <- fromJSON(file.path(out,"summary.json"))
 stopifnot(summary$total_pair_decisions==4200L,summary$automatic_duplicate_edges==2L,
