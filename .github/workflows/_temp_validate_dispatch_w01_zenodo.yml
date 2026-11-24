@@ -1,0 +1,39 @@
+name: TEMP validate restricted W01 checkpoint and dispatch
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/_temp_validate_dispatch_w01_zenodo.yml']
+permissions:
+  actions: write
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Validate authenticated checkpoint restoration
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          Rscript -e 'install.packages(c("httr2","jsonlite","digest")); invisible(parse(file="scripts/updater/workflow_01_restore_pending_checkpoint.R"))'
+          Rscript scripts/updater/workflow_01_restore_pending_checkpoint.R --pointer docs/deduplication/checkpoints/run-45349525216.json --output-root checkpoint_restore
+          Rscript -e 'x<-jsonlite::fromJSON("checkpoint_restore/checkpoint_restore_audit.json");stopifnot(x$status=="PASS",x$github_run_id=="45349525216",x$queue_sha256=="2b58c43d4ab2a35a4f2955f512ae16c8be4050e7dec93ba3182203fb5e8ad884"); for(f in c("previous_workflow01_pointer.json","incremental_rescored_pairs.csv","all_adjudications.jsonl","human_review_package/review_manifest.json"))stopifnot(file.exists(file.path(x$checkpoint_dir,f)));cat("PASS: locked checkpoint restored and verified\n")'
+      - name: Dispatch fresh production resume only after validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          HANDOFF=docs/deduplication/handoffs/w01/run-45349525216.json
+          Rscript -e 'x<-jsonlite::fromJSON("docs/deduplication/handoffs/w01/run-45349525216.json");stopifnot(x$status=="ready",x$checkpoint_run_id=="45349525216",x$export_run_id=="45390805607",x$queue_sha256=="2b58c43d4ab2a35a4f2955f512ae16c8be4050e7dec93ba3182203fb5e8ad884")'
+          active="$(gh run list --workflow workflow_01_resume_after_human_review.yml --branch workflow01-final-architecture --limit 30 --json status --jq '[.[]|select(.status != "completed")]|length')"
+          test "$active" = 0
+          gh workflow run workflow_01_resume_after_human_review.yml --ref workflow01-final-architecture -f handoff_path="$HANDOFF"
+          echo "PASS: fresh W01 resume dispatched"
