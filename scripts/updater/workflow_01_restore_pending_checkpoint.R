@@ -32,10 +32,40 @@ if(!length(files)) stop("Checkpoint pointer lacks archive_files",call.=FALSE)
 
 dep_id <- as.character(p$zenodo_deposition_id)
 auth <- function(req) req |> req_headers(Authorization=paste("Bearer",token))
-dep <- request(paste0("https://zenodo.org/api/deposit/depositions/",dep_id)) |>
-  auth() |> req_timeout(120) |> req_perform() |> resp_body_json(simplifyVector=FALSE)
-if(!isTRUE(dep$submitted)) stop("Checkpoint deposition is not published",call.=FALSE)
-bucket <- as.character(dep$links$bucket)
+# Use only authenticated Zenodo endpoints. The legacy deposit API can refuse
+# access to a published record even when the published-record API permits it.
+get_zenodo <- function(url, label, dest=NULL, timeout=120) {
+  for(attempt in seq_len(5L)) {
+    if(!is.null(dest) && file.exists(dest)) unlink(dest)
+    resp <- tryCatch({
+      req <- request(url) |> auth() |> req_timeout(timeout) |>
+        req_error(is_error=function(resp) FALSE)
+      if(is.null(dest)) req_perform(req) else req_perform(req,path=dest)
+    },error=function(e) NULL)
+    status <- if(is.null(resp)) NA_integer_ else resp_status(resp)
+    message(sprintf("Zenodo %s: HTTP %s (attempt %d/5)",label,status,attempt))
+    if(!is.na(status) && status==200L) return(resp)
+    if(!is.null(dest) && file.exists(dest)) unlink(dest)
+    if(!is.na(status) && !status %in% c(408L,425L,429L,500L,502L,503L,504L)) return(NULL)
+    if(attempt<5L) Sys.sleep(min(60,3*2^(attempt-1L)))
+  }
+  NULL
+}
+record_id <- as.character(p$zenodo_record_id)
+stopifnot(length(dep_id)==1L,grepl("^[0-9]+$",dep_id),
+          length(record_id)==1L,grepl("^[0-9]+$",record_id))
+legacy <- get_zenodo(paste0("https://zenodo.org/api/deposit/depositions/",dep_id),"deposition metadata")
+bucket <- ""
+if(!is.null(legacy)) {
+  dep <- resp_body_json(legacy,simplifyVector=FALSE)
+  if(!isTRUE(dep$submitted)) stop("Checkpoint deposition is not published",call.=FALSE)
+  bucket <- if(is.null(dep$links$bucket)) "" else as.character(dep$links$bucket)
+  if(!grepl("^https://zenodo[.]org/api/files/",bucket)) bucket <- ""
+}
+# The record and filenames are fixed by the immutable repository pointer.
+# Access is still enforced by Zenodo using the same token.
+record_file_url <- function(fn) paste0("https://zenodo.org/api/records/",record_id,
+  "/files/",URLencode(fn,reserved=TRUE),"/content")
 
 dir.create(output_root,recursive=TRUE)
 downloads <- file.path(output_root,".downloads")
@@ -44,10 +74,11 @@ local <- character()
 for(z in files){
   fn <- as.character(z$filename)
   dest <- file.path(downloads,fn)
-  resp <- request(paste0(sub("/$","",bucket),"/",URLencode(fn,reserved=TRUE))) |>
-    req_method("GET") |> auth() |> req_timeout(1800) |>
-    req_error(is_error=function(resp)FALSE) |> req_perform(path=dest)
-  if(resp_status(resp)!=200L) stop(sprintf("Checkpoint download failed for %s",fn),call.=FALSE)
+  resp <- NULL
+  if(nzchar(bucket)) resp <- get_zenodo(paste0(sub("/$","",bucket),"/",URLencode(fn,reserved=TRUE)),
+                                      paste("deposit file",fn),dest,1800)
+  if(is.null(resp)) resp <- get_zenodo(record_file_url(fn),paste("published record file",fn),dest,1800)
+  if(is.null(resp)) stop(sprintf("Authenticated checkpoint download failed for %s (record %s); check Zenodo token permissions or service status",fn,record_id),call.=FALSE)
   if(as.numeric(file.info(dest)$size)!=as.numeric(z$bytes)) stop(sprintf("Byte mismatch for %s",fn),call.=FALSE)
   actual_sha <- digest(file=dest,algo="sha256",serialize=FALSE)
   if(!identical(tolower(actual_sha),tolower(as.character(z$sha256)))) stop(sprintf("SHA mismatch for %s",fn),call.=FALSE)
