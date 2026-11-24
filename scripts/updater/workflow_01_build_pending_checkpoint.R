@@ -152,14 +152,37 @@ for(src in source_order){
   source_files[[src]] <- basename(cur)
 }
 
-file.copy(incremental_rescore,file.path(output_dir,"incremental_rescored_pairs.csv"),overwrite=TRUE)
-file.copy(adjudications,file.path(output_dir,"all_adjudications.jsonl"),overwrite=TRUE)
-file.copy(pre_summary,file.path(output_dir,"pre_adjudication_summary.json"),overwrite=TRUE)
-file.copy(previous_pointer,file.path(output_dir,"previous_workflow01_pointer.json"),overwrite=TRUE)
-file.copy(workflow00_pointer,file.path(output_dir,"workflow00_pointer.json"),overwrite=TRUE)
-dir.create(file.path(output_dir,"human_review_package"),showWarnings=FALSE)
+# Check every handoff source before copying. A failed file.copy previously
+# returned FALSE and the workflow continued until a later misleading hash error.
+copy_verified <- function(source,destination) {
+  if (!file.exists(source) || dir.exists(source)) {
+    stop(sprintf("Missing checkpoint handoff file: %s",source),call.=FALSE)
+  }
+  if (!isTRUE(file.copy(source,destination,overwrite=TRUE)) ||
+      !file.exists(destination) ||
+      !identical(sha(source),sha(destination))) {
+    stop(sprintf("Checkpoint handoff copy or SHA256 check failed: %s -> %s",
+                 source,destination),call.=FALSE)
+  }
+  invisible(destination)
+}
+copy_verified(incremental_rescore,file.path(output_dir,"incremental_rescored_pairs.csv"))
+copy_verified(adjudications,file.path(output_dir,"all_adjudications.jsonl"))
+copy_verified(pre_summary,file.path(output_dir,"pre_adjudication_summary.json"))
+copy_verified(previous_pointer,file.path(output_dir,"previous_workflow01_pointer.json"))
+copy_verified(workflow00_pointer,file.path(output_dir,"workflow00_pointer.json"))
+dest_review <- file.path(output_dir,"human_review_package")
+dir.create(dest_review,showWarnings=FALSE)
+if (!dir.exists(review_package)) stop(sprintf("Missing human-review package: %s",review_package),call.=FALSE)
 files <- list.files(review_package,full.names=TRUE,all.files=TRUE,no..=TRUE)
-file.copy(files,file.path(output_dir,"human_review_package"),recursive=TRUE,overwrite=TRUE)
+if (!length(files)) stop("Human-review package is empty",call.=FALSE)
+for (p in files) {
+  if (dir.exists(p)) stop(sprintf("Unexpected directory in human-review package: %s",p),call.=FALSE)
+  copy_verified(p,file.path(dest_review,basename(p)))
+}
+if (!file.exists(file.path(dest_review,"review_manifest.json"))) {
+  stop("Human-review package is missing review_manifest.json",call.=FALSE)
+}
 
 prev <- fromJSON(previous_pointer,simplifyVector=FALSE)
 w00 <- fromJSON(workflow00_pointer,simplifyVector=FALSE)
