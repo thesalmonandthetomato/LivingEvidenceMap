@@ -1,0 +1,9 @@
+{
+  "schema": "living-evidence-map-workflow01-export-request-v1",
+  "batch_id": "w01-run-45349525216",
+  "checkpoint_run_id": "45349525216",
+  "queue_sha256": "2b58c43d4ab2a35a4f2955f512ae16c8be4050e7dec93ba3182203fb5e8ad884",
+  "checkpoint_pointer_path": "docs/deduplication/checkpoints/run-45349525216.json",
+  "requested_via": "verified-W01-recovery",
+  "purpose": "Export current W01 human review decisions from locked queue; never W08b"
+}
