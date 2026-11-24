@@ -48,14 +48,14 @@ w01_pair_fingerprint <- function(keys,hashes,cols) {
   digest(paste(c(paste(sort(cols),collapse="\u001f"),lines),collapse="\n"),
          algo="sha256",serialize=FALSE)
 }
-w01_pair_collect <- function(path,cols) {
+w01_pair_collect <- function(path,cols,hash_cols=cols) {
   keys <- list(); hashes <- list()
   w01_pair_stream(path,function(dt){
     dt <- w01_pair_align(dt,cols)
     if(!"pair_key" %in% names(dt)) stop("W01 pair state lacks pair_key",call.=FALSE)
     if(anyNA(dt$pair_key)) stop("W01 pair keys contain NA",call.=FALSE)
     keys[[length(keys)+1L]] <<- as.character(dt$pair_key)
-    hashes[[length(hashes)+1L]] <<- w01_pair_rowhashes(dt,cols)
+    hashes[[length(hashes)+1L]] <<- w01_pair_rowhashes(dt,hash_cols)
   })
   list(keys=unlist(keys,use.names=FALSE),hashes=unlist(hashes,use.names=FALSE))
 }
@@ -66,7 +66,8 @@ w01_pair_diff <- function(previous_path,current_path,upsert_path) {
   if(anyDuplicated(previous$keys)) stop("Duplicate historical W01 pair keys",call.=FALSE)
   lookup <- data.table(pair_key=previous$keys,signature=previous$hashes)
   setkey(lookup,pair_key)
-  keys <- list(); hashes <- list()
+  keys <- list(); hashes <- list(); semantic_hashes <- list()
+  semantic_cols <- setdiff(cols,c("title_i","title_j"))
   n_new <- 0L; n_changed <- 0L; n_up <- 0L; written <- FALSE
   if(file.exists(upsert_path)) unlink(upsert_path)
   w01_pair_stream(current_path,function(dt){
@@ -75,6 +76,7 @@ w01_pair_diff <- function(previous_path,current_path,upsert_path) {
     sig <- w01_pair_rowhashes(dt,cols)
     keys[[length(keys)+1L]] <<- key
     hashes[[length(hashes)+1L]] <<- sig
+    semantic_hashes[[length(semantic_hashes)+1L]] <<- w01_pair_rowhashes(dt,semantic_cols)
     prior <- lookup[.(key),on="pair_key",signature]
     fresh <- is.na(prior)
     changed <- !fresh & prior != sig
@@ -97,7 +99,7 @@ w01_pair_diff <- function(previous_path,current_path,upsert_path) {
   if(anyDuplicated(current_keys)) stop("Duplicate current W01 pair keys",call.=FALSE)
   missing <- setdiff(previous$keys,current_keys)
   if(length(missing)) stop(sprintf("%d previous pair decisions disappeared",length(missing)),call.=FALSE)
-  state_sha <- w01_pair_fingerprint(current_keys,current_hashes,cols)
+  state_sha <- w01_pair_fingerprint(current_keys,unlist(semantic_hashes,use.names=FALSE),semantic_cols)
   cat(sprintf("PASS: streaming W01 pair delta: %d current, %d new, %d changed, %d upserts\n",
               length(current_keys),n_new,n_changed,n_up))
   list(new=n_new,changed=n_changed,upserts=n_up,state_sha256=state_sha,
@@ -130,8 +132,9 @@ w01_pair_replay <- function(previous_path,upsert_path,output_path,expected_sha) 
     written <<- TRUE
   })
   if(!written) stop("W01 pair replay generated no rows",call.=FALSE)
-  result <- w01_pair_collect(output_path,cols)
-  actual <- w01_pair_fingerprint(result$keys,result$hashes,cols)
+  semantic_cols <- setdiff(cols,c("title_i","title_j"))
+  result <- w01_pair_collect(output_path,cols,hash_cols=semantic_cols)
+  actual <- w01_pair_fingerprint(result$keys,result$hashes,semantic_cols)
   if(!identical(tolower(actual),tolower(as.character(expected_sha))))
     stop(sprintf("Replayed W01 pair state hash mismatch: expected=%s actual=%s",
                  expected_sha,actual),call.=FALSE)
