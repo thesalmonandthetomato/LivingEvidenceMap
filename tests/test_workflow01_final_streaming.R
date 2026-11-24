@@ -56,7 +56,8 @@ stopifnot(identical(final[pair_key=="3::4203",rescored_rule],"workflow01_llm_adj
 actual_note <- final[pair_key=="4002::4203",notes]
 input_note <- fread(file.path(td,"combined.csv"),na.strings=c("","NA"))[pair_key=="4002::4203",notes]
 stopifnot(identical(actual_note,input_note))
-stopifnot(identical(final[pair_key=="1::4203",notes],rows$notes[[1L]]))
+stopifnot(identical(final[pair_key=="1::4203",notes],
+  fread(file.path(td,"combined.csv"),na.strings=c("","NA"))[pair_key=="1::4203",notes]))
 summary <- fromJSON(file.path(out,"summary.json"))
 stopifnot(summary$total_pair_decisions==4200L,summary$automatic_duplicate_edges==2L,
   summary$human_final_decisions==1L,summary$llm_final_decisions==1L,
