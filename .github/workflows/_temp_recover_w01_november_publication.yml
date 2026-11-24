@@ -77,6 +77,13 @@ jobs:
             cat("PASS: verified",nm,"\n")
 
           }
+      - name: Check corrected historical restore scripts
+        shell: Rscript {0}
+        run: |
+          parse(file="scripts/updater/workflow_01_restore_state_from_zenodo.R")
+          parse(file="scripts/updater/workflow_01_restore_current_state.R")
+          cat("PASS: historical restore scripts parse successfully\n")
+
       - name: Restore previous authoritative state
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
