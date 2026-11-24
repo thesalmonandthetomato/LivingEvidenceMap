@@ -32,6 +32,36 @@ required <- list(previous_root,current_seed_root,incremental_rescore,adjudicatio
                  pre_summary,metadata_path,previous_pointer,workflow00_pointer,output_dir,run_id)
 if(any(vapply(required,is.null,logical(1)))) stop("Missing required checkpoint argument",call.=FALSE)
 
+# GitHub re-runs use the workflow YAML from the original run, even when checkout
+# obtains a newer script from the working branch. Older canonicalise jobs pass
+# workflow00_registry/<pointer> without checking out workflow00_registry.
+# The same immutable pointer is present in the normal repository checkout.
+resolve_workflow00_pointer <- function(path) {
+  if (file.exists(path)) return(path)
+  prefix <- "workflow00_registry/"
+  if (!startsWith(path,prefix)) {
+    stop(sprintf("W00 pointer file does not exist: %s",path),call.=FALSE)
+  }
+  candidate <- substring(path,nchar(prefix)+1L)
+  if (!startsWith(candidate,"docs/search_record/zenodo/") ||
+      !grepl("^run-[0-9]+\\.json$",basename(candidate)) ||
+      !file.exists(candidate)) {
+    stop(sprintf("Missing authoritative W00 pointer: %s (fallback %s)",path,candidate),call.=FALSE)
+  }
+  cat(sprintf("W01_CHECKPOINT_W00_POINTER_FALLBACK original=%s resolved=%s\\n",path,candidate))
+  candidate
+}
+workflow00_pointer <- resolve_workflow00_pointer(workflow00_pointer)
+if (!file.exists(previous_pointer)) {
+  stop(sprintf("Missing previous W01 pointer: %s",previous_pointer),call.=FALSE)
+}
+# Parse both pointer files explicitly to avoid jsonlite::fromJSON treating
+# an absent path as an inline JSON string.
+tryCatch(jsonlite::fromJSON(workflow00_pointer,simplifyVector=FALSE),
+         error=function(e)stop(sprintf("Invalid W00 pointer JSON at %s: %s",workflow00_pointer,conditionMessage(e)),call.=FALSE))
+tryCatch(jsonlite::fromJSON(previous_pointer,simplifyVector=FALSE),
+         error=function(e)stop(sprintf("Invalid previous W01 pointer JSON at %s: %s",previous_pointer,conditionMessage(e)),call.=FALSE))
+
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 dir.create(file.path(output_dir,"source_manifestations"),recursive=TRUE,showWarnings=FALSE)
 sha <- function(path) digest(file=path,algo="sha256",serialize=FALSE)
