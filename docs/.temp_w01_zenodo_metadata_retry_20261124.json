@@ -1,0 +1,4 @@
+{
+  "exit_code": 0,
+  "log": "PASS_METADATA_RETRY_WIRED scripts/updater/workflow_01_restore_current_state.R\\nPASS_METADATA_RETRY_WIRED scripts/updater/workflow_01_restore_state_from_zenodo.R\\nPASS: Zenodo deposition metadata 23211736 attempt=1/5\\nPASS_LIVE_ZENODO_METADATA deposition=23211736\\nPASS: Zenodo deposition metadata 23455348 attempt=1/5\\nPASS_LIVE_ZENODO_METADATA deposition=23455348\\nALL_W01_ZENODO_METADATA_RETRY_TESTS_PASS\\n"
+}
