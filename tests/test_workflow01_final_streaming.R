@@ -4,7 +4,7 @@
 # descriptive fields, one locked human decision and an LLM decision.
 suppressPackageStartupMessages({library(data.table);library(jsonlite);library(digest)})
 td <- tempfile("w01-final-stream-");dir.create(td)
-on.exit(unlink(td,recursive=TRUE),add=TRUE)
+stopifnot(dir.exists(td))
 meta <- data.table(idx=1:4203,source="lens",source_record_id=as.character(1:4203))
 fwrite(meta,file.path(td,"meta.csv"))
 wide <- paste(rep("wide descriptive field with comma, quote \" and unicode café ",85),collapse="")
@@ -67,3 +67,4 @@ stopifnot(setequal(aliases$retired_cluster_id,c("work-old-b","work-old-c")))
 audit <- lapply(readLines(file.path(out,"adjudication_application_audit.jsonl")),fromJSON)
 stopifnot(length(audit)==2L,all(vapply(audit,function(z)z$before=="review",logical(1))))
 cat("ALL_W01_BOUNDED_MEMORY_FINALISATION_TESTS_PASS\n")
+unlink(td,recursive=TRUE)
