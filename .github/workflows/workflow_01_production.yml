@@ -722,7 +722,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sha256sum previous_state/workflow01_full_five_source/summary.json outputs/workflow01_union/source_inputs.json outputs/workflow01_candidates/normalised_metadata.csv outputs/workflow01_candidates/all_candidate_pairs.csv outputs/adjudication/merged/summary.json > outputs/workflow01_stage_adjudicate_checksums.txt
+          test -f outputs/workflow01_incremental_assisted/final_incremental_decisions.csv
+          sha256sum previous_state/workflow01_full_five_source/summary.json outputs/workflow01_union/source_inputs.json outputs/workflow01_candidates/normalised_metadata.csv outputs/workflow01_candidates/all_candidate_pairs.csv outputs/workflow01_incremental_assisted/final_incremental_decisions.csv outputs/workflow01_pre_adjudication/summary.json outputs/adjudication/merged/all_adjudications.jsonl outputs/adjudication/merged/summary.json > outputs/workflow01_stage_adjudicate_checksums.txt
       - name: Transfer stage adjudicate working state
         uses: actions/upload-artifact@v4
         with:
@@ -736,6 +737,7 @@ jobs:
             outputs/workflow01_candidates/normalised_metadata.csv
             outputs/workflow01_candidates/all_candidate_pairs.csv
             outputs/workflow01_candidates/pathological_abstract_strip_actions.jsonl
+            outputs/workflow01_incremental_assisted/final_incremental_decisions.csv
             outputs/workflow01_pre_adjudication/
             outputs/adjudication/
             outputs/workflow01_stage_adjudicate_checksums.txt
@@ -778,6 +780,9 @@ jobs:
           test -s outputs/workflow01_union/source_inputs.json
           test -s outputs/workflow01_candidates/normalised_metadata.csv
           test -s outputs/workflow01_candidates/all_candidate_pairs.csv
+          test -f outputs/workflow01_incremental_assisted/final_incremental_decisions.csv
+          test -s outputs/adjudication/merged/all_adjudications.jsonl
+          test -s outputs/workflow01_pre_adjudication/summary.json
           sha256sum -c outputs/workflow01_stage_adjudicate_checksums.txt
       - name: Build immutable human-review package
         shell: bash
@@ -797,6 +802,10 @@ jobs:
           set -euo pipefail
           test -s "workflow00_registry/${{ inputs.workflow00_pointer_path }}"
           test -s "${{ inputs.previous_workflow01_pointer_path }}"
+          test -f outputs/workflow01_incremental_assisted/final_incremental_decisions.csv
+          test -s outputs/adjudication/merged/all_adjudications.jsonl
+          test -s outputs/workflow01_pre_adjudication/summary.json
+          test -s outputs/adjudication/human_review_package/review_manifest.json
           Rscript scripts/updater/workflow_01_build_pending_checkpoint.R \
             --previous-root previous_state \
             --current-seed-root outputs/workflow01_union \
