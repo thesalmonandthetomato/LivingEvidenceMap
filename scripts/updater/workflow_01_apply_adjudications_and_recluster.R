@@ -29,12 +29,12 @@ if (any(vapply(list(combined_path,manifestation_map_path,llm_path,human_path,int
 }
 dir.create(output_dir,recursive=TRUE,showWarnings=FALSE)
 
-pairs <- fread(combined_path,na.strings=c("","NA"))
+# The combined CSV may exceed 17 GiB because its pair records repeat wide
+# descriptive fields. Never memory-map the full file: stream CSV records through
+# readr's quoted-field-aware parser, retaining only small union-find state.
+if(!requireNamespace("readr",quietly=TRUE)) stop("Package readr is required for bounded-memory W01 finalisation",call.=FALSE)
 meta <- fread(manifestation_map_path,na.strings=c("","NA"))
-stopifnot(all(c("pair_key","rescored_classification","rescored_rule") %in% names(pairs)))
 stopifnot(all(c("idx","source","source_record_id") %in% names(meta)))
-if (anyDuplicated(pairs$pair_key)) stop("Combined pair decisions contain duplicate pair keys",call.=FALSE)
-setkey(pairs,pair_key)
 setorder(meta,idx)
 if (!identical(meta$idx,seq_len(nrow(meta)))) stop("Manifestation map idx is not contiguous",call.=FALSE)
 
@@ -144,41 +144,31 @@ strip_con <- file(strip_path,"wt",encoding="UTF-8")
 if(length(strip_actions)) for(z in strip_actions) writeLines(toJSON(z,auto_unbox=TRUE,null="null",na="null"),strip_con,useBytes=TRUE)
 close(strip_con)
 
+# Determine final decisions before scanning the wide CSV, without trusting
+# the human export to address any other queue.
 audit <- vector("list",length(llm))
-for (i in seq_along(llm)) {
+pair_overrides <- list()
+for(i in seq_along(llm)){
   a <- llm[[i]]
   key <- as.character(a$pair_key)
-  if (!(key %in% pairs$pair_key)) stop(sprintf("Adjudication pair not found in combined state: %s",key),call.=FALSE)
-
+  if(!nzchar(key) || !is.null(pair_overrides[[key]])) stop("LLM adjudications repeat or omit pair_key",call.=FALSE)
   final_decision <- NULL
   provenance <- NULL
-  if (identical(a$promotion,"duplicate") || identical(a$promotion,"not_duplicate")) {
-    final_decision <- a$promotion
+  if(a$promotion %in% c("duplicate","not_duplicate")){
+    final_decision <- as.character(a$promotion)
     provenance <- "llm"
-  } else if (identical(a$promotion,"human_review")) {
+  } else if(identical(a$promotion,"human_review")){
     h <- human_by_id[[as.character(a$review_case_id)]]
-    if (is.null(h)) stop(sprintf("Missing human decision for %s",a$review_case_id),call.=FALSE)
-    if (is.null(h$decision) || !(h$decision %in% c("duplicate","not_duplicate"))) {
-      stop(sprintf("Human decision for %s is not final",a$review_case_id),call.=FALSE)
-    }
-    final_decision <- h$decision
+    if(is.null(h) || is.null(h$decision) || !h$decision %in% c("duplicate","not_duplicate"))
+      stop(sprintf("Missing or non-final human decision for %s",a$review_case_id),call.=FALSE)
+    final_decision <- as.character(h$decision)
     provenance <- "human"
   } else stop(sprintf("Invalid promotion for %s",a$review_case_id),call.=FALSE)
-
-  before <- pairs[.(key),rescored_classification]
-  pairs[.(key),`:=`(
-    rescored_classification=final_decision,
-    rescored_rule=paste0("workflow01_",provenance,"_adjudication"),
-    review_route="resolved_adjudication"
-  )]
+  pair_overrides[[key]] <- list(decision=final_decision,provenance=provenance,audit_index=i)
   audit[[i]] <- list(
-    review_case_id=a$review_case_id,
-    pair_key=key,
-    before=before,
-    after=final_decision,
-    decision_source=provenance,
-    model_decision=a$model_decision,
-    model_confidence=a$model_confidence,
+    review_case_id=a$review_case_id,pair_key=key,before=NULL,
+    after=final_decision,decision_source=provenance,
+    model_decision=a$model_decision,model_confidence=a$model_confidence,
     model_rationale=a$model_rationale,
     human_decision=if(provenance=="human") human_by_id[[a$review_case_id]]$decision else NULL,
     human_rationale=if(provenance=="human") human_by_id[[a$review_case_id]]$rationale else NULL
@@ -242,24 +232,9 @@ if(!is.null(explicit_splits_path)){
       }
     }
 
-    declared_idx <- unname(meta_key_to_idx[unlist(group_keys,use.names=FALSE)])
-    rows <- which(pairs$record_i %in% declared_idx & pairs$record_j %in% declared_idx)
+    # Wide pair decisions are scanned once below; the explicit group index is
+    # checked in each streamed chunk and the override count recorded there.
     overridden <- 0L
-    if(length(rows)){
-      key_i <- meta_keys[pairs$record_i[rows]]
-      key_j <- meta_keys[pairs$record_j[rows]]
-      gi <- unname(explicit_key_group[key_i])
-      gj <- unname(explicit_key_group[key_j])
-      cross <- rows[!is.na(gi) & !is.na(gj) & gi!=gj]
-      if(length(cross)){
-        overridden <- length(cross)
-        pairs[cross,`:=`(
-          rescored_classification="not_duplicate",
-          rescored_rule="workflow01_explicit_cluster_split",
-          review_route="resolved_explicit_correction"
-        )]
-      }
-    }
     explicit_split_audit[[length(explicit_split_audit)+1L]] <- list(
       previous_cluster_id=old_id,
       reason=as.character(corr$reason),
@@ -272,7 +247,118 @@ if(!is.null(explicit_splits_path)){
   }
 }
 
-fwrite(pairs,file.path(output_dir,"final_pair_decisions.csv"))
+# Union-find uses only manifestation indices, never the wide pair records.
+parent <- seq_len(nrow(meta))
+rank <- integer(nrow(meta))
+find_root <- function(x) {
+  while(parent[[x]]!=x){parent[[x]] <<- parent[[parent[[x]]]]; x<-parent[[x]]}
+  x
+}
+union_nodes <- function(a,b){
+  ra <- find_root(a); rb <- find_root(b)
+  if(ra==rb) return(invisible(NULL))
+  if(rank[[ra]]<rank[[rb]]) parent[[ra]] <<- rb
+  else if(rank[[ra]]>rank[[rb]]) parent[[rb]] <<- ra
+  else {parent[[rb]] <<- ra;rank[[ra]] <<- rank[[ra]]+1L}
+}
+
+split_index_group <- rep(NA_character_,nrow(meta))
+split_index_owner <- rep(NA_character_,nrow(meta))
+if(length(explicit_key_group)){
+  for(key in names(explicit_key_group)){
+    i <- as.integer(meta_key_to_idx[[key]])
+    if(length(i)!=1L || is.na(i)) stop("Explicit split metadata index missing",call.=FALSE)
+    split_index_group[[i]] <- as.character(explicit_key_group[[key]])
+    split_index_owner[[i]] <- as.character(explicit_key_correction[[key]])
+  }
+}
+split_audit_ids <- if(length(explicit_split_audit)) vapply(explicit_split_audit,
+  function(z)as.character(z$previous_cluster_id),character(1)) else character()
+split_counts <- setNames(integer(length(split_audit_ids)),split_audit_ids)
+matched_override <- integer(length(llm))
+pair_key_parts <- list()
+total_pairs <- 0L
+duplicate_edges <- 0L
+unresolved_pairs <- 0L
+written <- FALSE
+unresolved_written <- FALSE
+final_pairs_path <- file.path(output_dir,"final_pair_decisions.csv")
+unresolved_pairs_path <- file.path(output_dir,"unresolved_pairs.csv")
+if(file.exists(final_pairs_path)) unlink(final_pairs_path)
+if(file.exists(unresolved_pairs_path)) unlink(unresolved_pairs_path)
+
+readr::read_csv_chunked(
+  combined_path,
+  callback=readr::DataFrameCallback$new(function(chunk,pos){
+    rows <- as.data.table(chunk)
+    if(!nrow(rows)) return(invisible(NULL))
+    required <- c("pair_key","record_i","record_j","rescored_classification","rescored_rule","review_route")
+    if(length(setdiff(required,names(rows)))) stop(sprintf("Combined pair decisions missing columns: %s",
+      paste(setdiff(required,names(rows)),collapse=", ")),call.=FALSE)
+    keys <- as.character(rows$pair_key)
+    if(anyNA(keys) || any(!nzchar(keys))) stop("Combined pair decisions contain missing pair_key",call.=FALSE)
+    pair_key_parts[[length(pair_key_parts)+1L]] <<- keys
+    total_pairs <<- total_pairs+nrow(rows)
+    ii <- suppressWarnings(as.integer(rows$record_i))
+    jj <- suppressWarnings(as.integer(rows$record_j))
+    if(anyNA(ii)||anyNA(jj)||any(ii<1L|ii>nrow(meta))||any(jj<1L|jj>nrow(meta)))
+      stop("Combined pair decisions have invalid manifestation indices",call.=FALSE)
+    hits <- match(keys,names(pair_overrides))
+    for(k in which(!is.na(hits))){
+      entry <- pair_overrides[[hits[[k]]]]
+      ai <- as.integer(entry$audit_index)
+      matched_override[[ai]] <<- matched_override[[ai]]+1L
+      audit[[ai]]$before <<- rows$rescored_classification[[k]]
+      rows$rescored_classification[[k]] <- entry$decision
+      rows$rescored_rule[[k]] <- paste0("workflow01_",entry$provenance,"_adjudication")
+      rows$review_route[[k]] <- "resolved_adjudication"
+    }
+    if(length(split_counts)){
+      gi <- split_index_group[ii]; gj <- split_index_group[jj]
+      own_i <- split_index_owner[ii]; own_j <- split_index_owner[jj]
+      cross <- which(!is.na(gi)&!is.na(gj)&gi!=gj & !is.na(own_i)&own_i==own_j)
+      if(length(cross)){
+        ids <- own_i[cross]
+        counts <- table(ids)
+        for(nm in names(counts)) split_counts[[nm]] <<- split_counts[[nm]]+as.integer(counts[[nm]])
+        rows$rescored_classification[cross] <- "not_duplicate"
+        rows$rescored_rule[cross] <- "workflow01_explicit_cluster_split"
+        rows$review_route[cross] <- "resolved_explicit_correction"
+      }
+    }
+    duplicate <- which(!is.na(rows$rescored_classification)&rows$rescored_classification=="duplicate")
+    duplicate_edges <<- duplicate_edges+length(duplicate)
+    for(k in duplicate) union_nodes(ii[[k]],jj[[k]])
+    rem <- which((!is.na(rows$rescored_classification)&rows$rescored_classification=="review")|
+      (!is.na(rows$review_route)&rows$review_route %in% c("manual_review","workflow04_exclusion_candidate")))
+    unresolved_pairs <<- unresolved_pairs+length(rem)
+    if(length(rem)){
+      fwrite(rows[rem],unresolved_pairs_path,append=unresolved_written,col.names=!unresolved_written,na="")
+      unresolved_written <<- TRUE
+    }
+    fwrite(rows,final_pairs_path,append=written,col.names=!written,na="")
+    written <<- TRUE
+    if(total_pairs %% 100000L < nrow(rows))
+      cat(sprintf("W01 bounded-memory pair finalisation: %d rows processed\\n",total_pairs))
+    invisible(NULL)
+  }),
+  chunk_size=4000L,
+  col_types=readr::cols(.default=readr::col_character()),
+  na=c("","NA"),progress=FALSE,show_col_types=FALSE
+)
+if(!written) stop("Combined pair decisions file has no rows",call.=FALSE)
+all_keys <- unlist(pair_key_parts,use.names=FALSE)
+if(anyDuplicated(all_keys)) stop("Combined pair decisions contain duplicate pair keys",call.=FALSE)
+if(length(matched_override) && any(matched_override!=1L))
+  stop(sprintf("Adjudication pairs missing or repeated: %s",
+    paste(vapply(audit[which(matched_override!=1L)],function(a)as.character(a$pair_key),character(1)),collapse=", ")),call.=FALSE)
+rm(all_keys,pair_key_parts)
+gc(verbose=FALSE)
+if(length(split_audit_ids)) for(i in seq_along(split_audit_ids))
+  explicit_split_audit[[i]]$cross_group_pair_rows_overridden <- unname(split_counts[[split_audit_ids[[i]]]])
+cat(sprintf("PASS: streamed %d full pair decisions, %d duplicate edges; no wide CSV memory mapping\\n",
+            total_pairs,duplicate_edges))
+
 if(length(explicit_split_audit)){
   con_split <- file(file.path(output_dir,"explicit_cluster_split_audit.jsonl"),"wt",encoding="UTF-8")
   for(z in explicit_split_audit) writeLines(toJSON(z,auto_unbox=TRUE,null="null",na="null"),con_split,useBytes=TRUE)
@@ -282,24 +368,6 @@ audit_con <- file(file.path(output_dir,"adjudication_application_audit.jsonl"),"
 for (z in audit) writeLines(toJSON(z,auto_unbox=TRUE,null="null",na="null"),audit_con,useBytes=TRUE)
 close(audit_con)
 
-parent <- seq_len(nrow(meta))
-rank <- integer(nrow(meta))
-find_root <- function(x) {
-  while(parent[[x]]!=x) {
-    parent[[x]] <<- parent[[parent[[x]]]]
-    x <- parent[[x]]
-  }
-  x
-}
-union_nodes <- function(a,b) {
-  ra <- find_root(a); rb <- find_root(b)
-  if (ra==rb) return(invisible(NULL))
-  if (rank[[ra]]<rank[[rb]]) parent[[ra]] <<- rb
-  else if (rank[[ra]]>rank[[rb]]) parent[[rb]] <<- ra
-  else {parent[[rb]] <<- ra; rank[[ra]] <<- rank[[ra]]+1L}
-}
-dup <- pairs[rescored_classification=="duplicate"]
-if(nrow(dup)) for(i in seq_len(nrow(dup))) union_nodes(dup$record_i[[i]],dup$record_j[[i]])
 roots <- vapply(seq_len(nrow(meta)),find_root,integer(1))
 groups <- split(seq_len(nrow(meta)),roots)
 
@@ -455,23 +523,20 @@ con <- file(file.path(output_dir,"clusters.jsonl"),"wt",encoding="UTF-8")
 for(z in cluster_rows) writeLines(toJSON(z,auto_unbox=TRUE,null="null"),con,useBytes=TRUE)
 close(con)
 
-remaining <- pairs[
-  rescored_classification=="review" | review_route=="manual_review" | review_route=="workflow04_exclusion_candidate"
-]
 sizes <- map[,.(cluster_size=.N),by=cluster_id]
 summary <- list(
   workflow="01_final_adjudicated_deduplication",
   status=if(nrow(remaining)==0L)"final" else "incomplete",
   source_manifestations=nrow(meta),
-  total_pair_decisions=nrow(pairs),
+  total_pair_decisions=total_pairs,
   adjudicated_cases=length(llm),
   llm_final_decisions=sum(vapply(audit,function(x)identical(x$decision_source,"llm"),logical(1))),
   human_final_decisions=sum(vapply(audit,function(x)identical(x$decision_source,"human"),logical(1))),
   abstract_strip_actions=length(strip_actions),
   abstract_strip_actions_file="abstract_strip_actions.jsonl",
   workflow02_discovers_stripped_abstracts_via_normal_missing_abstract_scan=TRUE,
-  unresolved_pair_decisions=nrow(remaining),
-  automatic_duplicate_edges=nrow(dup),
+  unresolved_pair_decisions=unresolved_pairs,
+  automatic_duplicate_edges=duplicate_edges,
   clusters=nrow(sizes),
   duplicate_clusters=sum(sizes$cluster_size>1L),
   singleton_clusters=sum(sizes$cluster_size==1L),
@@ -485,10 +550,8 @@ summary <- list(
   explicit_cluster_split_audit_file=if(length(explicit_split_audit)) "explicit_cluster_split_audit.jsonl" else NULL,
   cluster_id_aliases_file="cluster_id_aliases.csv"
 )
-if (nrow(remaining)) {
-  fwrite(remaining,file.path(output_dir,"unresolved_pairs.csv"))
-  stop(sprintf("Finalisation blocked: %d unresolved pair decisions remain",nrow(remaining)),call.=FALSE)
-}
+if(unresolved_pairs>0L)
+  stop(sprintf("Finalisation blocked: %d unresolved pair decisions remain",unresolved_pairs),call.=FALSE)
 writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null="null"),
            file.path(output_dir,"summary.json"))
 cat(sprintf("PASS: Workflow 01 finalised after adjudication: %d manifestations, %d clusters, %d adjudicated cases\n",
