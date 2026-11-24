@@ -1,0 +1,71 @@
+name: TEMP Dispatch validated bounded-memory November W01 resume
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/_temp_dispatch_w01_bounded_resume_20261124.yml']
+permissions:
+  actions: write
+  contents: write
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+      - name: Verify locked handoff and dispatch fresh corrected W01 resume
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          HANDOFF="docs/deduplication/handoffs/w01/run-45349525216.json"
+          python3 - <<'PY'
+          import json
+          h=json.load(open('docs/deduplication/handoffs/w01/run-45349525216.json'))
+          assert h['status']=='ready'
+          assert h['checkpoint_run_id']=='45349525216'
+          assert h['queue_cases']==1
+          assert h['queue_sha256']=='2b58c43d4ab2a35a4f2955f512ae16c8be4050e7dec93ba3182203fb5e8ad884'
+          assert h['export_run_id']=='45390805607'
+          print('PASS: November W01 handoff and completed human decision remain immutable')
+          PY
+          existing="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow workflow_01_resume_after_human_review.yml --limit 10 --json status,conclusion,databaseId)"
+          EXISTING="$existing" python3 - <<'PY'
+          import os,json
+          active=[r for r in json.loads(os.environ['EXISTING']) if r['status'] in ('in_progress','queued','waiting','requested','pending')]
+          if active:raise SystemExit('Refusing duplicate W01 resume: '+str(active))
+          print('PASS: no active W01 resume run')
+          PY
+          started="$(date -u +%s)"
+          gh workflow run workflow_01_resume_after_human_review.yml --repo "$GITHUB_REPOSITORY" \
+            --ref workflow01-final-architecture -f handoff_path="$HANDOFF"
+          run=''
+          for i in {1..24}; do
+            sleep 4
+            runs="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow workflow_01_resume_after_human_review.yml --limit 12 --json databaseId,createdAt,event,headBranch)"
+            run="$(STARTED="$started" RUNS="$runs" python3 - <<'PY'
+          import json,os,datetime
+          start=int(os.environ['STARTED'])
+          for x in json.loads(os.environ['RUNS']):
+              ts=int(datetime.datetime.fromisoformat(x['createdAt'].replace('Z','+00:00')).timestamp())
+              if x['event']=='workflow_dispatch' and x.get('headBranch')=='workflow01-final-architecture' and ts>=start-10:
+                  print(x['databaseId']);break
+          PY
+            )"
+            test -z "$run" || break
+          done
+          test -n "$run"
+          echo "NEW_W01_RESUME_RUN_ID=$run"
+          W01_RUN="$run" python3 - <<'PY'
+          import os,json,base64,urllib.request
+          data={'run_id':int(os.environ['W01_RUN']),'checkpoint_run_id':45349525216,
+                'decision_export_run_id':45390805607,'handoff_sha256':'2b58c43d4ab2a35a4f2955f512ae16c8be4050e7dec93ba3182203fb5e8ad884',
+                'source_branch':'workflow01-final-architecture','finalisation_validation_run_id':45405590590,
+                'delta_validation_run_id':45405796865}
+          payload=json.dumps({'message':'TEMP record validated W01 bounded-memory resume dispatch','content':base64.b64encode(json.dumps(data,indent=2).encode()).decode(),'branch':'workflow01-final-architecture'}).encode()
+          url='https://api.github.com/repos/'+os.environ['GITHUB_REPOSITORY']+'/contents/docs/.temp_w01_bounded_resume_dispatch_20261124.json'
+          req=urllib.request.Request(url,data=payload,method='PUT',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Content-Type':'application/json','Accept':'application/vnd.github+json'})
+          with urllib.request.urlopen(req,timeout=30) as resp:print('RECEIPT',resp.status)
+          PY
