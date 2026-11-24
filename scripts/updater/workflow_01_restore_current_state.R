@@ -108,7 +108,7 @@ download_delta <- function(pointer, dest_root){
         error=function(e){error_message <<- conditionMessage(e);NULL}
       )
       code <- if(is.null(resp)) NA_integer_ else resp_status(resp)
-      retryable <- is.na(code) || code %in% c(408L,409L,425L,429L,500L,502L,503L,504L)
+      retryable <- is.na(code) || code %in% c(200L,408L,409L,425L,429L,500L,502L,503L,504L)
       failure <- NULL
       if(!is.null(resp) && code==200L && file.exists(dest)){
         if(!identical(as.numeric(file.info(dest)$size),as.numeric(z$bytes))){
@@ -144,7 +144,7 @@ download_delta <- function(pointer, dest_root){
                      fn,dep_id,attempt,failure),call.=FALSE)
       }
       retry_after <- if(!is.null(resp)) suppressWarnings(as.numeric(resp_header(resp,"retry-after"))) else NA_real_
-      delay <- if(is.finite(retry_after) && retry_after>0) min(120,retry_after) else min(60,3 * 2^(attempt-1L))
+      delay <- if(length(retry_after)==1L && is.finite(retry_after) && retry_after>0) min(120,retry_after) else min(60,3 * 2^(attempt-1L))
       cat(sprintf("RETRY: Zenodo delta file %s attempt=%d/%d reason=%s delay_seconds=%s\\n",
                   fn,attempt,max_attempts,failure,format(delay)))
       flush.console()
