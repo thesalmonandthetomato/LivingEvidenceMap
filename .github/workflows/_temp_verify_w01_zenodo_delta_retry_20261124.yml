@@ -1,4 +1,4 @@
-name: TEMP Verify W01 Zenodo delta restore
+name: TEMP Verify W01 Zenodo delta restore corrected
 on:
   push:
     branches: [workflow01-final-architecture]
@@ -48,7 +48,7 @@ jobs:
           root <- download_delta(pointer,dest)
           stopifnot(file.exists(file.path(root,"delta_manifest.json")))
           stopifnot(all(file.exists(file.path(dest,"downloads",
-            vapply(pointer$archive_files,function(z)z$filename,character(1)))))
+            vapply(pointer$archive_files,function(z)z$filename,character(1))))))
           cat("PASS: real W01 historical delta and manifest retrieved and SHA256/MD5 validated\\n")
           RS
           code=$?
