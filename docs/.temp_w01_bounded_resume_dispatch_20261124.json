@@ -1,0 +1,9 @@
+{
+  "run_id": 45406247271,
+  "checkpoint_run_id": 45349525216,
+  "decision_export_run_id": 45390805607,
+  "handoff_sha256": "2b58c43d4ab2a35a4f2955f512ae16c8be4050e7dec93ba3182203fb5e8ad884",
+  "source_branch": "workflow01-final-architecture",
+  "finalisation_validation_run_id": 45405590590,
+  "delta_validation_run_id": 45405796865
+}
