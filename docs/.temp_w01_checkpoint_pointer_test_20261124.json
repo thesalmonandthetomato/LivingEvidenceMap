@@ -1,0 +1,4 @@
+{
+  "exit_code": 0,
+  "log": "W01_CHECKPOINT_W00_POINTER_FALLBACK original=workflow00_registry/docs/search_record/zenodo/run-45130154568.json resolved=docs/search_record/zenodo/run-45130154568.json\\nPASS_CHECKPOINT_POINTER original and retry fallback same valid JSON\nPASS_CHECKPOINT_MISSING_POINTER fails closed\nPASS_CHECKPOINT_UNEXPECTED_PATH fails closed\nALL_CHECKPOINT_POINTER_TESTS_PASS\n"
+}
