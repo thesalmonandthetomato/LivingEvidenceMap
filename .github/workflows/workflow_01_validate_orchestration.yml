@@ -21,6 +21,7 @@ on:
       - 'tests/test_workflow01_checkpoint_source_order.R'
       - 'tests/test_workflow01_final_streaming.R'
       - 'tests/test_workflow01_pair_streaming.R'
+      - 'tests/test_workflow01_final_explicit_splits_streaming.R'
       - 'scripts/updater/workflow_01_pair_state_stream.R'
       - 'scripts/updater/workflow_01_archive_delta_to_zenodo.R'
       - 'scripts/updater/workflow_01_build_canonical_jsonl.R'
@@ -170,6 +171,10 @@ jobs:
       - name: Reproduce full-fidelity wide-pair delta and replay
         shell: Rscript {0}
         run: source('tests/test_workflow01_pair_streaming.R')
+
+      - name: Reproduce explicit W01 split corrections under streaming
+        shell: Rscript {0}
+        run: source('tests/test_workflow01_final_explicit_splits_streaming.R')
 
       - name: Reproduce checkpoint source-order and index-identity regression
         shell: Rscript {0}
