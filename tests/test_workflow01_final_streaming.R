@@ -18,6 +18,9 @@ rows <- data.table(
 )
 rows$notes[[4002L]] <- paste0("quoted \"phrase\", with newline\nand a second line")
 fwrite(rows,file.path(td,"combined.csv"),na="")
+gz_path <- file.path(td,"combined.csv.gz")
+gz_status <- system2("gzip",c("-1","-c",file.path(td,"combined.csv")),stdout=gz_path)
+stopifnot(identical(gz_status,0L),file.info(gz_path)$size>0L)
 previous <- data.table(idx=c(1L,2L,4203L),source="lens",
   source_record_id=c("1","2","4203"),
   cluster_id=c("work-old-a","work-old-b","work-old-c"))
@@ -35,7 +38,7 @@ writeLines(toJSON(list(resume_allowed=TRUE,active_decisions=1L),auto_unbox=TRUE)
   file.path(td,"integrity.json"))
 out <- file.path(td,"out")
 args <- c("scripts/updater/workflow_01_apply_adjudications_and_recluster.R",
-  "--combined-decisions",file.path(td,"combined.csv"),
+  "--combined-decisions",gz_path,
   "--manifestation-map",file.path(td,"meta.csv"),
   "--llm-adjudications",file.path(td,"llm.jsonl"),
   "--human-decisions",file.path(td,"human.jsonl"),
