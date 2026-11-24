@@ -12,7 +12,7 @@ if(!requireNamespace("readr",quietly=TRUE))
 w01_pair_columns <- function(path) {
   if(!file.exists(path)) stop(sprintf("Missing W01 pair CSV: %s",path),call.=FALSE)
   names(readr::read_csv(path,n_max=0L,col_types=readr::cols(.default=readr::col_character()),
-                        show_col_types=FALSE,progress=FALSE))
+                        trim_ws=FALSE,show_col_types=FALSE,progress=FALSE))
 }
 w01_pair_stream <- function(path,callback,chunk_size=3000L) {
   readr::read_csv_chunked(
@@ -22,7 +22,7 @@ w01_pair_stream <- function(path,callback,chunk_size=3000L) {
     }),
     chunk_size=chunk_size,
     col_types=readr::cols(.default=readr::col_character()),
-    na=c("","NA"),show_col_types=FALSE,progress=FALSE
+    na=c("","NA"),trim_ws=FALSE,show_col_types=FALSE,progress=FALSE
   )
   invisible(NULL)
 }
