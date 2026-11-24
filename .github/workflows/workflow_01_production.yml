@@ -83,9 +83,20 @@ jobs:
           r-version: release
           use-public-rspm: true
 
-      - name: Install R dependencies
-        shell: Rscript {0}
-        run: install.packages(c('data.table','jsonlite','digest','httr2','readr','stringdist','stringi','xml2','googlesheets4'))
+      - name: Install required system library and R dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libcurl4-openssl-dev
+          Rscript - <<'RS'
+          packages <- c('curl','data.table','jsonlite','digest','httr2','readr','stringdist','stringi','xml2','googlesheets4')
+          install.packages(packages)
+          missing <- packages[!vapply(packages,requireNamespace,logical(1),quietly=TRUE)]
+          if (length(missing)) stop(sprintf("W01 prerequisite R packages unavailable: %s",paste(missing,collapse=", ")),call.=FALSE)
+          cat(sprintf("PASS: all %d W01 R dependencies are available; curl=%s\\n",
+                      length(packages),as.character(utils::packageVersion('curl'))))
+          RS
 
       - name: Validate input pointers and source subset
         env:
@@ -467,9 +478,20 @@ jobs:
         with:
           r-version: release
           use-public-rspm: true
-      - name: Install R dependencies
-        shell: Rscript {0}
-        run: install.packages(c('data.table','jsonlite','digest','httr2','readr','stringdist','stringi','xml2','googlesheets4'))
+      - name: Install required system library and R dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libcurl4-openssl-dev
+          Rscript - <<'RS'
+          packages <- c('curl','data.table','jsonlite','digest','httr2','readr','stringdist','stringi','xml2','googlesheets4')
+          install.packages(packages)
+          missing <- packages[!vapply(packages,requireNamespace,logical(1),quietly=TRUE)]
+          if (length(missing)) stop(sprintf("W01 prerequisite R packages unavailable: %s",paste(missing,collapse=", ")),call.=FALSE)
+          cat(sprintf("PASS: all %d W01 R dependencies are available; curl=%s\\n",
+                      length(packages),as.character(utils::packageVersion('curl'))))
+          RS
       - name: Restore validated handoff from prepare
         uses: actions/download-artifact@v4
         with:
@@ -764,9 +786,20 @@ jobs:
         with:
           r-version: release
           use-public-rspm: true
-      - name: Install R dependencies
-        shell: Rscript {0}
-        run: install.packages(c('data.table','jsonlite','digest','httr2','readr','stringdist','stringi','xml2','googlesheets4'))
+      - name: Install required system library and R dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libcurl4-openssl-dev
+          Rscript - <<'RS'
+          packages <- c('curl','data.table','jsonlite','digest','httr2','readr','stringdist','stringi','xml2','googlesheets4')
+          install.packages(packages)
+          missing <- packages[!vapply(packages,requireNamespace,logical(1),quietly=TRUE)]
+          if (length(missing)) stop(sprintf("W01 prerequisite R packages unavailable: %s",paste(missing,collapse=", ")),call.=FALSE)
+          cat(sprintf("PASS: all %d W01 R dependencies are available; curl=%s\\n",
+                      length(packages),as.character(utils::packageVersion('curl'))))
+          RS
       - name: Restore validated handoff from adjudicate
         uses: actions/download-artifact@v4
         with:
@@ -1070,9 +1103,20 @@ jobs:
         with:
           r-version: release
           use-public-rspm: true
-      - name: Install R dependencies
-        shell: Rscript {0}
-        run: install.packages(c('data.table','jsonlite','digest','httr2','readr','stringdist','stringi','xml2','googlesheets4'))
+      - name: Install required system library and R dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libcurl4-openssl-dev
+          Rscript - <<'RS'
+          packages <- c('curl','data.table','jsonlite','digest','httr2','readr','stringdist','stringi','xml2','googlesheets4')
+          install.packages(packages)
+          missing <- packages[!vapply(packages,requireNamespace,logical(1),quietly=TRUE)]
+          if (length(missing)) stop(sprintf("W01 prerequisite R packages unavailable: %s",paste(missing,collapse=", ")),call.=FALSE)
+          cat(sprintf("PASS: all %d W01 R dependencies are available; curl=%s\\n",
+                      length(packages),as.character(utils::packageVersion('curl'))))
+          RS
       - name: Restore validated handoff from canonicalise
         uses: actions/download-artifact@v4
         with:
