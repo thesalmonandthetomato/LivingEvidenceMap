@@ -1,0 +1,13 @@
+{
+  "schema": "living-evidence-map-workflow01-shiny-handoff-v1",
+  "status": "ready",
+  "checkpoint_pointer_path": "docs/deduplication/checkpoints/run-45349525216.json",
+  "checkpoint_run_id": "45349525216",
+  "checkpoint_zenodo_record_id": "24498427",
+  "queue_cases": 1,
+  "queue_sha256": "2b58c43d4ab2a35a4f2955f512ae16c8be4050e7dec93ba3182203fb5e8ad884",
+  "export_run_id": "45390805607",
+  "decisions_artifact": "workflow01-human-decisions-45349525216-45390805607",
+  "decisions_export_sha256": "28ef03880cae9d0b7693a7839a69d6c6127bc20346254a3161b5e7e091eabad6",
+  "created_at_utc": "2026-11-24T12:11:24Z"
+}
