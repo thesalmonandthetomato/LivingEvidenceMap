@@ -58,9 +58,20 @@ jobs:
           r-version: release
           use-public-rspm: true
 
-      - name: Install R dependencies
-        shell: Rscript {0}
-        run: install.packages(c('data.table','jsonlite','digest','httr2','readr','stringdist','stringi','xml2','googlesheets4'))
+      - name: Install system curl and verify required R packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libcurl4-openssl-dev
+          Rscript - <<'RS'
+          packages <- c('curl','data.table','jsonlite','digest','httr2','readr','stringdist','stringi','xml2','googlesheets4')
+          install.packages(packages)
+          missing <- packages[!vapply(packages,requireNamespace,logical(1),quietly=TRUE)]
+          if(length(missing)) stop(sprintf("W01 resume missing R packages: %s",paste(missing,collapse=", ")),call.=FALSE)
+          cat(sprintf("PASS: W01 resume R dependencies available; curl=%s\\n",
+                      as.character(utils::packageVersion('curl'))))
+          RS
 
       - name: Resolve resume inputs
         env:
