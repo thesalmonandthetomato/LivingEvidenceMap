@@ -31,7 +31,7 @@ jobs:
 
       - name: Install R dependencies
         shell: Rscript {0}
-        run: install.packages(c('data.table','jsonlite','digest'))
+        run: install.packages(c('data.table','jsonlite','digest','readr'))
 
       - name: Build stable-ID fixtures
         shell: Rscript {0}
