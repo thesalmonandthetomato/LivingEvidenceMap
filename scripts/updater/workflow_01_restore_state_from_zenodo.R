@@ -66,6 +66,7 @@ zenodo_get_deposition <- function(api, label) {
     }
     if(is.null(failure)) failure <- sprintf("HTTP %s",if(is.na(status))"unknown" else as.character(status))
     transient <- is.na(status) || status %in% c(408L,425L,429L,500L,502L,503L,504L)
+    if(identical(status,403L)) return(NULL)
     if(!transient || attempt==max_attempts){
       stop(sprintf("Zenodo deposition metadata %s failed after %d attempt(s): %s",
                    label,attempt,failure),call.=FALSE)
@@ -80,9 +81,11 @@ zenodo_get_deposition <- function(api, label) {
 }
 
 dep <- zenodo_get_deposition(api,dep_id)
-if (!isTRUE(dep$submitted)) stop("Zenodo Workflow 01 deposition is not published",call.=FALSE)
-bucket <- as.character(dep$links$bucket)
-if (!nzchar(bucket)) stop("Published deposition lacks bucket link",call.=FALSE)
+if (!is.null(dep) && !isTRUE(dep$submitted)) stop("Zenodo Workflow 01 deposition is not published",call.=FALSE)
+bucket <- if(is.null(dep$links$bucket)) "" else as.character(dep$links$bucket)
+record_id <- as.character(x$zenodo_record_id)
+stopifnot(length(record_id)==1L,grepl("^[0-9]+$",record_id))
+if(!grepl("^https://zenodo[.]org/api/files/",bucket)) bucket <- ""
 
 dir.create(output_root,recursive=TRUE,showWarnings=FALSE)
 download_dir <- file.path(output_root,".workflow01_zenodo_download")
@@ -90,7 +93,8 @@ dir.create(download_dir,recursive=TRUE,showWarnings=FALSE)
 
 download_one <- function(e) {
   dest <- file.path(download_dir,e$filename)
-  url <- paste0(sub("/$","",bucket),"/",URLencode(e$filename,reserved=TRUE))
+  record_url <- paste0("https://zenodo.org/api/records/",record_id,"/files/",URLencode(e$filename,reserved=TRUE),"/content")
+  url <- if(nzchar(bucket)) paste0(sub("/$","",bucket),"/",URLencode(e$filename,reserved=TRUE)) else record_url
   max_attempts <- 5L
   for(attempt in seq_len(max_attempts)){
     if(file.exists(dest)) unlink(dest)
@@ -101,6 +105,12 @@ download_one <- function(e) {
       error=function(err){failure <<- conditionMessage(err);NULL}
     )
     status <- if(is.null(response)) NA_integer_ else resp_status(response)
+    if(identical(status,403L) && !identical(url,record_url)){
+      message("Legacy file endpoint refused access; trying authenticated published-record endpoint")
+      url <- record_url
+      if(file.exists(dest)) unlink(dest)
+      next
+    }
     transient <- is.na(status) || status %in% c(200L,408L,425L,429L,500L,502L,503L,504L)
     if(!is.null(response) && status==200L && file.exists(dest)){
       bytes <- unname(file.info(dest)$size)
