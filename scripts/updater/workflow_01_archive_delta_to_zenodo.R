@@ -47,7 +47,13 @@ if(length(all_paths)) suppressWarnings(Sys.setFileTime(all_paths,as.POSIXct("200
 archive_name <- sprintf("LivingEvidenceMap_workflow01_run-%s_delta.tar.gz",run_id)
 archive_path <- file.path(archive_dir,archive_name)
 old <- setwd(dirname(delta_dir)); on.exit(setwd(old),add=TRUE)
-utils::tar(archive_path,files=basename(delta_dir),compression="gzip",tar="internal")
+# POSIX pax archives support individual files larger than the internal R tar limit.
+tar_bin <- Sys.which("tar")
+if(!nzchar(tar_bin)) stop("System tar is required for large W01 delta archives",call.=FALSE)
+status <- system2(tar_bin,c("--format=pax","-czf",shQuote(archive_path),"--",shQuote(basename(delta_dir))))
+if(status!=0L) stop("System tar failed to create W01 delta archive",call.=FALSE)
+status <- system2(tar_bin,c("-tzf",shQuote(archive_path)),stdout=FALSE)
+if(status!=0L) stop("W01 delta archive failed integrity check",call.=FALSE)
 setwd(old); on.exit(NULL,add=FALSE)
 if(!file.exists(archive_path)||file.info(archive_path)$size<=0) stop("Failed to create delta archive",call.=FALSE)
 
