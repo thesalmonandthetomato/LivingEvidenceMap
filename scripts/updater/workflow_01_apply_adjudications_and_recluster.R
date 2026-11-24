@@ -344,7 +344,7 @@ readr::read_csv_chunked(
   }),
   chunk_size=4000L,
   col_types=readr::cols(.default=readr::col_character()),
-  na=c("","NA"),progress=FALSE,show_col_types=FALSE
+  na=c("","NA"),trim_ws=FALSE,progress=FALSE,show_col_types=FALSE
 )
 if(!written) stop("Combined pair decisions file has no rows",call.=FALSE)
 all_keys <- unlist(pair_key_parts,use.names=FALSE)
