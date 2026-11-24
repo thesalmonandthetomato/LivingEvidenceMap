@@ -42,8 +42,44 @@ names(expected) <- vapply(expected,function(z)z$filename,character(1))
 
 api <- paste0("https://zenodo.org/api/deposit/depositions/",dep_id)
 auth <- function(req) req |> req_headers(Authorization=paste("Bearer",token))
-resp <- request(api) |> auth() |> req_timeout(120) |> req_perform()
-dep <- resp_body_json(resp,simplifyVector=FALSE)
+
+# Retry transient Zenodo deposition API errors (including 502/504), not just
+# archive-file transfers. Never retry permission/record errors such as 401/404.
+zenodo_get_deposition <- function(api, label) {
+  max_attempts <- 5L
+  for (attempt in seq_len(max_attempts)) {
+    failure <- NULL
+    response <- tryCatch(
+      request(api) |> auth() |> req_timeout(120) |>
+        req_error(is_error=function(resp)FALSE) |> req_perform(),
+      error=function(e) {failure <<- conditionMessage(e); NULL}
+    )
+    status <- if(is.null(response)) NA_integer_ else resp_status(response)
+    if(!is.null(response) && status==200L){
+      dep <- tryCatch(resp_body_json(response,simplifyVector=FALSE),
+                      error=function(e) stop(sprintf("Invalid Zenodo deposition JSON for %s: %s",
+                                  label,conditionMessage(e)),call.=FALSE))
+      if(!is.list(dep)) stop(sprintf("Unexpected Zenodo deposition response for %s",label),call.=FALSE)
+      cat(sprintf("PASS: Zenodo deposition metadata %s attempt=%d/%d\\n",
+                  label,attempt,max_attempts))
+      return(dep)
+    }
+    if(is.null(failure)) failure <- sprintf("HTTP %s",if(is.na(status))"unknown" else as.character(status))
+    transient <- is.na(status) || status %in% c(408L,425L,429L,500L,502L,503L,504L)
+    if(!transient || attempt==max_attempts){
+      stop(sprintf("Zenodo deposition metadata %s failed after %d attempt(s): %s",
+                   label,attempt,failure),call.=FALSE)
+    }
+    retry_after <- if(!is.null(response)) suppressWarnings(as.numeric(resp_header(response,"retry-after"))) else NA_real_
+    delay <- if(length(retry_after)==1L && is.finite(retry_after) && retry_after>0) min(120,retry_after) else min(60,3*2^(attempt-1L))
+    cat(sprintf("RETRY: Zenodo deposition metadata %s attempt=%d/%d reason=%s delay_seconds=%s\\n",
+                label,attempt,max_attempts,failure,format(delay)))
+    flush.console()
+    Sys.sleep(delay)
+  }
+}
+
+dep <- zenodo_get_deposition(api,dep_id)
 if (!isTRUE(dep$submitted)) stop("Zenodo Workflow 01 deposition is not published",call.=FALSE)
 bucket <- as.character(dep$links$bucket)
 if (!nzchar(bucket)) stop("Published deposition lacks bucket link",call.=FALSE)
