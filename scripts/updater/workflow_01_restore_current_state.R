@@ -96,6 +96,7 @@ zenodo_get_deposition <- function(api, label) {
     }
     if(is.null(failure)) failure <- sprintf("HTTP %s",if(is.na(status))"unknown" else as.character(status))
     transient <- is.na(status) || status %in% c(408L,425L,429L,500L,502L,503L,504L)
+    if(identical(status,403L)) return(NULL)
     if(!transient || attempt==max_attempts){
       stop(sprintf("Zenodo deposition metadata %s failed after %d attempt(s): %s",
                    label,attempt,failure),call.=FALSE)
@@ -119,9 +120,11 @@ download_delta <- function(pointer, dest_root){
 
   api <- paste0("https://zenodo.org/api/deposit/depositions/",dep_id)
   dep <- zenodo_get_deposition(api,dep_id)
-  if(!isTRUE(dep$submitted)) stop(sprintf("Zenodo delta %s is not published",dep_id),call.=FALSE)
-  bucket <- as.character(dep$links$bucket)
-  if(!nzchar(bucket)) stop("Published delta deposition lacks bucket link",call.=FALSE)
+  if(!is.null(dep) && !isTRUE(dep$submitted)) stop(sprintf("Zenodo delta %s is not published",dep_id),call.=FALSE)
+  bucket <- if(is.null(dep$links$bucket)) "" else as.character(dep$links$bucket)
+  record_id <- as.character(pointer$zenodo_record_id)
+  stopifnot(length(record_id)==1L,grepl("^[0-9]+$",record_id))
+  if(!grepl("^https://zenodo[.]org/api/files/",bucket)) bucket <- ""
 
   dir.create(dest_root,recursive=TRUE,showWarnings=FALSE)
   downloads <- file.path(dest_root,"downloads")
@@ -130,7 +133,8 @@ download_delta <- function(pointer, dest_root){
   for(z in files){
     fn <- as.character(z$filename)
     dest <- file.path(downloads,fn)
-    url <- paste0(sub("/$","",bucket),"/",URLencode(fn,reserved=TRUE))
+    record_url <- paste0("https://zenodo.org/api/records/",record_id,"/files/",URLencode(fn,reserved=TRUE),"/content")
+    url <- if(nzchar(bucket)) paste0(sub("/$","",bucket),"/",URLencode(fn,reserved=TRUE)) else record_url
     # Zenodo's authenticated bucket occasionally returns transient HTTP 5xx
     # responses or times out even for intact published files. Retry boundedly;
     # accept a file only after checking every published checksum.
@@ -145,6 +149,12 @@ download_delta <- function(pointer, dest_root){
         error=function(e){error_message <<- conditionMessage(e);NULL}
       )
       code <- if(is.null(resp)) NA_integer_ else resp_status(resp)
+      if(identical(code,403L) && !identical(url,record_url)){
+        message("Legacy file endpoint refused access; trying authenticated published-record endpoint")
+        url <- record_url
+        if(file.exists(dest)) unlink(dest)
+        next
+      }
       retryable <- is.na(code) || code %in% c(200L,408L,409L,425L,429L,500L,502L,503L,504L)
       failure <- NULL
       if(!is.null(resp) && code==200L && file.exists(dest)){
