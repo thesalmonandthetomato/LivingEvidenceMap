@@ -1,4 +1,4 @@
-name: TEMP Diagnose W01 Zenodo historical delta manifest
+name: TEMP Diagnose W01 alternative Zenodo file links
 on:
   push:
     branches: [workflow01-final-architecture]
@@ -45,6 +45,13 @@ jobs:
               urls=[('bucket',bucket+'/'+fn),('deposit_files','https://zenodo.org/api/deposit/depositions/'+dep_id+'/files')]
               for name,url in urls:
                   o,v=get(url,name);result['observations'].append(o)
+              for z in d.get('files',[]):
+                  if z.get('filename')==fn:
+                      for key in ('download','self'):
+                          url=z.get('links',{}).get(key)
+                          if url:
+                              o,v=get(url,'file_link_'+key)
+                              result['observations'].append(o)
               result['file_metadata']=[{'filename':z.get('filename'),'id':z.get('id'),'links':z.get('links'),'checksum':z.get('checksum'),'filesize':z.get('filesize')} for z in d.get('files',[]) if z.get('filename')==fn]
           text=json.dumps(result,indent=2)
           print(text)
