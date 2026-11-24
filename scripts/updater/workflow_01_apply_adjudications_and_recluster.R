@@ -23,6 +23,7 @@ data_quality_repairs_path <- arg("--data-quality-repairs",NULL)
 precomputed_strip_actions_path <- arg("--precomputed-strip-actions",NULL)
 previous_cluster_map_path <- arg("--previous-cluster-map",NULL)
 explicit_splits_path <- arg("--explicit-cluster-splits",NULL)
+seed_previous <- identical(arg("--seed-authoritative-clusters","false"),"true")
 output_dir <- arg("--output-dir")
 if (any(vapply(list(combined_path,manifestation_map_path,llm_path,human_path,integrity_path,output_dir),is.null,logical(1)))) {
   stop("Required: --combined-decisions --manifestation-map --llm-adjudications --human-decisions --human-integrity-manifest --output-dir",call.=FALSE)
@@ -272,6 +273,40 @@ if(length(explicit_key_group)){
     split_index_owner[[i]] <- as.character(explicit_key_correction[[key]])
   }
 }
+# Published W01 membership includes approved W08b relationships that have no
+# pairwise ledger rows. Treat membership as a separate source of connectivity,
+# not as invented pair decisions. Keep strict pair-only mode for legacy checks.
+historical_id <- rep(NA_character_,nrow(meta))
+seeded_memberships <- 0L
+if(seed_previous){
+  if(is.null(previous_cluster_map_path)) stop("Authoritative seeding requires previous cluster map",call.=FALSE)
+  prior <- fread(previous_cluster_map_path,na.strings=c("","NA"))
+  stopifnot(all(c("idx","source","source_record_id","cluster_id") %in% names(prior)))
+  setorder(prior,idx)
+  stopifnot(nrow(prior)<=nrow(meta),identical(as.integer(prior$idx),seq_len(nrow(prior))),
+            !anyNA(prior$cluster_id),all(nzchar(prior$cluster_id)),
+            identical(as.character(prior$source),as.character(meta$source[seq_len(nrow(prior))])),
+            identical(as.character(prior$source_record_id),as.character(meta$source_record_id[seq_len(nrow(prior))])))
+  historical_id[prior$idx] <- as.character(prior$cluster_id)
+  for(ids in split(prior$idx,prior$cluster_id)){
+    labels <- unique(na.omit(split_index_group[ids]))
+    if(length(labels)>1L){
+      old_id <- historical_id[ids[[1L]]]
+      declared <- names(explicit_key_correction)[explicit_key_correction==old_id]
+      keys <- paste(meta$source[ids],meta$source_record_id[ids],sep="::")
+      if(!(old_id %in% explicit_split_ids) || !setequal(keys,declared) || anyNA(split_index_group[ids]))
+        stop("Historical membership conflicts with explicit correction: ",old_id,call.=FALSE)
+      parts <- split(ids,split_index_group[ids])
+    } else parts <- list(ids)
+    for(part in parts) if(length(part)>1L){
+      for(j in part[-1L]) union_nodes(part[[1L]],j)
+      seeded_memberships <- seeded_memberships+length(part)-1L
+    }
+  }
+  message(sprintf("PASS: seeded %d authoritative historical membership links without altering pair ledger",seeded_memberships))
+  rm(prior)
+}
+
 split_audit_ids <- if(length(explicit_split_audit)) vapply(explicit_split_audit,
   function(z)as.character(z$previous_cluster_id),character(1)) else character()
 split_counts <- setNames(integer(length(split_audit_ids)),split_audit_ids)
@@ -309,6 +344,12 @@ readr::read_csv_chunked(
       ai <- as.integer(entry$audit_index)
       matched_override[[ai]] <<- matched_override[[ai]]+1L
       audit[[ai]]$before <<- rows$rescored_classification[[k]]
+      if(seed_previous && identical(entry$decision,"not_duplicate") &&
+         !is.na(historical_id[ii[[k]]]) && identical(historical_id[ii[[k]]],historical_id[jj[[k]]])){
+        gi <- split_index_group[ii[[k]]]; gj <- split_index_group[jj[[k]]]
+        if(is.na(gi)||is.na(gj)||identical(gi,gj)||!identical(split_index_owner[ii[[k]]],split_index_owner[jj[[k]]]))
+          stop("New negative adjudication contradicts authoritative historical membership: ",keys[[k]],call.=FALSE)
+      }
       rows$rescored_classification[[k]] <- entry$decision
       rows$rescored_rule[[k]] <- paste0("workflow01_",entry$provenance,"_adjudication")
       rows$review_route[[k]] <- "resolved_adjudication"
@@ -542,6 +583,8 @@ summary <- list(
   singleton_clusters=sum(sizes$cluster_size==1L),
   manifestations_in_duplicate_clusters=sum(sizes$cluster_size[sizes$cluster_size>1L]),
   previous_cluster_map_supplied=!is.null(previous_cluster_map_path),
+  authoritative_membership_seeded=seed_previous,
+  authoritative_membership_links=seeded_memberships,
   preserved_work_ids=if(is.null(previous)) 0L else sum(unique(map[,.(cluster_id,cluster_id_origin)])$cluster_id_origin=="preserved"),
   merged_existing_work_ids=nrow(aliases),
   new_work_ids=sum(unique(map[,.(cluster_id,cluster_id_origin)])$cluster_id_origin %in% c("new","explicit_split")),
