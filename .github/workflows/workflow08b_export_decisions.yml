@@ -23,6 +23,8 @@ jobs:
   export:
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    outputs:
+      continue_w01: ${{ steps.lineage.outputs.continue_w01 }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -58,7 +60,35 @@ jobs:
           path: w08b_export_receipt.json
           if-no-files-found: error
 
+      - name: Verify historical W08b lineage before current W01 continuation
+        id: lineage
+        shell: Rscript {0}
+        run: |
+          suppressPackageStartupMessages(library(jsonlite))
+          source <- fromJSON("docs/workflow08b/review_provenance.json",simplifyVector=FALSE)
+          current <- fromJSON("docs/current_run/current_run_status.json",simplifyVector=FALSE)
+          run_id <- function(stage) {
+            x <- current$workflow_runs[[stage]]
+            if(is.null(x) || !length(x) || !grepl("^[0-9]+$",as.character(x[[1L]]))) return("")
+            as.character(x[[1L]])
+          }
+          w01 <- run_id("W01")
+          w02 <- run_id("W02")
+          expected_w01 <- if(nzchar(w01)) paste0("docs/deduplication/zenodo/run-",w01,".json") else ""
+          expected_w02 <- if(nzchar(w02)) paste0("docs/enrichment/zenodo/run-",w02,".json") else ""
+          continue <- nzchar(w01) && nzchar(w02) &&
+            identical(as.character(source$previous_w01_pointer),expected_w01) &&
+            identical(as.character(source$previous_w02_pointer),expected_w02)
+          cat(sprintf("continue_w01=%s\\n",tolower(as.character(continue))),
+              file=Sys.getenv("GITHUB_OUTPUT"),append=TRUE)
+          if(continue) {
+            cat("PASS: W08b historical lineage matches active W01/W02; continuation allowed\\n")
+          } else {
+            cat("PASS: W08b decisions archived but historical baseline differs from current W01/W02; skipping obsolete canonicalisation and leaving current pipeline untouched\\n")
+          }
+
       - name: Automatically continue completed W08b review through W01 canonicalisation to W02
+        if: ${{ steps.lineage.outputs.continue_w01 == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -92,6 +122,6 @@ jobs:
           echo "PASS: W08b human decisions validated and canonical handoff marker registered"
   canonical_after_human_review:
     needs: export
-    if: ${{ needs.export.result == 'success' }}
+    if: ${{ needs.export.outputs.continue_w01 == 'true' }}
     uses: ./.github/workflows/workflow08b_canonical_to_w02.yml
     secrets: inherit
