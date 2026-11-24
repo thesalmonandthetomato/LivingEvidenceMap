@@ -54,6 +54,24 @@ jobs:
         shell: Rscript {0}
         run: install.packages(c('yaml','jsonlite','data.table','digest'))
 
+      - name: Verify W01 dependency bootstrap in every production job
+        shell: Rscript {0}
+        run: |
+          library(yaml)
+          w <- yaml.load_file('.github/workflows/workflow_01_production.yml')
+          for (stage in c('prepare','adjudicate','canonicalise','publish')) {
+            steps <- w$jobs[[stage]]$steps
+            found <- vapply(steps,function(s) {
+              cmd <- s$run
+              !is.null(cmd) &&
+                grepl('libcurl4-openssl-dev',cmd,fixed=TRUE) &&
+                grepl('requireNamespace',cmd,fixed=TRUE) &&
+                grepl('packageVersion',cmd,fixed=TRUE)
+            },logical(1))
+            stopifnot(sum(found)==1L)
+            cat(sprintf('PASS W01 dependency bootstrap: %s\\n',stage))
+          }
+
       - name: Parse production YAML
         shell: Rscript {0}
         run: |
