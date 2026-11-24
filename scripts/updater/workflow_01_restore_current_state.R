@@ -94,17 +94,63 @@ download_delta <- function(pointer, dest_root){
     fn <- as.character(z$filename)
     dest <- file.path(downloads,fn)
     url <- paste0(sub("/$","",bucket),"/",URLencode(fn,reserved=TRUE))
-    resp <- request(url) |> req_method("GET") |> auth() |> req_timeout(1800) |>
-      req_error(is_error=function(resp)FALSE) |> req_perform(path=dest)
-    if(resp_status(resp)!=200L) stop(sprintf("Delta download failed for %s",fn),call.=FALSE)
-    if(as.numeric(file.info(dest)$size)!=as.numeric(z$bytes)) stop(sprintf("Delta byte mismatch for %s",fn),call.=FALSE)
-    actual_sha <- digest(file=dest,algo="sha256",serialize=FALSE)
-    if(!identical(tolower(actual_sha),tolower(as.character(z$sha256)))) stop(sprintf("Delta SHA mismatch for %s",fn),call.=FALSE)
-    if(!is.null(z$zenodo_checksum) && nzchar(as.character(z$zenodo_checksum))){
-      expected_md5 <- sub("^md5:","",tolower(as.character(z$zenodo_checksum)))
-      actual_md5 <- digest(file=dest,algo="md5",serialize=FALSE)
-      if(!identical(actual_md5,expected_md5)) stop(sprintf("Delta MD5 mismatch for %s",fn),call.=FALSE)
+    # Zenodo's authenticated bucket occasionally returns transient HTTP 5xx
+    # responses or times out even for intact published files. Retry boundedly;
+    # accept a file only after checking every published checksum.
+    max_attempts <- 5L
+    downloaded <- FALSE
+    for(attempt in seq_len(max_attempts)){
+      if(file.exists(dest)) unlink(dest)
+      error_message <- NULL
+      resp <- tryCatch(
+        request(url) |> req_method("GET") |> auth() |> req_timeout(300) |>
+          req_error(is_error=function(resp)FALSE) |> req_perform(path=dest),
+        error=function(e){error_message <<- conditionMessage(e);NULL}
+      )
+      code <- if(is.null(resp)) NA_integer_ else resp_status(resp)
+      retryable <- is.na(code) || code %in% c(408L,409L,425L,429L,500L,502L,503L,504L)
+      failure <- NULL
+      if(!is.null(resp) && code==200L && file.exists(dest)){
+        if(!identical(as.numeric(file.info(dest)$size),as.numeric(z$bytes))){
+          failure <- sprintf("byte mismatch (expected=%s actual=%s)",as.character(z$bytes),as.character(file.info(dest)$size))
+          retryable <- TRUE
+        } else {
+          actual_sha <- digest(file=dest,algo="sha256",serialize=FALSE)
+          if(!identical(tolower(actual_sha),tolower(as.character(z$sha256)))){
+            failure <- sprintf("SHA256 mismatch (expected=%s actual=%s)",as.character(z$sha256),actual_sha)
+            retryable <- TRUE
+          } else if(!is.null(z$zenodo_checksum) && nzchar(as.character(z$zenodo_checksum))){
+            expected_md5 <- sub("^md5:","",tolower(as.character(z$zenodo_checksum)))
+            actual_md5 <- digest(file=dest,algo="md5",serialize=FALSE)
+            if(!identical(actual_md5,expected_md5)){
+              failure <- sprintf("MD5 mismatch (expected=%s actual=%s)",expected_md5,actual_md5)
+              retryable <- TRUE
+            }
+          }
+        }
+        if(is.null(failure)){
+          downloaded <- TRUE
+          cat(sprintf("PASS: verified Zenodo delta file %s (attempt %d/%d, SHA256=%s)\\n",
+                      fn,attempt,max_attempts,as.character(z$sha256)))
+          break
+        }
+      } else {
+        failure <- if(!is.null(error_message)) error_message else
+          sprintf("HTTP %s",if(is.na(code))"unknown" else as.character(code))
+      }
+      if(file.exists(dest)) unlink(dest)
+      if(!retryable || attempt==max_attempts){
+        stop(sprintf("Zenodo delta file %s from deposition %s failed after %d attempt(s): %s",
+                     fn,dep_id,attempt,failure),call.=FALSE)
+      }
+      retry_after <- if(!is.null(resp)) suppressWarnings(as.numeric(resp_header(resp,"retry-after"))) else NA_real_
+      delay <- if(is.finite(retry_after) && retry_after>0) min(120,retry_after) else min(60,3 * 2^(attempt-1L))
+      cat(sprintf("RETRY: Zenodo delta file %s attempt=%d/%d reason=%s delay_seconds=%s\\n",
+                  fn,attempt,max_attempts,failure,format(delay)))
+      flush.console()
+      Sys.sleep(delay)
     }
+    if(!downloaded || !file.exists(dest)) stop(sprintf("Zenodo download missing after retry: %s",fn),call.=FALSE)
     local <- c(local,dest)
   }
   tar <- local[grepl("\\.tar\\.gz$",local)]
