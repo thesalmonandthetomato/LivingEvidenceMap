@@ -1,0 +1,54 @@
+name: TEMP Diagnose W01 Zenodo historical delta manifest
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/_temp_diag_w01_zenodo_manifest_20261124.yml']
+permissions:
+  contents: write
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Probe authenticated API and both file URLs
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, urllib.request,urllib.error,json,base64,hashlib,time
+          token=os.environ['ZENODO_ACCESS_TOKEN']
+          headers={'Authorization':'Bearer '+token,'User-Agent':'LivingEvidenceMap-W01-diagnostic'}
+          dep_id='23455348'
+          fn='LivingEvidenceMap_workflow01_run-39140209398_delta-manifest.json'
+          result={'deposition_id':dep_id,'filename':fn,'observations':[]}
+          def get(url,name):
+              try:
+                  req=urllib.request.Request(url,headers=headers)
+                  with urllib.request.urlopen(req,timeout=55) as r:
+                      content=r.read(250000)
+                      item={'name':name,'status':r.status,'bytes_read':len(content),'sha256':hashlib.sha256(content).hexdigest(),'content_type':r.headers.get('Content-Type')}
+                      if name=='deposition':
+                          d=json.loads(content);item['submitted']=d.get('submitted');item['bucket_host']=urllib.request.urlparse(d.get('links',{}).get('bucket','')).hostname if hasattr(urllib.request,'urlparse') else 'provided'
+                          return item,d
+                      return item,None
+              except urllib.error.HTTPError as e:
+                  return {'name':name,'status':e.code,'retry_after':e.headers.get('Retry-After'),'content_type':e.headers.get('Content-Type'),'message':e.read(500).decode('utf-8','replace')[:250]},None
+              except Exception as e:
+                  return {'name':name,'error':str(e)[:280]},None
+          obs,d=get('https://zenodo.org/api/deposit/depositions/'+dep_id,'deposition')
+          result['observations'].append(obs)
+          if d:
+              bucket=d.get('links',{}).get('bucket','').rstrip('/')
+              urls=[('bucket',bucket+'/'+fn),('deposit_files','https://zenodo.org/api/deposit/depositions/'+dep_id+'/files')]
+              for name,url in urls:
+                  o,v=get(url,name);result['observations'].append(o)
+              result['file_metadata']=[{'filename':z.get('filename'),'id':z.get('id'),'links':z.get('links'),'checksum':z.get('checksum'),'filesize':z.get('filesize')} for z in d.get('files',[]) if z.get('filename')==fn]
+          text=json.dumps(result,indent=2)
+          print(text)
+          payload=json.dumps({'message':'TEMP W01 Zenodo manifest diagnostics','content':base64.b64encode(text.encode()).decode(),'branch':'workflow01-final-architecture'}).encode()
+          req=urllib.request.Request('https://api.github.com/repos/'+os.environ['GITHUB_REPOSITORY']+'/contents/docs/.temp_w01_zenodo_manifest_diag_20261124.json',data=payload,method='PUT',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Content-Type':'application/json','Accept':'application/vnd.github+json'})
+          with urllib.request.urlopen(req,timeout=30) as r: print('RECEIPT',r.status)
+          PY
