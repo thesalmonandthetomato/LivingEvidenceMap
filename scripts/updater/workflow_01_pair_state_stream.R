@@ -37,15 +37,15 @@ w01_pair_rowhashes <- function(dt,cols) {
     z <- as.character(v); z[is.na(z)] <- "<NA>"; z
   })
   vapply(seq_len(nrow(dt)),function(i)
-    digest(paste(vapply(vals,function(v)v[[i]],character(1)),collapse="\\u001f"),
+    digest(paste(vapply(vals,function(v)v[[i]],character(1)),collapse="\u001f"),
            algo="sha256",serialize=FALSE),character(1))
 }
 w01_pair_fingerprint <- function(keys,hashes,cols) {
   if(length(keys)!=length(hashes) || anyNA(keys) || anyDuplicated(keys))
     stop("Cannot fingerprint duplicate, missing or mismatched W01 pair keys",call.=FALSE)
   ord <- order(keys,method="radix")
-  lines <- paste(keys[ord],hashes[ord],sep="\\u001f")
-  digest(paste(c(paste(sort(cols),collapse="\\u001f"),lines),collapse="\\n"),
+  lines <- paste(keys[ord],hashes[ord],sep="\u001f")
+  digest(paste(c(paste(sort(cols),collapse="\u001f"),lines),collapse="\n"),
          algo="sha256",serialize=FALSE)
 }
 w01_pair_collect <- function(path,cols) {
@@ -98,7 +98,7 @@ w01_pair_diff <- function(previous_path,current_path,upsert_path) {
   missing <- setdiff(previous$keys,current_keys)
   if(length(missing)) stop(sprintf("%d previous pair decisions disappeared",length(missing)),call.=FALSE)
   state_sha <- w01_pair_fingerprint(current_keys,current_hashes,cols)
-  cat(sprintf("PASS: streaming W01 pair delta: %d current, %d new, %d changed, %d upserts\\n",
+  cat(sprintf("PASS: streaming W01 pair delta: %d current, %d new, %d changed, %d upserts\n",
               length(current_keys),n_new,n_changed,n_up))
   list(new=n_new,changed=n_changed,upserts=n_up,state_sha256=state_sha,
        hash_method="row_sha256_sorted_v2")
@@ -135,7 +135,7 @@ w01_pair_replay <- function(previous_path,upsert_path,output_path,expected_sha) 
   if(!identical(tolower(actual),tolower(as.character(expected_sha))))
     stop(sprintf("Replayed W01 pair state hash mismatch: expected=%s actual=%s",
                  expected_sha,actual),call.=FALSE)
-  cat(sprintf("PASS: replayed %d W01 pair rows with bounded memory and verified row SHA-256 state\\n",
+  cat(sprintf("PASS: replayed %d W01 pair rows with bounded memory and verified row SHA-256 state\n",
               length(result$keys)))
   invisible(actual)
 }
