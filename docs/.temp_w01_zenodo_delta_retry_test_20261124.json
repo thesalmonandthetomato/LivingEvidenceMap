@@ -1,4 +1,0 @@
-{
-  "exit_code": 1,
-  "log": "PASS: verified Zenodo delta file LivingEvidenceMap_workflow01_run-39140209398_delta.tar.gz (attempt 1/5, SHA256=c4222f3e87605c392f157b0fa91aa38bc6927a521ad2d5e446ee0dd01b1c182a)\\nPASS: verified Zenodo delta file LivingEvidenceMap_workflow01_run-39140209398_delta-manifest.json (attempt 1/5, SHA256=f8e640939f88bfd3841c9c5ef006656be2bc53322e00520a07650d7a0d909213)\\nError: unexpected symbol in:\n\"  vapply(pointer$archive_files,function(z)z$filename,character(1)))))\ncat\"\nExecution halted\n"
-}
