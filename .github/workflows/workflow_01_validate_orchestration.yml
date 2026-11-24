@@ -72,6 +72,20 @@ jobs:
             cat(sprintf('PASS W01 dependency bootstrap: %s\\n',stage))
           }
 
+      - name: Check historical Zenodo restore retry coverage
+        shell: Rscript {0}
+        run: |
+          paths <- c('scripts/updater/workflow_01_restore_current_state.R',
+                     'scripts/updater/workflow_01_restore_state_from_zenodo.R')
+          for (p in paths) {
+            code <- paste(readLines(p,warn=FALSE),collapse='\\n')
+            stopifnot(grepl('zenodo_get_deposition <- function',code,fixed=TRUE))
+            stopifnot(grepl('dep <- zenodo_get_deposition(api,dep_id)',code,fixed=TRUE))
+            stopifnot(grepl('max_attempts <- 5L',code,fixed=TRUE))
+            stopifnot(grepl('resp_status(response)',code,fixed=TRUE))
+            cat(sprintf('PASS historical Zenodo retry coverage: %s\\n',p))
+          }
+
       - name: Parse production YAML
         shell: Rscript {0}
         run: |
