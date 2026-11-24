@@ -70,7 +70,12 @@ jobs:
             stopifnot(identical(a[[nm]],m$target[[nm]]))
           for(nm in c("pair_decision_upserts.csv","cluster_map_upserts.csv","cluster_id_aliases.csv","canonical_upserts.jsonl","canonical_retired_ids.txt","data_quality_repair_upserts.jsonl","abstract_strip_action_upserts.jsonl")){
             key <- paste0(sub("\\.[^.]+$","",nm),"_sha256")
-            stopifnot(identical(digest(file=file.path("outputs/delta",nm),algo="sha256",serialize=FALSE),m$delta[[key]]))
+            expected <- m$files[[key]]
+            stopifnot(is.character(expected),length(expected)==1L,grepl("^[0-9a-f]{64}$",expected))
+            actual <- digest(file=file.path("outputs/delta",nm),algo="sha256",serialize=FALSE)
+            if(!identical(actual,expected)) stop(sprintf("Checksum mismatch for %s: expected %s, got %s",nm,expected,actual))
+            cat("PASS: verified",nm,"\n")
+
           }
       - name: Restore previous authoritative state
         env:
