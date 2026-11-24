@@ -20,6 +20,8 @@ on:
       - 'scripts/updater/workflow_01_validate_index_identity.R'
       - 'tests/test_workflow01_checkpoint_source_order.R'
       - 'tests/test_workflow01_final_streaming.R'
+      - 'tests/test_workflow01_pair_streaming.R'
+      - 'scripts/updater/workflow_01_pair_state_stream.R'
       - 'scripts/updater/workflow_01_archive_delta_to_zenodo.R'
       - 'scripts/updater/workflow_01_build_canonical_jsonl.R'
       - 'scripts/updater/workflow_01_prepare_source_catalogue.R'
@@ -164,6 +166,10 @@ jobs:
       - name: Reproduce wide-pair W01 finalisation without memory mapping
         shell: Rscript {0}
         run: source('tests/test_workflow01_final_streaming.R')
+
+      - name: Reproduce full-fidelity wide-pair delta and replay
+        shell: Rscript {0}
+        run: source('tests/test_workflow01_pair_streaming.R')
 
       - name: Reproduce checkpoint source-order and index-identity regression
         shell: Rscript {0}
