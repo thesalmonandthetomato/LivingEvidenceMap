@@ -125,26 +125,35 @@ align_cols <- function(a,b){
 
 # 2. Replay pair-decision upserts.
 prev_pairs_path <- file.path(previous_root,"workflow01_full_five_source","final_pair_decisions.csv")
-prev_pairs <- fread(prev_pairs_path,na.strings=c("","NA"),colClasses="character")
-up_pairs <- fread(file.path(delta_dir,"pair_decision_upserts.csv"),na.strings=c("","NA"),colClasses="character")
+up_pairs_path <- file.path(delta_dir,"pair_decision_upserts.csv")
 pair_out <- file.path(output_root,"workflow01_full_five_source","final_pair_decisions.csv")
-if(nrow(up_pairs)){
-  if(anyDuplicated(up_pairs$pair_key)) stop("Delta pair upserts contain duplicate pair_key",call.=FALSE)
-  ab <- align_cols(prev_pairs,up_pairs); prev_pairs <- ab$a; up_pairs <- ab$b
-  prev_pairs <- prev_pairs[!(pair_key %in% up_pairs$pair_key)]
-  pairs <- rbindlist(list(prev_pairs,up_pairs),use.names=TRUE,fill=TRUE)
-  setorder(pairs,pair_key)
-  fwrite(pairs,pair_out,na="")
+hash_method <- as.character(m$target$pair_decisions_hash_method %||% "legacy-v1")
+if(identical(hash_method,"row_sha256_sorted_v2")){
+  source("scripts/updater/workflow_01_pair_state_stream.R",local=TRUE)
+  w01_pair_replay(prev_pairs_path,up_pairs_path,pair_out,
+    as.character(m$target$pair_decisions_state_sha256))
 } else {
-  file.copy(prev_pairs_path,pair_out,overwrite=TRUE)
-}
-pair_state_sha <- table_state_sha(
-  fread(pair_out,na.strings=c("","NA"),colClasses="character"),
-  "pair_key",
-  exclude_cols=as.character(unlist(m$target$pair_decisions_hash_excluded_descriptive_columns %||% character()))
-)
-if(!identical(tolower(pair_state_sha),tolower(as.character(m$target$pair_decisions_state_sha256)))) {
-  stop("Replayed pair-decision semantic state hash does not match target",call.=FALSE)
+  # Historical published deltas retain their original hash contract.
+  prev_pairs <- fread(prev_pairs_path,na.strings=c("","NA"),colClasses="character")
+  up_pairs <- fread(up_pairs_path,na.strings=c("","NA"),colClasses="character")
+  if(nrow(up_pairs)){
+    if(anyDuplicated(up_pairs$pair_key)) stop("Delta pair upserts contain duplicate pair_key",call.=FALSE)
+    ab <- align_cols(prev_pairs,up_pairs); prev_pairs <- ab$a; up_pairs <- ab$b
+    prev_pairs <- prev_pairs[!(pair_key %in% up_pairs$pair_key)]
+    pairs <- rbindlist(list(prev_pairs,up_pairs),use.names=TRUE,fill=TRUE)
+    setorder(pairs,pair_key)
+    fwrite(pairs,pair_out,na="")
+  } else {
+    file.copy(prev_pairs_path,pair_out,overwrite=TRUE)
+  }
+  pair_state_sha <- table_state_sha(
+    fread(pair_out,na.strings=c("","NA"),colClasses="character"),
+    "pair_key",
+    exclude_cols=as.character(unlist(m$target$pair_decisions_hash_excluded_descriptive_columns %||% character()))
+  )
+  if(!identical(tolower(pair_state_sha),tolower(as.character(m$target$pair_decisions_state_sha256)))) {
+    stop("Replayed pair-decision semantic state hash does not match target",call.=FALSE)
+  }
 }
 
 # 3. Replay cluster-map upserts.
