@@ -133,21 +133,12 @@ for(src in sort(current_sources)){
 # 2. Pair-decision upserts.
 prev_pairs_path <- file.path(previous_root,"workflow01_full_five_source","final_pair_decisions.csv")
 cur_pairs_path <- file.path(current_final_root,"final_pair_decisions.csv")
-prev_pairs <- fread(prev_pairs_path,na.strings=c("","NA"),colClasses="character")
-cur_pairs <- fread(cur_pairs_path,na.strings=c("","NA"),colClasses="character")
-if(anyDuplicated(prev_pairs$pair_key)||anyDuplicated(cur_pairs$pair_key)) stop("Pair keys must be unique",call.=FALSE)
-missing_pairs <- setdiff(prev_pairs$pair_key,cur_pairs$pair_key)
-if(length(missing_pairs)) stop(sprintf("%d previous pair decisions disappeared",length(missing_pairs)),call.=FALSE)
-ab <- align_cols(prev_pairs,cur_pairs); prev_pairs <- ab$a; cur_pairs <- ab$b; pair_cols <- ab$cols
-setkey(prev_pairs,pair_key); setkey(cur_pairs,pair_key)
-new_pair_keys <- setdiff(cur_pairs$pair_key,prev_pairs$pair_key)
-common_pair_keys <- intersect(prev_pairs$pair_key,cur_pairs$pair_key)
-pcommon <- prev_pairs[J(common_pair_keys)]
-ccommon <- cur_pairs[J(common_pair_keys)]
-changed_pair_keys <- common_pair_keys[row_signature(pcommon,pair_cols)!=row_signature(ccommon,pair_cols)]
-pair_upsert_keys <- unique(c(new_pair_keys,changed_pair_keys))
-pair_upserts <- cur_pairs[J(pair_upsert_keys)]
-fwrite(pair_upserts,file.path(output_dir,"pair_decision_upserts.csv"),na="")
+# The combined pair CSV may exceed 17 GiB. The full-field comparison and
+# state hash must never fread the whole previous/current pair corpus.
+source("scripts/updater/workflow_01_pair_state_stream.R",local=TRUE)
+pair_diff <- w01_pair_diff(
+  prev_pairs_path,cur_pairs_path,file.path(output_dir,"pair_decision_upserts.csv")
+)
 
 # 3. Cluster-map upserts. Existing manifestations may change cluster IDs after a merge.
 prev_map_path <- file.path(previous_root,"workflow01_full_five_source","manifestation_cluster_map.csv")
@@ -267,11 +258,8 @@ manifest <- list(
     canonical_records=as.integer(current_manifest$records),
     canonical_jsonl_sha256=as.character(current_manifest$canonical_jsonl_sha256),
     canonical_jsonl_bytes=as.numeric(current_manifest$canonical_jsonl_bytes),
-    pair_decisions_state_sha256=table_state_sha(
-      fread(cur_pairs_path,na.strings=c("","NA"),colClasses="character"),
-      "pair_key",
-      exclude_cols=c("title_i","title_j")
-    ),
+    pair_decisions_state_sha256=pair_diff$state_sha256,
+    pair_decisions_hash_method=pair_diff$hash_method,
     cluster_map_state_sha256=table_state_sha(fread(cur_map_path,na.strings=c("","NA"),colClasses="character"),c("source","source_record_id")),
     pair_decisions_hash_excluded_descriptive_columns=c("title_i","title_j"),
     source_files=source_target
@@ -279,9 +267,9 @@ manifest <- list(
   delta=list(
     new_source_manifestations=sum(unlist(source_delta_counts)),
     new_source_manifestations_by_source=source_delta_counts,
-    pair_decision_upserts=nrow(pair_upserts),
-    new_pair_decisions=length(new_pair_keys),
-    changed_pair_decisions=length(changed_pair_keys),
+    pair_decision_upserts=pair_diff$upserts,
+    new_pair_decisions=pair_diff$new,
+    changed_pair_decisions=pair_diff$changed,
     cluster_map_upserts=nrow(map_upserts),
     new_manifestations=length(new_manifestation_keys),
     changed_existing_manifestations=length(changed_manifestation_keys),
