@@ -526,7 +526,7 @@ close(con)
 sizes <- map[,.(cluster_size=.N),by=cluster_id]
 summary <- list(
   workflow="01_final_adjudicated_deduplication",
-  status=if(nrow(remaining)==0L)"final" else "incomplete",
+  status=if(unresolved_pairs==0L)"final" else "incomplete",
   source_manifestations=nrow(meta),
   total_pair_decisions=total_pairs,
   adjudicated_cases=length(llm),
