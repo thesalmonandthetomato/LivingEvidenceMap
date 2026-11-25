@@ -1,4 +1,4 @@
-name: TEMP recover validated November W01 publication
+name: TEMP complete published November W01 handoff
 on:
   push:
     branches: [workflow01-final-architecture]
@@ -46,128 +46,27 @@ jobs:
           RS
 
 
-      - name: Recover original validated artifact
+      - name: Verify registered publication and completed human review
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          p <- fromJSON(Sys.getenv("POINTER"))
+          r <- fromJSON("docs/deduplication/checkpoints/resolutions/run-45349525216.json")
+          z <- fromJSON("docs/deduplication/zenodo/run-45459473670.json")
+          h <- fromJSON("docs/deduplication/handoffs/w01/run-45349525216.json")
+          stopifnot(r$status=="resolved",r$resolved_by_run_id==z$github_run_id,
+            r$checkpoint_run_id==p$github_run_id,z$status=="published",z$visibility=="restricted",
+            z$zenodo_record_id=="24516526",z$canonical_records==90995L,
+            h$status=="ready",h$checkpoint_run_id==p$github_run_id,h$queue_sha256==p$queue_sha256,
+            h$queue_cases==1L,h$export_run_id=="45390805607",
+            grepl("^[0-9a-f]{64}$",h$decisions_export_sha256))
+      - name: Verify original human gate and replay evidence
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          test ! -f docs/deduplication/checkpoints/resolutions/run-45349525216.json
-          test ! -f docs/deduplication/zenodo/run-45459473670.json
           gh run download "$RECOVERED_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "workflow01-resume-$RECOVERED_RUN_ID" --dir .
-          test -s outputs/delta/delta_manifest.json
-          test -s outputs/replayed/workflow01_delta_replay_audit.json
-      - name: Verify recovered delta and original validation receipt
-        shell: Rscript {0}
-        run: |
-          library(jsonlite)
-          library(digest)
-          m <- fromJSON("outputs/delta/delta_manifest.json")
-          a <- fromJSON("outputs/replayed/workflow01_delta_replay_audit.json")
-          stopifnot(a$status=="PASS",m$github_run_id==Sys.getenv("RECOVERED_RUN_ID"),
-            a$delta_github_run_id==m$github_run_id,m$previous$github_run_id=="40218882441",
-            m$target$source_manifestations==182703L,m$target$canonical_records==90995L)
-          for(nm in c("canonical_jsonl_sha256","pair_decisions_state_sha256","cluster_map_state_sha256"))
-            stopifnot(identical(a[[nm]],m$target[[nm]]))
-          for(nm in c("pair_decision_upserts.csv","cluster_map_upserts.csv","cluster_id_aliases.csv","canonical_upserts.jsonl","canonical_retired_ids.txt","data_quality_repair_upserts.jsonl","abstract_strip_action_upserts.jsonl")){
-            key <- paste0(sub("\\.[^.]+$","",nm),"_sha256")
-            expected <- m$files[[key]]
-            stopifnot(is.character(expected),length(expected)==1L,grepl("^[0-9a-f]{64}$",expected))
-            actual <- digest(file=file.path("outputs/delta",nm),algo="sha256",serialize=FALSE)
-            if(!identical(actual,expected)) stop(sprintf("Checksum mismatch for %s: expected %s, got %s",nm,expected,actual))
-            cat("PASS: verified",nm,"\n")
-
-          }
-      - name: Check corrected historical restore scripts
-        shell: Rscript {0}
-        run: |
-          parse(file="scripts/updater/workflow_01_restore_state_from_zenodo.R")
-          parse(file="scripts/updater/workflow_01_restore_current_state.R")
-          cat("PASS: historical restore scripts parse successfully\n")
-
-      - name: Restore previous authoritative state
-        env:
-          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-        run: |
-          Rscript scripts/updater/workflow_01_restore_current_state.R --pointer docs/deduplication/zenodo/run-40218882441.json --pointer-dir docs/deduplication/zenodo --output-root previous_state
-      - name: Replay recovered delta and verify all target hashes
-        run: |
-          set -euo pipefail
-          Rscript scripts/updater/workflow_01_replay_delta.R --previous-root previous_state --delta-dir outputs/delta --output-root recovered_state
-          cp recovered_state/canonical/records.jsonl outputs/canonical/records.jsonl
-          rm -rf previous_state recovered_state
-      - name: Archive only validated delta to Zenodo
-        env:
-          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p outputs/zenodo
-          Rscript scripts/updater/workflow_01_archive_delta_to_zenodo.R \
-            --delta-dir outputs/delta \
-            --run-id "$RECOVERED_RUN_ID" \
-            --repository "$GITHUB_REPOSITORY" \
-            --output-dir outputs/zenodo
-
-      - name: Register final delta and checkpoint resolution
-        env:
-          CHECKPOINT_POINTER: docs/deduplication/checkpoints/run-45349525216.json
-        shell: bash
-        run: |
-          set -euo pipefail
-          Rscript scripts/updater/workflow_01_update_zenodo_registry.R \
-            --receipt outputs/zenodo/zenodo_receipt.json \
-            --registry docs/deduplication/zenodo_registry.csv \
-            --pointer-dir docs/deduplication/zenodo
-          mkdir -p docs/deduplication/runs docs/deduplication/checkpoints/resolutions
-          Rscript scripts/updater/workflow_01_write_run_report.R \
-            --summary outputs/final/summary.json \
-            --canonical-manifest outputs/canonical/canonical_manifest.json \
-            --zenodo-receipt outputs/zenodo/zenodo_receipt.json \
-            --run-id "$RECOVERED_RUN_ID" \
-            --repository "$GITHUB_REPOSITORY" \
-            --out-md docs/deduplication/runs/run-$RECOVERED_RUN_ID.md \
-            --out-json docs/deduplication/runs/run-$RECOVERED_RUN_ID.json
-          CHECKPOINT_RUN="$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("CHECKPOINT_POINTER"));cat(x$github_run_id)')"
-          printf '{"checkpoint_run_id":"%s","resolved_by_run_id":"%s","status":"resolved"}\n' "$CHECKPOINT_RUN" "$RECOVERED_RUN_ID" > "docs/deduplication/checkpoints/resolutions/run-$CHECKPOINT_RUN.json"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/deduplication/zenodo_registry.csv docs/deduplication/zenodo/ docs/deduplication/runs/ docs/deduplication/checkpoints/resolutions/
-          if ! git diff --cached --quiet; then
-            git commit -m "Record resumed Workflow 01 delta run $RECOVERED_RUN_ID"
-            bash scripts/updater/workflow01_push_with_retry.sh "$WORKFLOW01_BRANCH"
-          fi
-
-      - name: Update current-run live status through W01
-        env:
-          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
-        shell: bash
-        run: |
-          set -euo pipefail
-          Rscript scripts/updater/workflow_current_run_status_observer.R \
-            --force-stage W01 \
-            --pointer "docs/deduplication/zenodo/run-$RECOVERED_RUN_ID.json"
-          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
-          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
-          Rscript scripts/updater/workflow_current_run_status_to_shiny.R \
-            --status docs/current_run/current_run_status.json \
-            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
-            --credential "$RUNNER_TEMP/lem-google-service-account.json"
-          Rscript scripts/reporting/write_workflow09_stage_summary.R --stage W01 --run-id "$RECOVERED_RUN_ID"
-          Rscript scripts/reporting/write_workflow09_source_snapshot.R \
-            --stage W01 \
-            --run-id "$RECOVERED_RUN_ID" \
-            --canonical outputs/canonical/records.jsonl
-          Rscript scripts/reporting/refresh_workflow09_input_manifest.R
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/current_run/current_run_status.json docs/reporting/workflow_09_inputs/current
-          if ! git diff --cached --quiet; then
-            git commit -m "Update current-run status through W01 [skip ci]"
-            bash scripts/updater/workflow01_push_with_retry.sh "$WORKFLOW01_BRANCH"
-          fi
-
+          Rscript -e 'library(jsonlite);p<-fromJSON(Sys.getenv("POINTER"));z<-fromJSON("docs/deduplication/zenodo/run-45459473670.json");a<-fromJSON("outputs/replayed/workflow01_delta_replay_audit.json");stopifnot(a$status=="PASS",a$delta_github_run_id==z$github_run_id,a$canonical_jsonl_sha256==z$canonical_jsonl_sha256);g<-fromJSON("outputs/human_gate/human_review_integrity.json");print(g)'
       - name: Acknowledge consumed W01 Shiny batch
         env:
           LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
@@ -179,7 +78,17 @@ jobs:
           chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
           CHECKPOINT_RUN="$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"));cat(x$github_run_id)')"
           QUEUE_SHA="$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"));cat(x$queue_sha256)')"
-          OUTPUT_SHA="$(Rscript -e 'cat(digest::digest(file="outputs/canonical/records.jsonl",algo="sha256",serialize=FALSE))')"
+          OUTPUT_SHA="$(Rscript -e 'cat(jsonlite::fromJSON("docs/deduplication/zenodo/run-45459473670.json")$canonical_jsonl_sha256)')"
+          Rscript scripts/updater/workflow_shiny_batch_status.R \
+            --stage "01" \
+            --batch-id "w01-run-$CHECKPOINT_RUN" \
+            --queue-sha256 "$QUEUE_SHA" \
+            --status review_complete \
+            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
+            --credential "$RUNNER_TEMP/lem-google-service-account.json" \
+            --workflow-run-id "45390805607" \
+            --source-run-id "$CHECKPOINT_RUN" \
+            --message "Reconcile completed exported human review verified by W01 production integrity gate."
           Rscript scripts/updater/workflow_shiny_batch_status.R \
             --stage "01" \
             --batch-id "w01-run-$CHECKPOINT_RUN" \
@@ -213,11 +122,3 @@ jobs:
           echo "PASS: dispatched Workflow 02 after resumed W01 run $RECOVERED_RUN_ID"
 
 
-      - name: Retain publication receipt
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: w01-recovered-publication-${{ github.run_id }}
-          path: outputs/zenodo/zenodo_receipt.json
-          if-no-files-found: warn
-          retention-days: 30
