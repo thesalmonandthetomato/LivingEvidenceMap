@@ -139,7 +139,10 @@ jobs:
 
       - name: Install preparation dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest','httr2','stringdist','data.table'))
+        run: |
+          packages <- c('jsonlite','digest','httr2','stringdist','data.table','readr')
+          install.packages(packages)
+          stopifnot(all(vapply(packages, requireNamespace, logical(1), quietly = TRUE)))
 
       - name: Parse batched Workflow 02 scripts
         shell: Rscript {0}
