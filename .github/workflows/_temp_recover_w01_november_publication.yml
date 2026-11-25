@@ -1,124 +1,22 @@
-name: TEMP complete published November W01 handoff
+name: TEMP dispatch historic W02 after dependency fix
 on:
   push:
     branches: [workflow01-final-architecture]
     paths: ['.github/workflows/_temp_recover_w01_november_publication.yml']
 permissions:
-  contents: write
+  contents: read
   actions: write
-concurrency:
-  group: workflow01-production
-  cancel-in-progress: false
-env:
-  WORKFLOW01_BRANCH: workflow01-final-architecture
-  RECOVERED_RUN_ID: '45459473670'
-  POINTER: docs/deduplication/checkpoints/run-45349525216.json
 jobs:
-  recover:
+  dispatch:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
     steps:
-      - name: Checkout Workflow 01 branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ env.WORKFLOW01_BRANCH }}
-          fetch-depth: 0
-
-      - name: Set up R
-        uses: r-lib/actions/setup-r@v2
-        with:
-          r-version: release
-          use-public-rspm: true
-
-      - name: Install system curl and verify required R packages
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends libcurl4-openssl-dev
-          Rscript - <<'RS'
-          packages <- c('curl','data.table','jsonlite','digest','httr2','readr','stringdist','stringi','xml2','googlesheets4')
-          install.packages(packages)
-          missing <- packages[!vapply(packages,requireNamespace,logical(1),quietly=TRUE)]
-          if(length(missing)) stop(sprintf("W01 resume missing R packages: %s",paste(missing,collapse=", ")),call.=FALSE)
-          cat(sprintf("PASS: W01 resume R dependencies available; curl=%s\\n",
-                      as.character(utils::packageVersion('curl'))))
-          RS
-
-
-      - name: Verify registered publication and completed human review
-        shell: Rscript {0}
-        run: |
-          library(jsonlite)
-          p <- fromJSON(Sys.getenv("POINTER"))
-          r <- fromJSON("docs/deduplication/checkpoints/resolutions/run-45349525216.json")
-          z <- fromJSON("docs/deduplication/zenodo/run-45459473670.json")
-          h <- fromJSON("docs/deduplication/handoffs/w01/run-45349525216.json")
-          stopifnot(r$status=="resolved",r$resolved_by_run_id==z$github_run_id,
-            r$checkpoint_run_id==p$github_run_id,z$status=="published",z$visibility=="restricted",
-            z$zenodo_record_id=="24516526",z$canonical_records==90995L,
-            h$status=="ready",h$checkpoint_run_id==p$github_run_id,h$queue_sha256==p$queue_sha256,
-            h$queue_cases==1L,h$export_run_id=="45390805607",
-            grepl("^[0-9a-f]{64}$",h$decisions_export_sha256))
-      - name: Verify original human gate and replay evidence
+      - uses: actions/checkout@v4
+      - name: Dispatch unchanged historic production entry point
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh run download "$RECOVERED_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "workflow01-resume-$RECOVERED_RUN_ID" --dir .
-          Rscript -e 'library(jsonlite);p<-fromJSON(Sys.getenv("POINTER"));z<-fromJSON("docs/deduplication/zenodo/run-45459473670.json");a<-fromJSON("outputs/replayed/workflow01_delta_replay_audit.json");stopifnot(a$status=="PASS",a$delta_github_run_id==z$github_run_id,a$canonical_jsonl_sha256==z$canonical_jsonl_sha256);g<-fromJSON("outputs/human_gate/human_review_integrity.json");print(g)'
-      - name: Acknowledge consumed W01 Shiny batch
-        env:
-          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
-          LEM_GOOGLE_SHEET_ID: '1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA'
-        shell: bash
-        run: |
-          set -euo pipefail
-          printf '%s' "$LEM_GOOGLE_SERVICE_ACCOUNT_JSON" > "$RUNNER_TEMP/lem-google-service-account.json"
-          chmod 600 "$RUNNER_TEMP/lem-google-service-account.json"
-          CHECKPOINT_RUN="$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"));cat(x$github_run_id)')"
-          QUEUE_SHA="$(Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("POINTER"));cat(x$queue_sha256)')"
-          OUTPUT_SHA="$(Rscript -e 'cat(jsonlite::fromJSON("docs/deduplication/zenodo/run-45459473670.json")$canonical_jsonl_sha256)')"
-          Rscript scripts/updater/workflow_shiny_batch_status.R \
-            --stage "01" \
-            --batch-id "w01-run-$CHECKPOINT_RUN" \
-            --queue-sha256 "$QUEUE_SHA" \
-            --status review_complete \
-            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
-            --credential "$RUNNER_TEMP/lem-google-service-account.json" \
-            --workflow-run-id "45390805607" \
-            --source-run-id "$CHECKPOINT_RUN" \
-            --message "Reconcile completed exported human review verified by W01 production integrity gate."
-          Rscript scripts/updater/workflow_shiny_batch_status.R \
-            --stage "01" \
-            --batch-id "w01-run-$CHECKPOINT_RUN" \
-            --queue-sha256 "$QUEUE_SHA" \
-            --status consumed \
-            --sheet-id "$LEM_GOOGLE_SHEET_ID" \
-            --credential "$RUNNER_TEMP/lem-google-service-account.json" \
-            --workflow-run-id "$RECOVERED_RUN_ID" \
-            --source-run-id "$CHECKPOINT_RUN" \
-            --output-sha256 "$OUTPUT_SHA" \
-            --message "Workflow 01 decisions applied; validated delta archived and registered."
-
-      - name: Trigger Workflow 02 after resumed Workflow 01
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          STATUS="docs/current_run/current_run_status.json"
-          W01_POINTER="docs/deduplication/zenodo/run-$RECOVERED_RUN_ID.json"
-          test -s "$STATUS"
-          test -s "$W01_POINTER"
-          PREV_W02="$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json",simplifyVector=FALSE);cat(as.character(x$baseline$workflow02_pointer))')"
-          test -n "$PREV_W02"
-          test -s "$PREV_W02"
-          gh workflow run workflow_02_batched_production.yml \
-            --repo "$GITHUB_REPOSITORY" \
-            --ref "$WORKFLOW01_BRANCH" \
-            -f workflow01_pointer_path="$W01_POINTER" \
-            -f previous_workflow02_pointer_path="$PREV_W02"
-          echo "PASS: dispatched Workflow 02 after resumed W01 run $RECOVERED_RUN_ID"
-
-
+          test -s docs/deduplication/zenodo/run-45459473670.json
+          test -s docs/enrichment/zenodo/run-40289685551.json
+          grep -F "'data.table','readr'" .github/workflows/workflow_02_batched.yml
+          gh workflow run workflow_02_batched_production.yml --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture -f workflow01_pointer_path=docs/deduplication/zenodo/run-45459473670.json -f previous_workflow02_pointer_path=docs/enrichment/zenodo/run-40289685551.json
