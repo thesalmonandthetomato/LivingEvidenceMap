@@ -1,13 +1,12 @@
-name: TEMP submit user-authorised W02 matches and resume historic updater
+name: TEMP audit all W04 protected correction identities
 on:
   push:
     branches: [workflow01-final-architecture]
     paths: ['.github/workflows/_temp_recover_w01_november_publication.yml']
 permissions:
   contents: read
-  actions: write
 jobs:
-  submit:
+  audit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,66 +16,81 @@ jobs:
           use-public-rspm: true
       - name: Install dependencies
         shell: Rscript {0}
-        run: install.packages(c("googlesheets4","jsonlite","digest"))
-      - name: Append authorised decisions without replacing existing definitive decisions
+        run: install.packages(c("jsonlite","digest","httr2","stringi"))
+      - name: Restore verified current lean canonical
         env:
-          LEM_GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.LEM_GOOGLE_SERVICE_ACCOUNT_JSON }}
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p inputs/current
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R --pointer docs/compaction/zenodo/run-45886317416.json --output-dir inputs/current/canonical
+          cp "$(find inputs/current/canonical -name canonical_lean.jsonl -type f -print -quit)" inputs/current/canonical_lean.raw.jsonl
+      - name: Audit every historical correction without modifying data
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          HUMAN_CORRECTIONS_POINTER: ${{ github.workspace }}/docs/workflow04/human_abstract_corrections/run-37511638503.json
         shell: Rscript {0}
         run: |
-          library(googlesheets4)
-          library(jsonlite)
-          library(digest)
-          ss <- "1e9-V67-8lwPO6YBqeGJWn-SFanWSze5Gi2ToKR4bXvA"
-          sha <- "7253ee6a39e709fb70bba4e0af12fffaec019a142f12b593264f645ca56e4a02"
-          batch <- "w02-run-45861367261"
-          cred <- tempfile()
-          writeLines(Sys.getenv("LEM_GOOGLE_SERVICE_ACCOUNT_JSON"),cred)
-          Sys.chmod(cred,"0600")
-          gs4_auth(path=cred,cache=FALSE)
-          q <- read_sheet(ss,sheet="queue_w02_active",col_types="c")
-          q <- q[order(as.integer(q$case_index)),]
-          stopifnot(nrow(q)==160L,all(q$batch_id==batch),all(q$queue_sha256==sha),!anyDuplicated(q$review_case_id),identical(digest(paste0(paste(q$case_json,collapse="\n"),"\n"),algo="sha256",serialize=FALSE),sha))
-          cases <- lapply(q$case_json,fromJSON,simplifyVector=FALSE)
-          norm <- function(x) sub("^https?://(dx\\.)?doi\\.org/","",tolower(trimws(as.character(x))),perl=TRUE)
-          for(i in seq_along(cases)){
-            z <- cases[[i]]
-            stopifnot(identical(z$review_case_id,q$review_case_id[i]),identical(z$field,"abstract"),identical(z$provider,"europe_pmc"),z$reason %in% c("title_guard_failed","title_mismatch"),length(z$provider_response$abstract)==1L,nzchar(z$provider_response$abstract),length(z$provider_response$returned_doi)==1L,identical(norm(z$doi),norm(z$provider_response$returned_doi)))
+          #!/usr/bin/env Rscript
+          # Reapply SHA-256-verified, restricted W04 human abstract corrections to current W04 input.
+          # Preserve all original human text and fail closed if any identity cannot be resolved uniquely.
+          # Input: inputs/current/canonical_lean.raw.jsonl; output: inputs/current/canonical_lean.jsonl.
+          dir.create("inputs/human_corrections",recursive=TRUE,showWarnings=FALSE)
+          library(jsonlite); library(httr2); library(digest)
+          p <- fromJSON(Sys.getenv('HUMAN_CORRECTIONS_POINTER'),simplifyVector=FALSE)
+          stopifnot(p$status=='published',p$visibility=='restricted',as.integer(p$corrections)==157L)
+          token <- Sys.getenv('ZENODO_ACCESS_TOKEN'); stopifnot(nzchar(token))
+          dep <- request(paste0('https://zenodo.org/api/deposit/depositions/',p$zenodo_record_id)) |>
+            req_headers(Authorization=paste('Bearer',token)) |> req_timeout(120) |>
+            req_perform() |> resp_body_json(simplifyVector=FALSE)
+          stopifnot(isTRUE(dep$submitted))
+          bucket <- sub('/$','',as.character(dep$links$bucket))
+          fn <- 'workflow04_human_abstract_corrections.jsonl'
+          dest <- file.path('inputs/human_corrections',fn)
+          resp <- request(paste0(bucket,'/',URLencode(fn,reserved=TRUE))) |>
+            req_method('GET') |> req_headers(Authorization=paste('Bearer',token)) |>
+            req_timeout(600) |> req_error(is_error=function(resp)FALSE) |> req_perform(path=dest)
+          stopifnot(resp_status(resp)==200L)
+          sha <- digest(file=dest,algo='sha256',serialize=FALSE)
+          stopifnot(tolower(sha)==tolower(as.character(p$corrections_sha256)))
+          cat('PASS: restored 157 protected W04 human abstract corrections\n')
+          
+          suppressPackageStartupMessages(library(jsonlite))
+          `%||%` <- function(x,y) if(is.null(x)) y else x
+          scalar <- function(x){if(is.null(x)||!length(x))return('');z<-as.character(x[[1L]]);if(is.na(z))'' else trimws(gsub('[[:space:]]+',' ',z))}
+          norm_doi <- function(x){z<-tolower(scalar(x));if(!nzchar(z))return('');z<-sub('^https?://(dx\\.)?doi\\.org/','',z,perl=TRUE);z<-sub('^doi:\\s*','',z,perl=TRUE);z<-sub('[?#].*$','',z,perl=TRUE);z<-sub('\\.(html?|pdf|xml)$','',z,perl=TRUE,ignore.case=TRUE);sub('[.,;:]+$','',z,perl=TRUE)}
+          norm_title <- function(x)tolower(trimws(gsub('[[:space:]]+',' ',scalar(x))))
+          readjl <- function(p){x<-readLines(p,warn=FALSE,encoding='UTF-8');x<-x[nzchar(trimws(x))];lapply(x,function(z)fromJSON(z,simplifyVector=FALSE))}
+          recs <- readjl('inputs/current/canonical_lean.raw.jsonl')
+          corr <- readjl('inputs/human_corrections/workflow04_human_abstract_corrections.jsonl')
+          stopifnot(length(recs)>0L,length(corr)==157L)
+          ids <- vapply(recs,function(r)scalar((r$identity%||%list())$record_id),character(1))
+          dois <- vapply(recs,function(r)norm_doi((r$canonical%||%list())$doi),character(1))
+          titles <- vapply(recs,function(r){c<-r$canonical%||%list();norm_title(c$title%||%r$title)},character(1))
+          stopifnot(!anyDuplicated(ids),all(nzchar(ids)))
+          id_map <- setNames(seq_along(ids),ids)
+          doi_groups <- split(which(nzchar(dois)),dois[nzchar(dois)])
+          title_groups <- split(which(nzchar(titles)),titles[nzchar(titles)])
+          
+          library(stringi)
+          norm2 <- function(x) {
+           x<-stri_trans_nfkc(x); x<-stri_trans_tolower(x)
+           x<-gsub("<[^>]+>","",x); stri_replace_all_regex(x,"[^\\p{L}\\p{N}]","")
           }
-          cols <- c("decision_id","review_case_id","record_id","provider","field","reason","decision","note","reviewer","resolved_at_utc","queue_sha256","supersedes_decision_id")
-          active <- function(){
-            d <- read_sheet(ss,sheet="decisions_w02",col_types="c")
-            stopifnot(all(cols %in% names(d)))
-            d <- d[which(d$queue_sha256==sha),cols,drop=FALSE]
-            if(nrow(d)){
-              t <- as.POSIXct(d$resolved_at_utc,format="%Y-%m-%dT%H:%M:%SZ",tz="UTC")
-              stopifnot(!anyNA(t),all(d$review_case_id %in% q$review_case_id))
-              d <- d[order(t,seq_len(nrow(d)),decreasing=TRUE),]
-              d <- d[!duplicated(d$review_case_id),]
-            }
-            d
+          titles2 <- norm2(titles)
+          for(i in seq_along(corr)){
+           p<-corr[[i]]; nd<-scalar(p$doi_normalized); nt<-scalar(p$title_normalized); oldid<-scalar(p$record_id_at_edit)
+           k<-which(ids==oldid); dh<-which(nzchar(nd)&dois==nd); th<-which(nzchar(nt)&titles==nt)
+           j<-integer()
+           if(length(k)==1L && ((!nzchar(nd)||identical(dois[[k]],nd))||(!nzchar(nt)||identical(titles[[k]],nt)))) j<-k
+           if(!length(j)&&length(dh)==1L) j<-dh
+           if(!length(j)&&length(dh)>1L&&length(intersect(dh,th))==1L)j<-intersect(dh,th)
+           if(!length(j)&&length(th)==1L)j<-th
+           if(length(j)!=1L){
+            n2<-norm2(nt); nh<-which(nzchar(n2)&titles2==n2)
+            dist<-if(nzchar(n2)) as.numeric(adist(n2,titles2))/pmax(nchar(n2),nchar(titles2),1) else rep(1,length(ids))
+            candidates<-unique(c(k,dh,th,nh,head(order(dist),5)))
+            cat(toJSON(list(correction=i,old_id=oldid,doi=nd,title=nt,exact_id_count=length(k),doi_count=length(dh),title_count=length(th),normalised_count=length(nh),candidates=lapply(candidates,function(z)list(id=ids[z],doi=dois[z],title=titles[z],distance=dist[z]))),auto_unbox=TRUE),"\n")
+           } else cat(sprintf("RESOLVED %d %s\n",i,ids[j]))
           }
-          d <- active()
-          keep <- d$review_case_id[d$decision %in% c("accept_provider_field","reject_provider_field","reject_provider_match")]
-          missing <- which(!q$review_case_id %in% keep)
-          if(length(missing)){
-            rows <- lapply(missing,function(i){
-              z <- cases[[i]]
-              old <- d$decision_id[match(z$review_case_id,d$review_case_id)]
-              data.frame(decision_id=paste0("w02-bulk-",digest(paste(sha,z$review_case_id,sep="|"),algo="sha256",serialize=FALSE)),review_case_id=z$review_case_id,record_id=z$record_id,provider=z$provider,field=z$field,reason=z$reason,decision="accept_provider_field",note="AI-assisted title review; bulk acceptance explicitly authorised by project administrator; exact DOI checked.",reviewer="AI-assisted administrator-authorised bulk review",resolved_at_utc=format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ"),queue_sha256=sha,supersedes_decision_id=if(length(old)&&!is.na(old))old else "",stringsAsFactors=FALSE)
-            })
-            sheet_append(ss,sheet="decisions_w02",data=do.call(rbind,rows)[,cols])
-          }
-          v <- active()
-          stopifnot(nrow(v)==160L,setequal(v$review_case_id,q$review_case_id),all(v$decision %in% c("accept_provider_field","reject_provider_field")))
-          for(i in seq_along(cases)){
-            z <- cases[[i]]; a <- v[match(z$review_case_id,v$review_case_id),]
-            stopifnot(identical(a$record_id,z$record_id),identical(a$provider,z$provider),identical(a$field,z$field),identical(a$reason,z$reason))
-          }
-          cat(sprintf("PASS: %d existing definitive decisions preserved; %d appended; all 160 resolved\n",length(keep),length(missing)))
-          stopifnot(system2("Rscript",c("scripts/updater/workflow_shiny_batch_status.R","--stage","02","--batch-id",batch,"--queue-sha256",sha,"--status","review_complete","--sheet-id",ss,"--credential",cred,"--source-run-id","45861367261"))==0L)
-          unlink(cred)
-      - name: Start historic W02 resume
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh workflow run workflow_02_resume_after_human_review.yml --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture -f source_run_id=45861367261 -f publish=true -f validation_only=false
+          
