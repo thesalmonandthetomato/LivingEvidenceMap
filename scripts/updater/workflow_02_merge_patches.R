@@ -20,12 +20,41 @@ writejl<-function(xs,p){
 }
 rid<-function(x) as.character(x$record_id)
 
+`%||%`<-function(x,y) if(is.null(x)) y else x
+clean<-function(x){
+  if(is.null(x)||!length(x)) return(NULL)
+  s<-trimws(gsub("[[:space:]]+"," ",as.character(x[[1L]])))
+  if(is.na(s)||!nzchar(s)) NULL else s
+}
+missing<-function(x) is.null(clean(x))
+norm_doi<-function(x){
+  z<-clean(x)
+  if(is.null(z)) return(NULL)
+  z<-tolower(z)
+  z<-sub("^https?://(dx\\.)?doi\\.org/","",z,perl=TRUE)
+  z<-sub("^doi:\\s*","",z,perl=TRUE)
+  z<-sub("[?#].*$","",z,perl=TRUE)
+  z<-sub("/full/html?$","",z,perl=TRUE,ignore.case=TRUE)
+  z<-sub("\\.(html?|pdf|xml)$","",z,perl=TRUE,ignore.case=TRUE)
+  z<-sub("[.,;:]+$","",z,perl=TRUE)
+  if(!nzchar(z)) NULL else z
+}
+
 prev<-readjl(previous); cur<-readjl(current)
 store<-list()
 if(length(prev)) for(x in prev) store[[rid(x)]]<-x
 if(length(cur)) for(x in cur){
   id<-rid(x); old<-store[[id]]
+  # A historical patch for another DOI was skipped during preparation.
+  # Never transfer its field values to the current DOI.
   if(is.null(old)){ store[[id]]<-x; next }
+  old_doi<-norm_doi(old$input_doi)
+  new_doi<-norm_doi(x$input_doi)
+  if(is.null(old_doi)||is.null(new_doi)||!identical(old_doi,new_doi)){
+    cat(sprintf("Replacing stale historical patch for %s (DOI identity changed)\n",id))
+    store[[id]]<-x
+    next
+  }
   if(!is.null(x$title)) old$title<-x$title
   if(!is.null(x$abstract)) old$abstract<-x$abstract
   if(!is.null(x$author_keywords)) old$author_keywords<-x$author_keywords
