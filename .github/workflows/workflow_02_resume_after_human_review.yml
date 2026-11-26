@@ -128,10 +128,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p source/prepared source/review source/batches
+          ARTIFACT_RUN_ID="$SOURCE_RUN_ID"
+          # November recovery published a review queue from verified original production inputs.
+          if [ "$SOURCE_RUN_ID" = "45861367261" ]; then
+            ARTIFACT_RUN_ID=45581540187
+          fi
 
-          gh run download "$SOURCE_RUN_ID" \
+          gh run download "$ARTIFACT_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --name "workflow02-finalize-input-$SOURCE_RUN_ID" \
+            --name "workflow02-finalize-input-$ARTIFACT_RUN_ID" \
             --dir source/prepared
 
           gh run download "$SOURCE_RUN_ID" \
@@ -139,9 +144,9 @@ jobs:
             --name "workflow02-human-review-$SOURCE_RUN_ID" \
             --dir source/review
 
-          gh run download "$SOURCE_RUN_ID" \
+          gh run download "$ARTIFACT_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --pattern "workflow02-batch-*-$SOURCE_RUN_ID" \
+            --pattern "workflow02-batch-*-$ARTIFACT_RUN_ID" \
             --dir source/batches
 
           gh run download "$SOURCE_RUN_ID" \
@@ -156,6 +161,7 @@ jobs:
           test -s source/prepared/outputs/workflow02_plan/plan.json
           test -f source/prepared/previous_cumulative_patch.jsonl
           test -s source/review/workflow02_human_review_manifest.json
+          Rscript -e 'library(jsonlite);library(digest);m<-fromJSON("source/review/workflow02_human_review_manifest.json");stopifnot(identical(m$source_input_sha256,digest(file="source/prepared/outputs/workflow02/input_with_previous_state.jsonl",algo="sha256",serialize=FALSE)))'
 
       - name: Prepare Google credential
         env:
