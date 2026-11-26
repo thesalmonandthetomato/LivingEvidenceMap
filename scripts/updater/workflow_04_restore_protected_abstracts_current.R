@@ -46,38 +46,10 @@ for(i in seq_along(corr)){
     k<-id_map[[oldid]]
     if((!nzchar(nd)||identical(dois[[k]],nd)) || (!nzchar(nt)||identical(titles[[k]],nt))){j<-k;basis<-'record_id_at_edit'}
   }
-  # Stable work identity plus a unique title differing only in terminal punctuation.
-  # Handles canonical DOI transitions (e.g. preprint to journal article) without
-  # fuzzy title matching or transferring corrections between different works.
+  # Stable ID plus unique title differing only in terminal punctuation.
   if(is.null(j)&&nzchar(oldid)&&oldid%in%names(id_map)&&nzchar(nt)){
     k<-id_map[[oldid]]
-    strip_terminal<-function(x) sub('[[:punct:][:space:]]+
-    hs<-doi_groups[[nd]]
-    if(length(hs)==1L){j<-hs[[1L]];basis<-'doi'}
-    else if(length(hs)>1L&&nzchar(nt)){th<-hs[titles[hs]==nt];if(length(th)==1L){j<-th[[1L]];basis<-'doi+title'}}
-  }
-  if(is.null(j)&&nzchar(nt)){hs<-title_groups[[nt]];if(length(hs)==1L){j<-hs[[1L]];basis<-'title'}}
-  if(is.null(j)||length(j)!=1L)stop(sprintf('Correction %d does not resolve uniquely',i),call.=FALSE)
-  id<-ids[[j]]; new_abs<-scalar(p$edited_abstract); stopifnot(nzchar(new_abs))
-  r<-recs[[j]]; can<-r$canonical%||%list()
-  can$abstract<-new_abs
-  prov<-can$field_provenance%||%list()
-  prov$abstract_human_w04<-list(source='workflow04_human_abstract_correction',source_w04_resume_run_id=as.character(p$source_w04_resume_run_id),identity_basis=basis)
-  can$field_provenance<-prov; r$canonical<-can; recs[[j]]<-r
-  matched<-c(matched,id)
-  audit[[length(audit)+1L]]<-list(current_record_id=id,record_id_at_edit=oldid,identity_basis=basis)
-}
-stopifnot(length(matched)==157L,!anyDuplicated(matched))
-out<-file('inputs/current/canonical_lean.jsonl','wt',encoding='UTF-8')
-for(r in recs)writeLines(toJSON(r,auto_unbox=TRUE,null='null',na='null',digits=NA),out,useBytes=TRUE)
-close(out)
-dir.create('outputs/human_overlay',recursive=TRUE,showWarnings=FALSE)
-con<-file('outputs/human_overlay/audit.jsonl','wt',encoding='UTF-8')
-for(a in audit)writeLines(toJSON(a,auto_unbox=TRUE),con,useBytes=TRUE)
-close(con)
-cat('PASS: overlaid all 157 protected human abstracts\n')
-
-,'',x)
+    strip_terminal<-function(x) sub("[[:punct:][:space:]]+$","",x)
     target<-strip_terminal(nt)
     if(nzchar(target)&&identical(strip_terminal(titles[[k]]),target)){
       hs<-which(strip_terminal(titles)==target)
