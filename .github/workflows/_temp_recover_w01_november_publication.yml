@@ -18,6 +18,8 @@ jobs:
       - name: Install dependencies
         shell: Rscript {0}
         run: install.packages(c("jsonlite","digest","httr2","stringi"))
+      - name: Parse corrected R script before any retrieval
+        run: Rscript -e 'invisible(parse(file="scripts/updater/workflow_04_restore_protected_abstracts_current.R"))'
       - name: Restore verified current lean canonical
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
