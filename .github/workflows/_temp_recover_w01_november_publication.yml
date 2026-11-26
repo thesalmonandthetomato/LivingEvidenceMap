@@ -1,10 +1,11 @@
-name: TEMP audit all W04 protected correction identities
+name: TEMP validate W04 protected overlay and dispatch historic production
 on:
   push:
     branches: [workflow01-final-architecture]
     paths: ['.github/workflows/_temp_recover_w01_november_publication.yml']
 permissions:
   contents: read
+  actions: write
 jobs:
   audit:
     runs-on: ubuntu-latest
@@ -25,72 +26,22 @@ jobs:
           mkdir -p inputs/current
           Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R --pointer docs/compaction/zenodo/run-45886317416.json --output-dir inputs/current/canonical
           cp "$(find inputs/current/canonical -name canonical_lean.jsonl -type f -print -quit)" inputs/current/canonical_lean.raw.jsonl
-      - name: Audit every historical correction without modifying data
+      - name: Validate corrected production overlay against all 157 records
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
           HUMAN_CORRECTIONS_POINTER: ${{ github.workspace }}/docs/workflow04/human_abstract_corrections/run-37511638503.json
-        shell: Rscript {0}
         run: |
-          #!/usr/bin/env Rscript
-          # Reapply SHA-256-verified, restricted W04 human abstract corrections to current W04 input.
-          # Preserve all original human text and fail closed if any identity cannot be resolved uniquely.
-          # Input: inputs/current/canonical_lean.raw.jsonl; output: inputs/current/canonical_lean.jsonl.
-          dir.create("inputs/human_corrections",recursive=TRUE,showWarnings=FALSE)
-          library(jsonlite); library(httr2); library(digest)
-          p <- fromJSON(Sys.getenv('HUMAN_CORRECTIONS_POINTER'),simplifyVector=FALSE)
-          stopifnot(p$status=='published',p$visibility=='restricted',as.integer(p$corrections)==157L)
-          token <- Sys.getenv('ZENODO_ACCESS_TOKEN'); stopifnot(nzchar(token))
-          dep <- request(paste0('https://zenodo.org/api/deposit/depositions/',p$zenodo_record_id)) |>
-            req_headers(Authorization=paste('Bearer',token)) |> req_timeout(120) |>
-            req_perform() |> resp_body_json(simplifyVector=FALSE)
-          stopifnot(isTRUE(dep$submitted))
-          bucket <- sub('/$','',as.character(dep$links$bucket))
-          fn <- 'workflow04_human_abstract_corrections.jsonl'
-          dest <- file.path('inputs/human_corrections',fn)
-          resp <- request(paste0(bucket,'/',URLencode(fn,reserved=TRUE))) |>
-            req_method('GET') |> req_headers(Authorization=paste('Bearer',token)) |>
-            req_timeout(600) |> req_error(is_error=function(resp)FALSE) |> req_perform(path=dest)
-          stopifnot(resp_status(resp)==200L)
-          sha <- digest(file=dest,algo='sha256',serialize=FALSE)
-          stopifnot(tolower(sha)==tolower(as.character(p$corrections_sha256)))
-          cat('PASS: restored 157 protected W04 human abstract corrections\n')
-          
-          suppressPackageStartupMessages(library(jsonlite))
-          `%||%` <- function(x,y) if(is.null(x)) y else x
-          scalar <- function(x){if(is.null(x)||!length(x))return('');z<-as.character(x[[1L]]);if(is.na(z))'' else trimws(gsub('[[:space:]]+',' ',z))}
-          norm_doi <- function(x){z<-tolower(scalar(x));if(!nzchar(z))return('');z<-sub('^https?://(dx\\.)?doi\\.org/','',z,perl=TRUE);z<-sub('^doi:\\s*','',z,perl=TRUE);z<-sub('[?#].*$','',z,perl=TRUE);z<-sub('\\.(html?|pdf|xml)$','',z,perl=TRUE,ignore.case=TRUE);sub('[.,;:]+$','',z,perl=TRUE)}
-          norm_title <- function(x)tolower(trimws(gsub('[[:space:]]+',' ',scalar(x))))
-          readjl <- function(p){x<-readLines(p,warn=FALSE,encoding='UTF-8');x<-x[nzchar(trimws(x))];lapply(x,function(z)fromJSON(z,simplifyVector=FALSE))}
-          recs <- readjl('inputs/current/canonical_lean.raw.jsonl')
-          corr <- readjl('inputs/human_corrections/workflow04_human_abstract_corrections.jsonl')
-          stopifnot(length(recs)>0L,length(corr)==157L)
-          ids <- vapply(recs,function(r)scalar((r$identity%||%list())$record_id),character(1))
-          dois <- vapply(recs,function(r)norm_doi((r$canonical%||%list())$doi),character(1))
-          titles <- vapply(recs,function(r){c<-r$canonical%||%list();norm_title(c$title%||%r$title)},character(1))
-          stopifnot(!anyDuplicated(ids),all(nzchar(ids)))
-          id_map <- setNames(seq_along(ids),ids)
-          doi_groups <- split(which(nzchar(dois)),dois[nzchar(dois)])
-          title_groups <- split(which(nzchar(titles)),titles[nzchar(titles)])
-          
-          library(stringi)
-          norm2 <- function(x) {
-           x<-stri_trans_nfkc(x); x<-stri_trans_tolower(x)
-           x<-gsub("<[^>]+>","",x); stri_replace_all_regex(x,"[^\\p{L}\\p{N}]","")
-          }
-          titles2 <- norm2(titles)
-          for(i in seq_along(corr)){
-           p<-corr[[i]]; nd<-scalar(p$doi_normalized); nt<-scalar(p$title_normalized); oldid<-scalar(p$record_id_at_edit)
-           k<-which(ids==oldid); dh<-which(nzchar(nd)&dois==nd); th<-which(nzchar(nt)&titles==nt)
-           j<-integer()
-           if(length(k)==1L && ((!nzchar(nd)||identical(dois[[k]],nd))||(!nzchar(nt)||identical(titles[[k]],nt)))) j<-k
-           if(!length(j)&&length(dh)==1L) j<-dh
-           if(!length(j)&&length(dh)>1L&&length(intersect(dh,th))==1L)j<-intersect(dh,th)
-           if(!length(j)&&length(th)==1L)j<-th
-           if(length(j)!=1L){
-            n2<-norm2(nt); nh<-which(nzchar(n2)&titles2==n2)
-            dist<-if(nzchar(n2)) as.numeric(adist(n2,titles2))/pmax(nchar(n2),nchar(titles2),1) else rep(1,length(ids))
-            candidates<-unique(c(k,dh,th,nh,head(order(dist),5)))
-            cat(toJSON(list(correction=i,old_id=oldid,doi=nd,title=nt,exact_id_count=length(k),doi_count=length(dh),title_count=length(th),normalised_count=length(nh),candidates=lapply(candidates,function(z)list(id=ids[z],doi=dois[z],title=titles[z],distance=dist[z]))),auto_unbox=TRUE),"\n")
-           } else cat(sprintf("RESOLVED %d %s\n",i,ids[j]))
-          }
-          
+          set -euo pipefail
+          Rscript scripts/updater/workflow_04_restore_protected_abstracts_current.R
+          test "$(wc -l < outputs/human_overlay/audit.jsonl)" -eq 157
+          Rscript -e 'library(jsonlite);a<-lapply(readLines("outputs/human_overlay/audit.jsonl"),fromJSON);stopifnot(length(unique(vapply(a,function(x)x$current_record_id,character(1))))==157L,identical(a[[111]]$current_record_id,"work-b7bef45da9c316ca"),identical(a[[111]]$identity_basis,"stable_record_id_unique_terminal_punctuation_title"));cat("PASS: all 157 protected corrections uniquely overlaid\\n")'
+      - name: Dispatch original W04 production after successful validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          PREV_W04="$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json");cat(x$baseline$workflow04_pointer)')"
+          PREV_LEAN="$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json");cat(x$baseline$lean_pointer)')"
+          test -s "$PREV_W04"
+          test -s "$PREV_LEAN"
+          gh workflow run workflow_04_production.yml --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture -f lean_pointer_path=docs/compaction/zenodo/run-45886317416.json -f workflow03_pointer_path=docs/publication_status/zenodo/run-45891636461.json -f prior_workflow04_pointer_path="$PREV_W04" -f prior_lean_pointer_path="$PREV_LEAN" -f publish=true
