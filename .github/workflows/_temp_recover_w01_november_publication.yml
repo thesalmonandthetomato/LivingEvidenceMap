@@ -1,4 +1,4 @@
-name: TEMP dispatch historic W02 after dependency fix
+name: TEMP validate W02 merge repair and resume historical production
 on:
   push:
     branches: [workflow01-final-architecture]
@@ -11,12 +11,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Dispatch unchanged historic production entry point
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Validate DOI identity regression fixture
+        shell: Rscript {0}
+        run: |
+          install.packages(c("jsonlite","digest"))
+          library(jsonlite)
+          p <- tempfile(); q <- tempfile(); out <- tempfile()
+          old <- list(record_id="test",input_doi="10.1234/old",abstract=list(value="historical"),metadata_enrichment=list(status="old"))
+          new <- list(record_id="test",input_doi="10.1234/new",title=list(value="current"),metadata_enrichment=list(status="new"))
+          writeLines(toJSON(old,auto_unbox=TRUE),p)
+          writeLines(toJSON(new,auto_unbox=TRUE),q)
+          run <- function() {
+            stopifnot(system2("Rscript",c("scripts/updater/workflow_02_merge_patches.R","--previous",p,"--current",q,"--output",out))==0L)
+            fromJSON(readLines(out),simplifyVector=FALSE)
+          }
+          x <- run()
+          stopifnot(identical(x$input_doi,new$input_doi),is.null(x$abstract),identical(x$title,new$title))
+          new$input_doi <- "https://doi.org/10.1234/old"
+          writeLines(toJSON(new,auto_unbox=TRUE),q)
+          x <- run()
+          stopifnot(identical(x$abstract,old$abstract),identical(x$title,new$title))
+          cat("PASS: stale DOI isolation and same-DOI retention\n")
+      - name: Verify unchanged batch checkpoint fingerprint inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin e012ad7dbc99b504e14542c42d9b2863af739b6a
+          git diff --exit-code e012ad7dbc99b504e14542c42d9b2863af739b6a HEAD -- .github/workflows/workflow_02_batched.yml scripts/updater/workflow_02_plan_batches.R scripts/updater/workflow_02_metadata_enrichment.R scripts/updater/workflow_02_build_patch.R scripts/updater/workflow_02_apply_patch.R scripts/updater/workflow_02_resume_checkpoints.R
+      - name: Dispatch historic production using existing batch checkpoints
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          test -s docs/deduplication/zenodo/run-45459473670.json
-          test -s docs/enrichment/zenodo/run-40289685551.json
-          grep -F "'data.table','readr'" .github/workflows/workflow_02_batched.yml
-          gh workflow run workflow_02_batched_production.yml --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture -f workflow01_pointer_path=docs/deduplication/zenodo/run-45459473670.json -f previous_workflow02_pointer_path=docs/enrichment/zenodo/run-40289685551.json
+          gh workflow run workflow_02_batched_production.yml --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture -f workflow01_pointer_path=docs/deduplication/zenodo/run-45459473670.json -f previous_workflow02_pointer_path=docs/enrichment/zenodo/run-40289685551.json -f resume_run_id=45581540187
