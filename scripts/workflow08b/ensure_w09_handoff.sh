@@ -16,7 +16,10 @@ Rscript scripts/workflow08b/ensure_w09_handoff.R \
   "$RUNNER_TEMP/w09-current-status.json" "$RELEASE" "$RUNNER_TEMP/w09-routing-marker.json" \
   "$RUNNER_TEMP/w09-registry.json" "$RUNNER_TEMP/w09-runs.json" "$RUNNER_TEMP/w09-action.json"
 case "$(jq -r .action "$RUNNER_TEMP/w09-action.json")" in
-  complete) echo "PASS: W09 already completed for accepted release";;
+  complete)
+    echo "PASS: W09 already completed for accepted release; reconcile downstream W10"
+    bash scripts/workflow08b/ensure_w10_handoff.sh \
+      "$(jq -r .update_id "$RELEASE")" "$(jq -r .w08_run_id "$RELEASE")" "$(jq -r .w08_canonical_sha256 "$RELEASE")";;
   await) echo "PASS: matching W09 execution already active";;
   dispatch)
     gh workflow run report_workflow09_figures.yml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH" \
