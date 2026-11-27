@@ -1,8 +1,22 @@
 name: Report - Workflow 09 publication package
+run-name: ${{ inputs.expected_update_id != '' && format('W09 release {0} / {1} / {2}', inputs.expected_update_id, inputs.expected_w08_run_id, inputs.expected_w08_sha256) || 'Report - Workflow 09 publication package' }}
 
 on:
   workflow_dispatch:
     inputs:
+      expected_update_id:
+        description: 'Exact accepted monthly update ID for recoverable W08b handoff'
+        required: false
+        default: ''
+        type: string
+      expected_w08_run_id:
+        required: false
+        default: ''
+        type: string
+      expected_w08_sha256:
+        required: false
+        default: ''
+        type: string
       search_update_date:
         description: 'Actual latest database search date (YYYY-MM-DD); leave blank only when unknown'
         required: false
@@ -18,8 +32,48 @@ permissions:
   contents: write
   actions: write
 
+concurrency:
+  group: workflow09-publication
+  cancel-in-progress: false
+
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      run_report: ${{ steps.gate.outputs.run_report }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+      - name: Verify exact release before any report or status writes
+        id: gate
+        env:
+          EXPECTED_UPDATE: ${{ inputs.expected_update_id }}
+          EXPECTED_RUN: ${{ inputs.expected_w08_run_id }}
+          EXPECTED_SHA: ${{ inputs.expected_w08_sha256 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$EXPECTED_UPDATE$EXPECTED_RUN$EXPECTED_SHA" ]]; then
+            echo "run_report=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          [[ "$EXPECTED_UPDATE" =~ ^[A-Za-z0-9._-]+$ && "$EXPECTED_RUN" =~ ^[0-9]+$ && "$EXPECTED_SHA" =~ ^[a-f0-9]{64}$ ]]
+          S=docs/current_run/current_run_status.json
+          M="docs/workflow08b/routing/$EXPECTED_UPDATE.json"
+          P="docs/workflow08/zenodo/run-$EXPECTED_RUN.json"
+          jq -e --arg u "$EXPECTED_UPDATE" --arg r "$EXPECTED_RUN" '.update_id==$u and (.workflow_runs.W08|tostring)==$r and (.progress.completed_through>=9 and .progress.completed_through<=11)' "$S"
+          jq -e --arg u "$EXPECTED_UPDATE" --arg r "$EXPECTED_RUN" --arg h "$EXPECTED_SHA" '.update_id==$u and .stage=="completed" and .final_w08_run_id==$r and .final_w08_sha256==$h' "$M"
+          jq -e --arg r "$EXPECTED_RUN" --arg h "$EXPECTED_SHA" '.status=="published" and .source_github_run_id==$r and .final_canonical_jsonl_sha256==$h' "$P"
+          if [[ "$(jq -r .progress.completed_through "$S")" -ge 10 ]]; then
+            echo "run_report=false" >> "$GITHUB_OUTPUT"
+            echo "PASS: exact release report already complete; duplicate execution skipped"
+          else
+            echo "run_report=true" >> "$GITHUB_OUTPUT"
+          fi
   publish:
+    needs: preflight
+    if: ${{ needs.preflight.outputs.run_report == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
