@@ -43,12 +43,22 @@ if(generation=="original"){
      !identical(tolower(as.character(state$original_w08_sha256)),sha))
    stop("Repeated original W08 does not match accepted original source snapshot")
   transition<-if(identical(as.character(state$stage),"completed_without_supplemental"))
-    "publish_final_w09_w10" else "await_existing_citation_generation"
+    "publish_final_w09_w10" else if(identical(as.character(state$stage),"completed")){
+      if(!identical(as.character(state$final_w08_run_id),w08_run)||
+         !identical(tolower(as.character(state$final_w08_sha256)),sha))
+        stop("Original W08 is not the accepted final publication")
+      "already_published"
+    }else if(as.character(state$stage)%in%c("citation_chasing_started","candidates_started","supplemental_w01_started"))
+      "await_existing_citation_generation" else stop("Unknown existing routing stage")
  }
 }else{
  if(is.null(state))stop("Supplemental W08 cannot run without an accepted original citation generation")
- if(identical(as.character(state$stage),"completed"))
+ if(identical(as.character(state$stage),"completed")){
+  if(!identical(as.character(state$final_w08_run_id),w08_run)||
+     !identical(tolower(as.character(state$final_w08_sha256)),sha))
+    stop("Supplemental W08 differs from accepted final publication")
   transition<-"already_published"
+ }
  else if(!identical(as.character(state$stage),"supplemental_w01_started"))
   stop("Supplemental W01 has not been explicitly registered")
  if(identical(as.character(state$original_w08_run_id),w08_run))
