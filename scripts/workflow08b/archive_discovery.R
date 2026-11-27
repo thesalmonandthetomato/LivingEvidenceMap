@@ -26,10 +26,18 @@ setwd(old);on.exit(NULL,add=FALSE)
 sha<-digest(file=archive,algo="sha256",serialize=FALSE)
 api<-"https://zenodo.org/api/deposit/depositions"
 auth<-function(r)req_headers(r,Authorization=paste("Bearer",token))
-call<-function(r,allowed,label){
- x<-req_perform(req_error(req_timeout(r,120),is_error=function(resp)FALSE))
- if(!(resp_status(x)%in%allowed))stop("Zenodo ",label," HTTP ",resp_status(x),": ",substr(resp_body_string(x),1,600))
- x
+call<-function(r,allowed,label,timeout=120,retries=1L){
+ for(attempt in seq_len(retries)){
+   x<-tryCatch(req_perform(req_error(req_timeout(r,timeout),is_error=function(resp)FALSE)),error=identity)
+   if(!inherits(x,"error")&&resp_status(x)%in%allowed)return(x)
+   retryable<-inherits(x,"error")||resp_status(x)%in%c(408L,429L,500L,502L,503L,504L)
+   if(!retryable||attempt==retries){
+     if(inherits(x,"error"))stop("Zenodo ",label,": ",conditionMessage(x))
+     stop("Zenodo ",label," HTTP ",resp_status(x),": ",substr(resp_body_string(x),1,600))
+   }
+   message("Zenodo ",label," retry ",attempt,"/",retries)
+   Sys.sleep(min(60,5*2^(attempt-1L)))
+ }
 }
 created<-resp_body_json(call(auth(req_method(request(api),"POST")) |>
  req_body_raw(charToRaw("{}"),type="application/json"),201L,"draft create"),simplifyVector=FALSE)
@@ -46,7 +54,7 @@ call(auth(req_method(request(paste0(api,"/",id)),"PUT")) |> req_body_json(metada
 fn<-basename(archive)
 up<-auth(req_method(request(paste0(bucket,"/",URLencode(fn,reserved=TRUE))),"PUT")) |>
  req_headers(Expect="") |> req_body_file(archive) |> req_timeout(1800)
-call(up,c(200L,201L),"upload")
+call(up,c(200L,201L),"upload",timeout=1800,retries=5L)
 pub<-resp_body_json(call(auth(req_method(request(paste0(api,"/",id,"/actions/publish")),"POST")),
  c(200L,201L,202L),"publish"),simplifyVector=FALSE)
 record<-as.character(if(is.null(pub$record_id))pub$id else pub$record_id)
