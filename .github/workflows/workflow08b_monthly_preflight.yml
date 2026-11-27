@@ -25,7 +25,7 @@ jobs:
           use-public-rspm: true
       - name: Install packages
         shell: Rscript {0}
-        run: install.packages(c("jsonlite","httr2","digest"))
+        run: install.packages(c("jsonlite","httr2","digest","readr"))
       - name: Parse all preflight scripts
         shell: Rscript {0}
         run: |
