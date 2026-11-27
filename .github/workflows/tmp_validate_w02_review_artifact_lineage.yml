@@ -1,0 +1,64 @@
+name: TEMP validate generic W02 review artifact lineage
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/tmp_validate_w02_review_artifact_lineage.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - run: Rscript -e 'install.packages("jsonlite")'
+      - name: Test normal and recovered ownership plus rejection cases
+        shell: Rscript {0}
+        run: |
+          source("scripts/updater/workflow_02_resolve_review_artifact_lineage.R")
+          d <- tempfile(); dir.create(d)
+          m <- list(schema="living-evidence-map-workflow02-human-review-package-v1",workflow="02")
+          expect_error <- function(expr) stopifnot(inherits(tryCatch(force(expr),error=identity),"error"))
+          stopifnot(identical(resolve_w02_artifact_run("123",d,m),"123"))
+          m$artifact_run_id <- "456"
+          expect_error(resolve_w02_artifact_run("123",d,m))
+          x <- list(schema="w02-review-artifact-lineage-v1",review_run_id="123",artifact_run_id="456",review_run_commit=paste(rep("a",40),collapse=""),reason="verified recovery")
+          jsonlite::write_json(x,file.path(d,"run-123.json"),auto_unbox=TRUE)
+          stopifnot(identical(resolve_w02_artifact_run("123",d,m,x$review_run_commit),"456"))
+          expect_error(resolve_w02_artifact_run("123",d,m,paste(rep("b",40),collapse="")))
+          m$artifact_run_id <- "789"
+          expect_error(resolve_w02_artifact_run("123",d,m,x$review_run_commit))
+          m$artifact_run_id <- NULL
+          m$review_run_id <- "999"
+          expect_error(resolve_w02_artifact_run("123",d,m,x$review_run_commit))
+          m$review_run_id <- NULL
+          expect_error(resolve_w02_artifact_run("../123",d,m))
+          p <- jsonlite::fromJSON("docs/enrichment/review_artifact_lineage/run-45861367261.json")
+          stopifnot(identical(resolve_w02_artifact_run(p$review_run_id,"docs/enrichment/review_artifact_lineage",m,p$review_run_commit),p$artifact_run_id))
+          cat("PASS: ordinary, historical and synthetic recovery routing; invalid lineage rejected\n")
+      - name: Verify actual historical GitHub run lineage and immutable artifact inventory
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          P=docs/enrichment/review_artifact_lineage/run-45861367261.json
+          REVIEW="$(jq -r .review_run_id "$P")"
+          OWNER="$(jq -r .artifact_run_id "$P")"
+          SHA="$(jq -r .review_run_commit "$P")"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$REVIEW" --jq .head_sha)" = "$SHA"
+          for RUN in "$REVIEW" "$OWNER"; do
+            test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN" --jq .head_branch)" = workflow01-final-architecture
+          done
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$OWNER/artifacts?per_page=100" --jq '.artifacts[].name' > "$RUNNER_TEMP/names"
+          grep -Fx "workflow02-finalize-input-$OWNER" "$RUNNER_TEMP/names"
+          test "$(grep -Ec "^workflow02-batch-[0-9]+-$OWNER$" "$RUNNER_TEMP/names")" -eq 43
+          echo "PASS: historical provenance points to original 43-batch production execution"
+      - name: Lint production W02 resume workflow
+        run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 -shellcheck= .github/workflows/workflow_02_resume_after_human_review.yml
