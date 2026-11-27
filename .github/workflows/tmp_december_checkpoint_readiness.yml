@@ -1,0 +1,74 @@
+name: TEMP December independent checkpoint restoration
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/tmp_december_checkpoint_readiness.yml']
+permissions:
+  contents: read
+jobs:
+  restore:
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        stage: ['00','01','02','lean','03','04','05','06','07','08']
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - run: Rscript -e 'install.packages(c("httr2","jsonlite","digest","readr","dplyr","stringi","data.table"))'
+      - name: Restore immutable November checkpoint using production reader
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          STAGE: ${{ matrix.stage }}
+        run: |
+          set -euo pipefail
+          S=scripts/updater
+          O="$RUNNER_TEMP/restored"
+          case "$STAGE" in
+            00) Rscript "$S/workflow_01_restore_workflow00_from_zenodo.R" --pointer docs/search_record/zenodo/run-45130154568.json --output-root "$O";;
+            01) Rscript "$S/workflow_01_restore_current_state.R" --pointer docs/deduplication/zenodo/run-45459473670.json --pointer-dir docs/deduplication/zenodo --output-root "$O";;
+            02) Rscript "$S/workflow_02_restore_state_from_zenodo.R" --pointer docs/enrichment/zenodo/run-45886317416.json --output-dir "$O";;
+            lean) Rscript "$S/workflow_03_restore_lean_checkpoint.R" --pointer docs/compaction/zenodo/run-45886317416.json --output-dir "$O";;
+            03) Rscript "$S/workflow_03_restore_state_from_zenodo.R" --pointer docs/publication_status/zenodo/run-45891636461.json --output-dir "$O";;
+            04) Rscript "$S/workflow_04_restore_state_from_zenodo.R" --pointer docs/workflow04/zenodo/run-45968696491.json --output-dir "$O";;
+            05|06|07) Rscript "$S/workflow_${STAGE}_restore_state_from_zenodo.R" --pointer "docs/workflow${STAGE}/zenodo/run-45989191441.json" --output-dir "$O";;
+            08) Rscript scripts/reporting/restore_workflow08_reporting_state.R --pointer docs/workflow08/zenodo/run-45999469513.json --output-dir "$O"
+                Rscript "$S/workflow_08_restore_adjudication_ledger.R" --pointer docs/workflow08/zenodo/run-45999469513.json --output "$O/ledger.jsonl";;
+            *) exit 2;;
+          esac
+          test -n "$(find "$O" -type f -print -quit)"
+          echo "PASS: independent November checkpoint restoration $STAGE"
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate production workflow syntax and reusable workflow contracts
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 -shellcheck= \
+            .github/workflows/workflow_00_monthly_schedule_bridge.yml \
+            .github/workflows/workflow_00_search_orchestrator.yml \
+            .github/workflows/workflow_01_production.yml \
+            .github/workflows/workflow_01_resume_after_human_review.yml \
+            .github/workflows/workflow_02_batched_production.yml \
+            .github/workflows/workflow_02_batched.yml \
+            .github/workflows/workflow_02_resume_after_human_review.yml \
+            .github/workflows/workflow_03_production.yml \
+            .github/workflows/workflow_04_production.yml \
+            .github/workflows/workflow_04_resume_after_shiny.yml \
+            .github/workflows/workflow_05_production.yml \
+            .github/workflows/workflow_06_production.yml \
+            .github/workflows/workflow_07_production.yml \
+            .github/workflows/workflow_08_production.yml \
+            .github/workflows/workflow_08_resume_after_shiny.yml \
+            .github/workflows/workflow08b_monthly_*.yml \
+            .github/workflows/report_workflow09_figures.yml \
+            .github/workflows/workflow_10_dashboard.yml
