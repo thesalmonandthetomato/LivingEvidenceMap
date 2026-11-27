@@ -132,7 +132,32 @@ for(i in seq_along(corrections)){
  if(disposition!="duplicate_text"||(!nzchar(scalar(prior$abstract_edit_saved_at_utc))&&nzchar(stamp)))chosen[[key]]<-z
  audit[[length(audit)+1L]]<-list(event=i,current_record_id=key,identity_basis=basis,disposition=disposition)
 }
+# Emit only identity/provenance diagnostics, never abstract text or reviewer names.
+conflict_diagnostics<-lapply(conflicts,function(x){
+ z<-corrections[[x$event]]
+ id<-norm(z$record_id_at_edit)
+ nd<-doi(if(nzchar(norm(z$doi_normalized)))z$doi_normalized else z$doi)
+ nt<-title(if(nzchar(norm(z$title_normalized)))z$title_normalized else z$title)
+ k<-match(id,ids)
+ dh<-if(nzchar(nd))which(ds==nd)else integer()
+ th<-if(nzchar(nt))which(ts==nt)else integer()
+ candidates<-unique(c(if(!is.na(k))k else integer(),dh,th))
+ list(event=x$event,reason=x$reason,source_run=z$source_archive_run_id,
+ source_row=z$source_archive_row,stable_id_present=!is.na(k),
+ doi_matches=length(dh),title_matches=length(th),
+ stable_id_doi_agrees=!is.na(k)&&nzchar(nd)&&ds[k]==nd,
+ stable_id_title_agrees=!is.na(k)&&nzchar(nt)&&ts[k]==nt,
+ edit_time=scalar(z$abstract_edit_saved_at_utc),
+ candidate_prior_edits=lapply(candidates,function(j){
+  p<-chosen[[ids[j]]]
+  list(has_prior=!is.null(p),source_run=scalar(p$source_archive_run_id),
+   source_row=p$source_archive_row,edit_time=scalar(p$abstract_edit_saved_at_utc),
+   same_normalized_text=!is.null(p)&&identical(norm(p$edited_abstract),norm(z$edited_abstract)),
+   same_edit_id=!is.null(p)&&nzchar(scalar(z$abstract_edit_id))&&identical(scalar(p$abstract_edit_id),scalar(z$abstract_edit_id)))
+ }))
+})
 summary<-list(status=if(length(conflicts))"FAIL"else "PASS",sources=sources,
+ conflict_diagnostics=conflict_diagnostics,
  historical_pointers_without_explicit_correction_metadata=untracked,
  correction_events=length(corrections),unique_resolved_works=length(chosen),
  conflicts=length(conflicts),dispositions=as.list(table(vapply(audit,function(x)x$disposition,character(1)))))
