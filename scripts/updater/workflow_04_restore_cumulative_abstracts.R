@@ -89,6 +89,21 @@ ds<-vapply(recs,function(r)doi(r$canonical$doi),character(1))
 ts<-vapply(recs,function(r)title(if(is.null(r$canonical$title))r$title else r$canonical$title),character(1))
 stopifnot(length(ids)>0L,all(nzchar(ids)),!anyDuplicated(ids))
 strip<-function(x)sub("[[:punct:][:space:]]+$","",x)
+# Corroborate DOI-less stable IDs when a long title has been expanded.
+# Exact token sequence containment (after removing markup) only; no fuzzy
+# title matching or unrestricted stable-ID fallback.
+clean_title<-function(x){
+ x<-gsub("<[^>]*>","",x)
+ x<-gsub("[^[:alnum:]]+"," ",x)
+ trimws(gsub("[[:space:]]+"," ",x))
+}
+clean_titles<-vapply(ts,clean_title,character(1))
+expanded_title_matches<-function(nt){
+ t<-clean_title(nt)
+ if(nchar(t)<80L||length(strsplit(t," ",fixed=TRUE)[[1L]])<10L)return(integer())
+ hits<-which(grepl(paste0(" ",t," "),paste0(" ",clean_titles," "),fixed=TRUE))
+ hits[nchar(clean_titles[hits])>=nchar(t)&nchar(t)/nchar(clean_titles[hits])>=0.85]
+}
 audit<-list(); chosen<-list(); conflicts<-list()
 for(i in seq_along(corrections)){
  z<-corrections[[i]]
@@ -105,6 +120,8 @@ for(i in seq_along(corrections)){
   j<-k;basis<-"stable_id_corroborated"
  }else if(!is.na(k)&&nzchar(nt)&&nzchar(strip(nt))&&strip(ts[k])==strip(nt)&&sum(strip(ts)==strip(nt))==1L){
   j<-k;basis<-"stable_id_unique_terminal_punctuation_title"
+ }else if(!is.na(k)&&!nzchar(nd)&&!nzchar(ds[k])&&identical(expanded_title_matches(nt),k)){
+  j<-k;basis<-"stable_id_unique_long_title_expansion"
  }else if(length(dh)==1L&&(!length(th)||dh%in%th)){
   j<-dh;basis<-"unique_doi"
  }else if(length(intersect(dh,th))==1L){
@@ -148,6 +165,8 @@ conflict_diagnostics<-lapply(conflicts,function(x){
  archived_doi_present=nzchar(nd),archived_title_present=nzchar(nt),
  current_doi_present=!is.na(k)&&nzchar(ds[k]),current_title_present=!is.na(k)&&nzchar(ts[k]),
  title_edit_distance=if(!is.na(k)&&nzchar(nt))as.integer(adist(nt,ts[k]))else NULL,
+ unique_long_title_expansion_matches=length(expanded_title_matches(nt)),
+ stable_id_long_title_expansion_agrees=!is.na(k)&&identical(expanded_title_matches(nt),k),
  title_lengths=if(!is.na(k))c(nchar(nt),nchar(ts[k]))else NULL,
  title_alphanumeric_agrees=!is.na(k)&&nzchar(nt)&&identical(gsub("[^[:alnum:]]","",nt),gsub("[^[:alnum:]]","",ts[k])),
  current_record_field_names=if(!is.na(k))names(recs[[k]])else NULL,
