@@ -1,0 +1,56 @@
+name: TEMP November downstream historical state preflight
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/_temp_november_downstream_preflight.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  historical:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - name: Install dependencies
+        run: Rscript -e 'install.packages(c("httr2","jsonlite","digest","readr","dplyr","stringi","data.table","googlesheets4"))'
+      - name: Verify all downstream baseline pointers and restoration contracts
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          for n in 05 06 07; do
+            Rscript -e 'invisible(parse(file=commandArgs(TRUE)[1]))' "scripts/updater/workflow_${n}_restore_state_from_zenodo.R"
+            P="$(N="$n" Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json");cat(x$baseline[[paste0("workflow",Sys.getenv("N"),"_pointer")]])')"
+            test -s "$P"
+            Rscript "scripts/updater/workflow_${n}_restore_state_from_zenodo.R" --pointer "$P" --output-dir "audit/w$n"
+          done
+          P="$(Rscript -e 'x<-jsonlite::fromJSON("docs/current_run/current_run_status.json");cat(x$baseline$workflow08_pointer)')"
+          test -s "$P"
+          Rscript scripts/updater/workflow_08_restore_adjudication_ledger.R --pointer "$P" --output audit/w08/ledger.jsonl
+      - name: Check historical fingerprint completeness and required files
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          find <- function(root,name) {
+            p <- list.files(root,recursive=TRUE,full.names=TRUE)
+            p <- p[basename(p)==name]
+            stopifnot(length(p)==1L)
+            p
+          }
+          g <- read.csv(find("audit/w06","workflow06_geography_layer.csv"),check.names=FALSE)
+          missing <- function(x,n) if(is.null(x)) n else sum(is.na(x)|!nzchar(trimws(as.character(x))))
+          cat("W06 rows:",nrow(g),"missing fingerprints:",missing(g$geography_input_sha256,nrow(g)),"\n")
+          for(n in c("workflow07_records.csv","workflow07_topic_pathway_scores.csv","workflow07_zero_topic_targeted_rescreen.jsonl","workflow07_topic_complete_manifest.json")){
+            p <- list.files("audit/w07",recursive=TRUE,full.names=TRUE)
+            cat("W07 file",n,"matches",sum(basename(p)==n),"\n")
+          }
+          l <- lapply(readLines("audit/w08/ledger.jsonl",warn=FALSE),fromJSON,simplifyVector=FALSE)
+          m <- sum(vapply(l,function(r) is.null(r$issue_state_sha256)||!length(r$issue_state_sha256)||!nzchar(trimws(as.character(r$issue_state_sha256[[1]]))),logical(1)))
+          cat("W08 ledger rows:",length(l),"missing issue fingerprints:",m,"\n")
+          cat("PASS: baseline restoration audit completed; no publication or coding requests\n")
