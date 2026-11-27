@@ -118,6 +118,7 @@ for(i in seq_len(nrow(d))){
  }
  if(inherits(result,"error")){
   halt<-conditionMessage(result)
+  message("OpenAlex incomplete Work ",oa,": ",halt)
   append(ledger,list(record_id=seed_ids[[1]],seed_record_ids=as.list(seed_ids),openalex_id=oa,provider="openalex",status="incomplete",
    update_id=if(nzchar(update))update else NULL,last_checked_utc=now(),error=halt))
   break
