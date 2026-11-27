@@ -1,0 +1,12 @@
+{
+  "schema": "workflow08b-monthly-routing-state-v1",
+  "update_id": "w00-run-45130154568",
+  "update_month": "2026-11",
+  "original_w08_run_id": "45999469513",
+  "original_w08_sha256": "605b6d4299967dbb6360ea39a223300e497912a22bdcecf7d998777b4fdf0b51",
+  "original_w01_run_id": "45459473670",
+  "stage": "citation_chasing_started",
+  "stages_completed": [],
+  "same_update_required": true,
+  "second_generation_forbidden": true
+}
