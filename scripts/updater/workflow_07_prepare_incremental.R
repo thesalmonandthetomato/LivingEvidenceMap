@@ -69,14 +69,14 @@ if(mode=="update"&&!reuse_allowed){
 
   title_gained_ids<-known[!prior_title_present[known] & current_title_present[known]]
   abstract_gained_ids<-known[!prior_abstract_present[known] & current_abstract_present[known]]
-  refresh_ids<-sort(unique(changed_ids))
+  refresh_ids<-sort(unique(c(title_gained_ids,abstract_gained_ids)))
 
   reuse_ids<-setdiff(known,refresh_ids)
   queue_ids<-c(new_ids,refresh_ids)
-  reuse_reason<-"existing_record_id_reused_only_when_topic_input_sha256_is_unchanged"
+  reuse_reason<-"existing_record_id_reused_unless_missing_title_or_abstract_now_present"
 }
 
-if(length(setdiff(intersect(queue_ids,prior_ids),refresh_ids)))stop("W07 invariant failed: prior record queued without a changed topic-input fingerprint",call.=FALSE)
+if(length(setdiff(intersect(queue_ids,prior_ids),refresh_ids)))stop("W07 invariant failed: prior record queued without a missing-to-present title or abstract",call.=FALSE)
 queue<-current |> filter(record_id%in%queue_ids)
 reused_records<-current |> filter(record_id%in%reuse_ids)
 reused_scores<-if(length(reuse_ids))prior_scores |> filter(record_id%in%reuse_ids) else prior_scores[0,,drop=FALSE]
@@ -118,10 +118,10 @@ manifest<-list(
   existing_records_abstract_gained=length(abstract_gained_ids),
   existing_records_title_and_abstract_gained=length(intersect(title_gained_ids,abstract_gained_ids)),
   existing_records_refreshed=length(refresh_ids),
-  scientific_input_refresh_rule="any_title_or_abstract_fingerprint_change",
+  scientific_input_refresh_rule="missing_title_or_abstract_now_present",
   prior_records_no_longer_current=length(setdiff(prior_ids,current$record_id)),
   reuse_allowed=reuse_allowed,reuse_basis=reuse_reason,
-  previously_assessed_records_requeued_only_for_missing_to_present_text=FALSE,
+  previously_assessed_records_requeued_only_for_missing_to_present_text=TRUE,
   changed_title_abstract_reused=length(setdiff(changed_ids,refresh_ids)),
   fingerprint_fields=c("title","abstract"),
   ontology_sha256=ontology_sha,prompt_sha256=prompt_sha,
