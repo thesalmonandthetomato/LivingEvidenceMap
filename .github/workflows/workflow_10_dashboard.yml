@@ -1,11 +1,24 @@
 name: Workflow 10 - dashboard from authoritative Workflow 08 canonical
+run-name: ${{ inputs.expected_update_id != '' && format('W10 release {0} / {1} / {2}', inputs.expected_update_id, inputs.expected_w08_run_id, inputs.expected_w08_sha256) || 'Workflow 10 - dashboard from authoritative Workflow 08 canonical' }}
 
 on:
   workflow_dispatch:
+    inputs:
+      expected_update_id:
+        required: false
+        default: ''
+        type: string
+      expected_w08_run_id:
+        required: false
+        default: ''
+        type: string
+      expected_w08_sha256:
+        required: false
+        default: ''
+        type: string
   push:
     branches: [workflow01-final-architecture]
     paths:
-      - '.github/workflows/workflow_10_dashboard.yml'
       - 'docs/reporting/.run_workflow10_dashboard'
       - 'R/workflow_10_dashboard_from_canonical_jsonl.R'
       - 'R/workflow_10_make_public_dashboard.R'
@@ -29,7 +42,43 @@ env:
   TOPIC_ONTOLOGY_PATH: 'user_input/workflow07_topic_ontology.csv'
 
 jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      run_dashboard: ${{ steps.gate.outputs.run_dashboard }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          persist-credentials: false
+      - name: Verify exact W09 release and reject stale or duplicate W10
+        id: gate
+        env:
+          EXPECTED_UPDATE: ${{ inputs.expected_update_id }}
+          EXPECTED_RUN: ${{ inputs.expected_w08_run_id }}
+          EXPECTED_SHA: ${{ inputs.expected_w08_sha256 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$EXPECTED_UPDATE$EXPECTED_RUN$EXPECTED_SHA" ]]; then
+            echo "run_dashboard=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          [[ "$EXPECTED_UPDATE" =~ ^[A-Za-z0-9._-]+$ && "$EXPECTED_RUN" =~ ^[0-9]+$ && "$EXPECTED_SHA" =~ ^[a-f0-9]{64}$ ]]
+          S=docs/current_run/current_run_status.json
+          P="docs/workflow08/zenodo/run-$EXPECTED_RUN.json"
+          R=docs/reporting/workflow_09/data/workflow_inputs/w08_summary.json
+          jq -e --arg u "$EXPECTED_UPDATE" --arg r "$EXPECTED_RUN" '.update_id==$u and (.workflow_runs.W08|tostring)==$r and .progress.W09.status=="complete" and (.progress.completed_through>=10 and .progress.completed_through<=11)' "$S"
+          jq -e --arg r "$EXPECTED_RUN" --arg h "$EXPECTED_SHA" '.status=="published" and .source_github_run_id==$r and .final_canonical_jsonl_sha256==$h' "$P"
+          jq -e --arg r "$EXPECTED_RUN" --arg h "$EXPECTED_SHA" '(.source_run_id|tostring)==$r and .metrics.final_canonical_sha256==$h' "$R"
+          if [[ "$(jq -r .progress.completed_through "$S")" -eq 11 ]]; then
+            jq -e '.progress.W10.status=="complete"' "$S"
+            echo "run_dashboard=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_dashboard=true" >> "$GITHUB_OUTPUT"
+          fi
   build:
+    needs: preflight
+    if: ${{ needs.preflight.outputs.run_dashboard == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
