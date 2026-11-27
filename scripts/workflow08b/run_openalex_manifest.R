@@ -91,24 +91,33 @@ for(i in seq_len(nrow(d))){
   bc<-length(w$referenced_works %||% list())
   back<-unique(vapply(w$referenced_works %||% list(),normal,character(1)))
   back<-back[nzchar(back)]
-  # OpenAlex forward citations must be fully paginated. Never accept one page
-  # as complete when its reported cited_by_count is larger.
-  forward<-character();cursor<-"*";pages<-0L
+  # The Work-level citation count can differ from the live cites-filter index.
+  # Require complete cursor traversal and reconcile against the query's own
+  # advertised cardinality, not the independently maintained Work metric.
+  forward<-character();cursor<-"*";pages<-0L;query_count<-NULL
   repeat{
    z<-query("https://api.openalex.org/works",list(filter=paste0("cites:",oa),
       per_page=200,cursor=cursor,select="id"));requests<-requests+1L
    pages<-pages+1L
+   count<-suppressWarnings(as.integer(z$meta$count))
+   if(length(count)!=1L||is.na(count)||count<0L)stop("OpenAlex missing or invalid cites-query count")
+   if(is.null(query_count))query_count<-count
+   else if(count!=query_count)stop("OpenAlex cites-query count changed during pagination")
    ids<-vapply(z$results %||% list(),function(x)normal(x$id %||% ""),character(1))
-   forward<-unique(c(forward,ids[nzchar(ids)]))
+   if(any(!nzchar(ids))||anyDuplicated(ids)||length(intersect(forward,ids)))
+     stop("OpenAlex malformed or duplicate citing IDs during pagination")
+   forward<-c(forward,ids)
    next_cursor<-z$meta$next_cursor %||% NULL
-   if(is.null(next_cursor)||!length(z$results))break
+   if(is.null(next_cursor)||!length(ids))break
    if(pages>=5000L)stop("OpenAlex pagination safety cap reached")
    if(identical(next_cursor,cursor))stop("OpenAlex cursor did not advance")
    cursor<-as.character(next_cursor)
   }
   expected<-as.integer(w$cited_by_count %||% 0L)
-  if(length(forward)<expected)stop("OpenAlex citation count exceeds returned IDs")
-  list(back=back,forward=forward,bc=bc,fc=expected)
+  if(length(forward)!=query_count)stop("OpenAlex cites-query count differs from retrieved unique IDs")
+  if(expected!=query_count)message("OpenAlex count discrepancy ",oa,": Work metadata=",expected,"; complete cites query=",query_count)
+  list(back=back,forward=forward,bc=bc,fc=expected,query_count=query_count)
+
  },error=identity)
  if(inherits(result,"error")&&identical(conditionMessage(result),"openalex_not_found")){
   append(ledger,list(record_id=seed_ids[[1]],seed_record_ids=as.list(seed_ids),openalex_id=oa,provider="openalex",status="not_found",
@@ -130,7 +139,8 @@ for(i in seq_len(nrow(d))){
    backward_ids=if(backward_refresh)result$back else character(),forward_ids=result$forward))
  z<-list(record_id=seed_ids[[1]],seed_record_ids=as.list(seed_ids),openalex_id=oa,provider="openalex",status="complete",
   update_id=if(nzchar(update))update else NULL,reference_count=result$bc,
-  scholarly_citations_count=result$fc,backward_ids=if(backward_refresh)length(result$back)else prior$backward_ids,
+  scholarly_citations_count=result$fc,cites_query_count=result$query_count,
+  cites_count_discrepancy=result$fc-result$query_count,backward_ids=if(backward_refresh)length(result$back)else prior$backward_ids,
   forward_ids=length(result$forward),backward_refreshed=backward_refresh,
   last_checked_utc=now(),error=NULL)
  append(ledger,z);old[[oa]]<-z;complete<-complete+1L
