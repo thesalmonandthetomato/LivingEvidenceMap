@@ -110,7 +110,7 @@ jobs:
           r-version: release
           use-public-rspm: true
       - name: Install R packages
-        run: Rscript -e 'install.packages(c("jsonlite","httr2","digest","data.table"))'
+        run: Rscript -e 'install.packages(c("jsonlite","httr2","digest","data.table","readr"))'
       - name: Verify versioned release and previous-month history
         id: select
         env:
@@ -145,6 +145,7 @@ jobs:
           Rscript scripts/workflow08b/restore_discovery.R \
             "$(cat "$RUNNER_TEMP/previous_zenodo_id")" "$RUNNER_TEMP/w08b/previous"
       - name: Expand and plan every source identifier
+        id: plan
         env:
           UPDATE_MONTH: ${{ inputs.update_month }}
         run: |
@@ -341,7 +342,7 @@ jobs:
           cat("complete=true\n",file=Sys.getenv("GITHUB_OUTPUT"),append=TRUE)
       - name: Archive every genuine bounded discovery attempt to restricted Zenodo
         id: archive
-        if: ${{ always() && inputs.execute_provider_queries }}
+        if: ${{ always() && inputs.execute_provider_queries && steps.plan.outcome == 'success' }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         run: |
