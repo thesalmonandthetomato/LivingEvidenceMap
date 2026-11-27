@@ -128,32 +128,36 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p source/prepared source/review source/batches
-          ARTIFACT_RUN_ID="$SOURCE_RUN_ID"
-          # November recovery published a review queue from verified original production inputs.
-          if [ "$SOURCE_RUN_ID" = "45861367261" ]; then
-            ARTIFACT_RUN_ID=45581540187
-          fi
-
-          gh run download "$ARTIFACT_RUN_ID" \
-            --repo "$GITHUB_REPOSITORY" \
-            --name "workflow02-finalize-input-$ARTIFACT_RUN_ID" \
-            --dir source/prepared
-
           gh run download "$SOURCE_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
             --name "workflow02-human-review-$SOURCE_RUN_ID" \
             --dir source/review
 
+          REVIEW_COMMIT="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID" --jq '.head_sha')"
+          ARTIFACT_RUN_ID="$(Rscript scripts/updater/workflow_02_resolve_review_artifact_lineage.R \
+            "$SOURCE_RUN_ID" docs/enrichment/review_artifact_lineage \
+            source/review/workflow02_human_review_manifest.json "$REVIEW_COMMIT")"
+          for RUN in "$SOURCE_RUN_ID" "$ARTIFACT_RUN_ID"; do
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN" \
+              --jq '.head_branch' | grep -Fx "$WORKFLOW02_BRANCH"
+          done
           gh run download "$ARTIFACT_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
-            --pattern "workflow02-batch-*-$ARTIFACT_RUN_ID" \
-            --dir source/batches
+            --name "workflow02-finalize-input-$ARTIFACT_RUN_ID" \
+            --dir source/prepared
 
-          gh run download "$SOURCE_RUN_ID" \
-            --repo "$GITHUB_REPOSITORY" \
-            --name "workflow02-resumed-checkpoints-$SOURCE_RUN_ID" \
-            --dir source/batches/resumed || true
-
+          # A resumed batch run can contain only restored checkpoints or a mixture.
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs/$ARTIFACT_RUN_ID/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.expired == false) | .name' > "$RUNNER_TEMP/w02-artifacts.txt"
+          if grep -Eq "^workflow02-batch-[0-9]+-$ARTIFACT_RUN_ID$" "$RUNNER_TEMP/w02-artifacts.txt"; then
+            gh run download "$ARTIFACT_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+              --pattern "workflow02-batch-*-$ARTIFACT_RUN_ID" --dir source/batches
+          fi
+          if grep -Fxq "workflow02-resumed-checkpoints-$ARTIFACT_RUN_ID" "$RUNNER_TEMP/w02-artifacts.txt"; then
+            gh run download "$ARTIFACT_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+              --name "workflow02-resumed-checkpoints-$ARTIFACT_RUN_ID" --dir source/batches/resumed
+          fi
+          echo "PASS: resolved W02 review owner $SOURCE_RUN_ID to artifact owner $ARTIFACT_RUN_ID"
           test -s source/prepared/outputs/workflow02/input_with_previous_state.jsonl
           test -s source/prepared/workflow01_state/canonical/records.jsonl
           test -s source/prepared/workflow01_pointer_path.txt
@@ -282,7 +286,8 @@ jobs:
           fi
 
           test -f outputs/workflow02/current_patch.jsonl
-          echo "PASS: reconstructed source-run current W02 patch from immutable checkpoints"
+          Rscript -e 'library(jsonlite);library(digest);m<-fromJSON("source/review/workflow02_human_review_manifest.json");stopifnot(identical(m$source_audit_sha256,digest(file="outputs/workflow02/enrichment_audit.jsonl",algo="sha256",serialize=FALSE)))'
+          echo "PASS: reconstructed source-run current W02 patch and verified original review audit checksum"
 
       - name: Apply human decisions to current patch
         shell: bash
