@@ -122,10 +122,13 @@ jobs:
           git commit -m "W08b: complete one citation generation and register final W08 checksum"
           git pull --rebase origin workflow01-final-architecture
           git push origin HEAD:workflow01-final-architecture
-          gh workflow run report_workflow09_figures.yml \
-            --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture
-          echo "PASS: supplemental W08 dispatched W09 only, not W08b"
-      - name: Preserve idempotent no-op for repeated original or published W08
-        if: ${{ env.ROUTING_TRANSITION == 'await_existing_citation_generation' || env.ROUTING_TRANSITION == 'already_published' }}
+      - name: Reconcile or recover W09 dispatch for accepted final release
+        if: ${{ env.ROUTING_TRANSITION == 'publish_final_w09_w10' || env.ROUTING_TRANSITION == 'already_published' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          echo "PASS: no second citation generation and no duplicate W09 publication"
+          bash scripts/workflow08b/ensure_w09_handoff.sh "$RUNNER_TEMP/source_release.json" "$ROUTING_STATE"
+      - name: Preserve idempotent no-op for repeated original or published W08
+        if: ${{ env.ROUTING_TRANSITION == 'await_existing_citation_generation' }}
+        run: |
+          echo "PASS: no second citation generation"
