@@ -73,14 +73,31 @@ qm <- read_csv(file.path(out,"topic_screen_queue_manifest.csv"),show_col_types=F
 m <- fromJSON(file.path(out,"prepare_manifest.json"),simplifyVector=FALSE)
 
 stopifnot(
-  identical(as.character(queue$record_id),"work-changed"),
-  identical(as.character(reuse$record_id),"work-unchanged"),
-  identical(as.character(qm$queue_reason),"title_or_abstract_changed"),
+  nrow(queue)==0L,
+  setequal(as.character(reuse$record_id),c("work-unchanged","work-changed")),
+  nrow(qm)==0L,
   as.integer(m$changed_title_abstract)==1L,
-  as.integer(m$existing_records_refreshed)==1L,
-  as.integer(m$changed_title_abstract_reused)==0L,
-  identical(as.character(m$scientific_input_refresh_rule),"any_title_or_abstract_fingerprint_change"),
-  identical(as.character(m$reuse_basis),"existing_record_id_reused_only_when_topic_input_sha256_is_unchanged")
+  as.integer(m$existing_records_refreshed)==0L,
+  as.integer(m$changed_title_abstract_reused)==1L,
+  identical(as.character(m$scientific_input_refresh_rule),"missing_title_or_abstract_now_present"),
+  identical(as.character(m$reuse_basis),"existing_record_id_reused_unless_missing_title_or_abstract_now_present")
 )
 
-cat("PASS: W07 reuses only unchanged title/abstract fingerprints\n")
+# A previously missing abstract becoming available must still trigger recoding.
+prior_records$abstract[2] <- ""
+prior_records$topic_input_sha256[2] <- fp("Title B","")
+write_csv(prior_records,prior_records_path,na="")
+status <- system2(file.path(R.home("bin"),"Rscript"),c(
+  "scripts/updater/workflow_07_prepare_incremental.R",
+  "--current",current_path,"--prior-records",prior_records_path,
+  "--prior-scores",prior_scores_path,"--prior-manifest",manifest_path,
+  "--ontology",ontology,"--prompt",prompt,"--output-dir",out
+),stdout=FALSE,stderr=FALSE)
+stopifnot(status==0L)
+queue <- read_csv(file.path(out,"topic_screen_queue.csv"),show_col_types=FALSE)
+reuse <- read_csv(file.path(out,"reused_topic_records.csv"),show_col_types=FALSE)
+qm <- read_csv(file.path(out,"topic_screen_queue_manifest.csv"),show_col_types=FALSE)
+stopifnot(identical(as.character(queue$record_id),"work-changed"),
+  identical(as.character(reuse$record_id),"work-unchanged"),
+  identical(as.character(qm$queue_reason),"missing_abstract_now_present"))
+cat("PASS: W07 preserves ordinary edits and refreshes newly available scientific text\n")
