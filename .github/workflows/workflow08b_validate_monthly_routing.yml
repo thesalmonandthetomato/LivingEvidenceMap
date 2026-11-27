@@ -8,6 +8,9 @@ on:
       - 'scripts/workflow08b/record_routing_event.R'
       - 'tests/test_workflow08b_monthly_routing.R'
       - 'tests/test_workflow08b_w09_handoff.R'
+      - 'tests/test_workflow08b_w10_handoff.R'
+      - 'scripts/workflow08b/ensure_w10_handoff.*'
+      - '.github/workflows/workflow_10_dashboard.yml'
       - 'scripts/workflow08b/ensure_w09_handoff.*'
       - '.github/workflows/workflow08b_monthly_dispatch.yml'
       - '.github/workflows/workflow08b_monthly_chain.yml'
@@ -29,6 +32,7 @@ jobs:
       - run: Rscript -e 'install.packages("jsonlite")'
       - run: Rscript tests/test_workflow08b_monthly_routing.R
       - run: Rscript tests/test_workflow08b_w09_handoff.R
-      - run: bash -n scripts/workflow08b/ensure_w09_handoff.sh
+      - run: Rscript tests/test_workflow08b_w10_handoff.R
+      - run: bash -n scripts/workflow08b/ensure_w09_handoff.sh && bash -n scripts/workflow08b/ensure_w10_handoff.sh
       - name: Lint changed production handoff workflows
-        run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 -shellcheck= .github/workflows/workflow08b_monthly_dispatch.yml .github/workflows/workflow08b_monthly_chain.yml .github/workflows/report_workflow09_figures.yml
+        run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 -shellcheck= .github/workflows/workflow08b_monthly_dispatch.yml .github/workflows/workflow08b_monthly_chain.yml .github/workflows/report_workflow09_figures.yml .github/workflows/workflow_10_dashboard.yml
