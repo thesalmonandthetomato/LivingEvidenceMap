@@ -1,232 +1,184 @@
-name: TEMP November W04 full preparation preflight (no screening or publication)
+name: TEMP validate approved refresh policies and launch November W04
 on:
   push:
     branches: [workflow01-final-architecture]
     paths: ['.github/workflows/_temp_recover_w01_november_publication.yml']
 permissions:
   contents: read
-  actions: read
+  actions: write
 jobs:
-  prepare:
+  validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 0
 
-      - name: Set up R
-        uses: r-lib/actions/setup-r@v2
+      - uses: r-lib/actions/setup-r@v2
         with:
           r-version: release
           use-public-rspm: true
 
-      - name: Install dependencies
+      - name: Install local-test dependencies
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','digest','httr2','stringi'))
+        run: install.packages(c('digest','dplyr','jsonlite','readr'))
 
-      - name: Parse W04 implementation
+      - name: Parse changed production scripts
         shell: Rscript {0}
         run: |
-          parse(file='scripts/updater/workflow_03_restore_lean_checkpoint.R')
-          parse(file='scripts/updater/workflow_03_restore_state_from_zenodo.R')
-          parse(file='scripts/updater/workflow_04_restore_state_from_zenodo.R')
-          parse(file='scripts/updater/workflow_04_restore_manual_repair_bundle.R')
-          parse(file='scripts/updater/workflow_04_apply_manual_metadata_repairs.R')
-          parse(file='scripts/updater/workflow_04_restore_recovery_pass1.R')
-          parse(file='scripts/updater/workflow_04_seed_recovered_pass1.R')
-          parse(file='scripts/updater/workflow_04_restore_protected_abstracts_current.R')
           parse(file='scripts/updater/workflow_04_prepare_incremental.R')
           parse(file='scripts/updater/workflow_04_luna_consensus.R')
-          parse(file='scripts/updater/workflow_04_merge_consensus.R')
-          parse(file='scripts/updater/workflow_04_merge_incremental.R')
-          parse(file='scripts/updater/workflow_04_build_resolution_queue.R')
-          parse(file='scripts/updater/workflow_04_publish_resolution_queue_to_shiny.R')
-          parse(file='scripts/updater/workflow_04_archive_state_to_zenodo.R')
-          cat('PASS: W04 production scripts parse\n')
+          parse(file='scripts/updater/workflow_07_prepare_incremental.R')
+          cat('PASS: changed R scripts parse\n')
 
-      - name: Restore current W03 inputs
-        env:
-          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-          LEAN_POINTER: docs/compaction/zenodo/run-45886317416.json
-          W03_POINTER: docs/publication_status/zenodo/run-45891636461.json
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf inputs/current
-          mkdir -p inputs/current
-          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R             --pointer "$LEAN_POINTER"             --output-dir inputs/current/canonical
-          Rscript scripts/updater/workflow_03_restore_state_from_zenodo.R             --pointer "$W03_POINTER"             --output-dir inputs/current/w03
-          CAN=$(find inputs/current/canonical -type f -name canonical_lean.jsonl -print -quit)
-          STA=$(find inputs/current/w03 -type f -name publication_status.jsonl -print -quit)
-          test -n "$CAN"; test -n "$STA"
-          cp "$CAN" inputs/current/canonical_lean.jsonl
-          cp "$STA" inputs/current/publication_status.jsonl
-
-      - name: Restore protected W04 human abstracts before screening
-        env:
-          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-          HUMAN_CORRECTIONS_POINTER: ${{ github.workspace }}/docs/workflow04/human_abstract_corrections/run-37511638503.json
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -s "$HUMAN_CORRECTIONS_POINTER"
-          test -s inputs/current/canonical_lean.jsonl
-          cp inputs/current/canonical_lean.jsonl inputs/current/canonical_lean.raw.jsonl
-          Rscript scripts/updater/workflow_04_restore_protected_abstracts_current.R
-          test -s inputs/current/canonical_lean.jsonl
-          test -s outputs/human_overlay/audit.jsonl
-          test "$(wc -l < outputs/human_overlay/audit.jsonl)" -eq 157
-
-      - name: Restore prior W04 state
-        env:
-          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-          GH_TOKEN: ${{ github.token }}
-          PRIOR_W04: docs/workflow04/zenodo/run-40298490744.json
-          PRIOR_LEAN: docs/compaction/zenodo/run-40289685551.json
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -rf inputs/prior_w04 inputs/prior_canonical inputs/prior_prepared
-          Rscript scripts/updater/workflow_04_restore_state_from_zenodo.R             --pointer "$PRIOR_W04"             --output-dir inputs/prior_w04
-          PRIOR_LAYER=$(find inputs/prior_w04 -type f -name workflow04_final_screening_layer.jsonl -print -quit)
-          test -n "$PRIOR_LAYER"
-          cp "$PRIOR_LAYER" inputs/prior_workflow04_layer.jsonl
-
-          read NEED_PRIOR_CANONICAL MISSING_FP MISSING_AVAIL <<< "$(P=inputs/prior_workflow04_layer.jsonl Rscript -e '
-            library(jsonlite)
-            x<-readLines(Sys.getenv("P"),warn=FALSE);x<-x[nzchar(trimws(x))]
-            rows<-lapply(x,fromJSON,simplifyVector=FALSE)
-            missing_fp<-sum(vapply(rows,function(r){s<-r$screening$screening_input_sha256;if(is.null(s)||!length(s))return(TRUE);!nzchar(trimws(as.character(s[[1L]])))},logical(1)))
-            missing_avail<-sum(vapply(rows,function(r){s<-r$screening;is.null(s$input_title_present)||is.null(s$input_abstract_present)},logical(1)))
-            cat(as.integer(missing_fp>0L||missing_avail>0L),missing_fp,missing_avail)
-          ')"
-          echo "Prior W04 rows without fingerprints: $MISSING_FP; without title/abstract availability provenance: $MISSING_AVAIL"
-
-          if [ "$NEED_PRIOR_CANONICAL" -eq 1 ]; then
-            PRIOR_RUN=$(P="$PRIOR_W04" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(x$source_github_run_id)')
-            EXPECTED_SHA=$(P="$PRIOR_W04" Rscript -e 'x<-jsonlite::fromJSON(Sys.getenv("P"),simplifyVector=FALSE);cat(tolower(x$upstream_lean_canonical_sha256))')
-            FOUND_EXACT=false
-
-            mkdir -p inputs/prior_prepared
-            if gh run download "$PRIOR_RUN" --repo "$GITHUB_REPOSITORY" --name "workflow04-prepared-$PRIOR_RUN" --dir inputs/prior_prepared; then
-              P=$(find inputs/prior_prepared -type f -path '*/inputs/current/canonical_lean.jsonl' -print -quit)
-              if [ -n "$P" ]; then
-                SHA=$(P="$P" Rscript -e 'library(digest);cat(digest(file=Sys.getenv("P"),algo="sha256",serialize=FALSE))')
-                if [ "$SHA" = "$EXPECTED_SHA" ]; then
-                  cp "$P" inputs/prior_canonical_lean.jsonl
-                  FOUND_EXACT=true
-                  echo "PASS: restored exact prior W04 canonical input from prepared artefact"
-                fi
-              fi
-            fi
-
-            if [ "$FOUND_EXACT" != true ]; then
-              test -n "$PRIOR_LEAN"
-              Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R                 --pointer "$PRIOR_LEAN"                 --output-dir inputs/prior_canonical
-              P=$(find inputs/prior_canonical -type f -name canonical_lean.jsonl -print -quit)
-              test -n "$P"
-              SHA=$(P="$P" Rscript -e 'library(digest);cat(digest(file=Sys.getenv("P"),algo="sha256",serialize=FALSE))')
-              if [ "$SHA" != "$EXPECTED_SHA" ]; then
-                # Historical integrity repair W04 37679581307 applied 157 protected
-                # human abstracts to the prior lean canonical before screening.
-                # Reconstruct only this identified legacy input, preserving an
-                # exact SHA-256 match as the mandatory acceptance criterion.
-                if [ "$PRIOR_RUN" != "40298490744" ]; then
-                  echo "ERROR: Unrecognised legacy W04 input checksum mismatch: $SHA expected $EXPECTED_SHA" >&2
-                  exit 1
-                fi
-                # Never overwrite inputs/current: that is the NEW W03 canonical
-                # needed for the incremental W04 identity comparison.
-                mkdir -p inputs/prior_repair_sandbox/inputs/current
-                cp "$P" inputs/prior_repair_sandbox/inputs/current/canonical_lean.raw.jsonl
-                git show d17f612043c6ba127aa54ae50f86f9cd31fd3106:scripts/updater/workflow_04_restore_protected_abstracts_current.R > "$RUNNER_TEMP/october_w04_overlay.R"
-                (
-                  cd inputs/prior_repair_sandbox
-                  HUMAN_CORRECTIONS_POINTER="$GITHUB_WORKSPACE/docs/workflow04/human_abstract_corrections/run-37511638503.json" Rscript "$RUNNER_TEMP/october_w04_overlay.R"
-                )
-                P="inputs/prior_repair_sandbox/inputs/current/canonical_lean.jsonl"
-                SHA=$(P="$P" Rscript -e 'library(digest);cat(digest(file=Sys.getenv("P"),algo="sha256",serialize=FALSE))')
-                if [ "$SHA" != "$EXPECTED_SHA" ]; then
-                  echo "ERROR: Reconstructed legacy W04 input SHA $SHA differs from authoritative $EXPECTED_SHA" >&2
-                  exit 1
-                fi
-                echo "PASS: reconstructed exact historical W04 input including protected human abstract repairs"
-              fi
-              cp "$P" inputs/prior_canonical_lean.jsonl
-              echo "PASS: restored exact prior W04 canonical input from fallback pointer"
-            fi
-          fi
-
-      - name: Prepare first-run/update queue
-        id: queue
-        env:
-          PRIOR_W04_INPUT: docs/workflow04/zenodo/run-40298490744.json
-          MANUAL_REPAIR_RECORD: ''
-        shell: bash
-        run: |
-          set -euo pipefail
-          ARGS=(
-            --canonical inputs/current/canonical_lean.jsonl
-            --workflow03-status inputs/current/publication_status.jsonl
-            --output-dir outputs/workflow04_prepare
-          )
-          if [ "$PRIOR_W04_INPUT" != "none" ] && [ -n "$PRIOR_W04_INPUT" ]; then
-            ARGS+=(--prior-workflow04 inputs/prior_workflow04_layer.jsonl)
-            if [ -f inputs/prior_canonical_lean.jsonl ]; then
-              ARGS+=(--prior-canonical inputs/prior_canonical_lean.jsonl)
-            fi
-          fi
-          if [ -n "$MANUAL_REPAIR_RECORD" ]; then
-            ARGS+=(--force-rescreen-record-ids inputs/current/manual_repair_force_rescreen_record_ids.txt)
-          fi
-          Rscript scripts/updater/workflow_04_prepare_incremental.R "${ARGS[@]}"
-          QUEUE_N=$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_prepare/prepare_manifest.json");cat(as.integer(x$screen_queue_records))')
-          MODE=$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_prepare/prepare_manifest.json");cat(as.character(x$mode))')
-          echo "queue_n=$QUEUE_N" >> "$GITHUB_OUTPUT"
-          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
-
-      - name: Freeze screening prompt provenance
+      - name: Build synthetic no-API fixtures
         shell: Rscript {0}
         run: |
           library(jsonlite)
           library(digest)
-          cfg <- fromJSON("user_input/workflow04_screening_config.json", simplifyVector=FALSE)
-          prompt <- paste(readLines(cfg$prompt_path, warn=FALSE, encoding="UTF-8"), collapse="\n")
-          prompt_sha <- digest(prompt, algo="sha256", serialize=FALSE)
-          stopifnot(identical(prompt_sha, as.character(cfg$expected_prompt_sha256)))
-          provenance <- list(
-            schema="living-evidence-map-workflow04-prompt-provenance-v1",
-            prompt_path=cfg$prompt_path,
-            prompt_version=cfg$prompt_version,
-            prompt_sha256=prompt_sha,
-            source_github_run_id=Sys.getenv("GITHUB_RUN_ID"),
-            source_github_sha=Sys.getenv("GITHUB_SHA")
-          )
-          writeLines(
-            toJSON(provenance, auto_unbox=TRUE, pretty=TRUE, null="null"),
-            "outputs/workflow04_prepare/prompt_provenance.json"
-          )
-          cat("PASS: froze W04 prompt provenance before screening\n")
+          library(readr)
 
-      - name: Upload immutable W04 prepared state
-        uses: actions/upload-artifact@v4
-        with:
-          name: workflow04-preflight-${{ github.run_id }}
-          path: |
-            inputs/current/canonical_lean.jsonl
-            inputs/current/publication_status.jsonl
-            outputs/workflow04_prepare/
-            outputs/workflow04_recovery_seed/
-            inputs/current/manual_repair_application.json
-            inputs/current/manual_repair_force_rescreen_record_ids.txt
-          retention-days: 30
-          if-no-files-found: error
+          dir.create('tmp_refresh/prior',recursive=TRUE,showWarnings=FALSE)
+          dir.create('tmp_refresh/current',recursive=TRUE,showWarnings=FALSE)
 
-      - name: Report deterministic preparation results
+          rec <- function(id,title='',abstract='',keywords=''){
+            list(identity=list(record_id=id),canonical=list(title=title,abstract=abstract,keywords=keywords))
+          }
+          prior <- list(
+            rec('r1','',               'existing abstract'),
+            rec('r2','existing title', ''),
+            rec('r3','',               '',                 'salmon aquaculture'),
+            rec('r4','old title',      'existing abstract'),
+            rec('r5','stable title',   'stable abstract'),
+            rec('r7','forced title',   'forced abstract')
+          )
+          current <- list(
+            rec('r1','new title',      'existing abstract'),
+            rec('r2','existing title', 'new abstract'),
+            rec('r3','new title',      'new abstract',      'salmon aquaculture'),
+            rec('r4','revised title',  'existing abstract'),
+            rec('r5','stable title',   'stable abstract'),
+            rec('r6','brand new',      'brand new abstract'),
+            rec('r7','forced title',   'forced abstract')
+          )
+          write_jsonl <- function(x,path){
+            con<-file(path,'wt');on.exit(close(con),add=TRUE)
+            for(z in x)writeLines(toJSON(z,auto_unbox=TRUE,null='null'),con)
+          }
+          write_jsonl(prior,'tmp_refresh/prior/canonical.jsonl')
+          write_jsonl(current,'tmp_refresh/current/canonical.jsonl')
+
+          w03 <- lapply(current,function(x)list(record_id=x$identity$record_id,exclude_from_workflow04=FALSE))
+          write_jsonl(w03,'tmp_refresh/current/w03.jsonl')
+
+          prior_w04 <- lapply(prior,function(x)list(
+            record_id=x$identity$record_id,
+            screening=list(decision='retain',decision_origin='fixture')
+          ))
+          write_jsonl(prior_w04,'tmp_refresh/prior/w04.jsonl')
+          writeLines('r7','tmp_refresh/current/force.txt')
+
+          fp <- function(t,a)digest(toJSON(list(title=t,abstract=a),auto_unbox=TRUE,null='null',na='null'),algo='sha256',serialize=FALSE)
+          prior_df <- data.frame(
+            record_id=vapply(prior,function(x)x$identity$record_id,character(1)),
+            title=vapply(prior,function(x)x$canonical$title,character(1)),
+            abstract=vapply(prior,function(x)x$canonical$abstract,character(1)),
+            stringsAsFactors=FALSE
+          )
+          prior_df$topic_input_sha256 <- mapply(fp,prior_df$title,prior_df$abstract,USE.NAMES=FALSE)
+          write_csv(prior_df,'tmp_refresh/prior/w07_records.csv',na='')
+          write_csv(data.frame(record_id=prior_df$record_id,path_id='P1'),'tmp_refresh/prior/w07_scores.csv',na='')
+
+          current_df <- data.frame(
+            record_id=vapply(current,function(x)x$identity$record_id,character(1)),
+            title=vapply(current,function(x)x$canonical$title,character(1)),
+            abstract=vapply(current,function(x)x$canonical$abstract,character(1)),
+            stringsAsFactors=FALSE
+          )
+          write_csv(current_df,'tmp_refresh/current/w07_current.csv',na='')
+
+          ontology_sha<-digest(file='user_input/workflow07_topic_ontology.csv',algo='sha256',serialize=FALSE)
+          prompt_sha<-digest(file='user_input/workflow07_topic_system_prompt.txt',algo='sha256',serialize=FALSE)
+          write_json(list(ontology_sha256=ontology_sha,prompt_sha256=prompt_sha),
+                     'tmp_refresh/prior/w07_manifest.json',auto_unbox=TRUE,pretty=TRUE)
+
+      - name: Validate W04 missing-to-present routing
+        shell: bash
         run: |
           set -euo pipefail
-          cat outputs/workflow04_prepare/prepare_manifest.json
-          echo "PASS: read-only full W04 preparation completed; no screening or publication requested"
+          Rscript scripts/updater/workflow_04_prepare_incremental.R \
+            --canonical tmp_refresh/current/canonical.jsonl \
+            --workflow03-status tmp_refresh/current/w03.jsonl \
+            --prior-workflow04 tmp_refresh/prior/w04.jsonl \
+            --prior-canonical tmp_refresh/prior/canonical.jsonl \
+            --force-rescreen-record-ids tmp_refresh/current/force.txt \
+            --output-dir tmp_refresh/out_w04
+
+          Rscript -e '
+            library(readr);library(jsonlite)
+            q<-read_csv("tmp_refresh/out_w04/screen_queue_manifest.csv",show_col_types=FALSE)
+            r<-read_csv("tmp_refresh/out_w04/scientific_input_refresh_records.csv",show_col_types=FALSE)
+            m<-fromJSON("tmp_refresh/out_w04/prepare_manifest.json")
+            stopifnot(setequal(q$record_id,c("r1","r2","r3","r6","r7")))
+            stopifnot(setequal(r$record_id,c("r1","r2","r3")))
+            stopifnot(q$queue_reason[q$record_id=="r1"]=="missing_title_now_present")
+            stopifnot(q$queue_reason[q$record_id=="r2"]=="missing_abstract_now_present")
+            stopifnot(q$queue_reason[q$record_id=="r3"]=="missing_title_and_abstract_now_present")
+            stopifnot(q$queue_reason[q$record_id=="r6"]=="new_record_id")
+            stopifnot(q$queue_reason[q$record_id=="r7"]=="explicit_repair_rescreen")
+            stopifnot(as.integer(m$existing_records_refreshed)==3L)
+            stopifnot(as.integer(m$existing_records_title_gained)==2L)
+            stopifnot(as.integer(m$existing_records_abstract_gained)==2L)
+            stopifnot(as.integer(m$existing_records_title_and_abstract_gained)==1L)
+            stopifnot(as.integer(m$changed_screening_input_reused)==1L)
+            reuse<-readLines("tmp_refresh/out_w04/reused_record_ids.txt",warn=FALSE)
+            stopifnot(setequal(reuse,c("r4","r5")))
+            cat("PASS: W04 refreshes only missing-to-present scientific text plus explicit force/new records\n")
+          '
+
+      - name: Validate W07 missing-to-present routing
+        shell: bash
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_07_prepare_incremental.R \
+            --current tmp_refresh/current/w07_current.csv \
+            --prior-records tmp_refresh/prior/w07_records.csv \
+            --prior-scores tmp_refresh/prior/w07_scores.csv \
+            --prior-manifest tmp_refresh/prior/w07_manifest.json \
+            --ontology user_input/workflow07_topic_ontology.csv \
+            --prompt user_input/workflow07_topic_system_prompt.txt \
+            --output-dir tmp_refresh/out_w07
+
+          Rscript -e '
+            library(readr);library(jsonlite)
+            q<-read_csv("tmp_refresh/out_w07/topic_screen_queue_manifest.csv",show_col_types=FALSE)
+            r<-read_csv("tmp_refresh/out_w07/scientific_input_refresh_records.csv",show_col_types=FALSE)
+            m<-fromJSON("tmp_refresh/out_w07/prepare_manifest.json")
+            stopifnot(setequal(q$record_id,c("r1","r2","r3","r6")))
+            stopifnot(setequal(r$record_id,c("r1","r2","r3")))
+            stopifnot(q$queue_reason[q$record_id=="r1"]=="missing_title_now_present")
+            stopifnot(q$queue_reason[q$record_id=="r2"]=="missing_abstract_now_present")
+            stopifnot(q$queue_reason[q$record_id=="r3"]=="missing_title_and_abstract_now_present")
+            stopifnot(q$queue_reason[q$record_id=="r6"]=="new_record_id")
+            stopifnot(as.integer(m$existing_records_refreshed)==3L)
+            stopifnot(as.integer(m$changed_title_abstract_reused)==1L)
+            stopifnot(isTRUE(m$previously_assessed_records_requeued_only_for_missing_to_present_text))
+            reuse<-read_csv("tmp_refresh/out_w07/reused_topic_records.csv",show_col_types=FALSE)
+            stopifnot(setequal(reuse$record_id,c("r4","r5","r7")))
+            cat("PASS: W07 refreshes missing-to-present records while reusing ordinary text edits\n")
+          '
+
+      - name: Assert no paid/external APIs were used
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${OPENAI_API_KEY:-}"
+          test -z "${ZENODO_ACCESS_TOKEN:-}"
+          echo "PASS: synthetic validation completed without OpenAI, database, Google Sheets, or Zenodo calls"
+
+      - name: Dispatch original W04 production after successful routing checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run workflow_04_production.yml --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture -f lean_pointer_path=docs/compaction/zenodo/run-45886317416.json -f workflow03_pointer_path=docs/publication_status/zenodo/run-45891636461.json -f prior_workflow04_pointer_path=docs/workflow04/zenodo/run-40298490744.json -f prior_lean_pointer_path=docs/compaction/zenodo/run-40289685551.json -f publish=true
