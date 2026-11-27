@@ -1,0 +1,56 @@
+name: TEMP W08b OpenAlex live smoke test
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/tmp_openalex_w08b_smoke.yml']
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - run: Rscript -e 'install.packages(c("jsonlite","httr2"))'
+      - name: Test authenticated Work retrieval and citing-work pagination
+        env:
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+        shell: Rscript {0}
+        run: |
+          library(httr2)
+          library(jsonlite)
+          key<-Sys.getenv("OPENALEX_API_KEY")
+          stopifnot(nzchar(key))
+          get<-function(path,params=list()){
+            r<-request(paste0("https://api.openalex.org/",path)) |> req_url_query(api_key=key) |> req_timeout(20)
+            r<-do.call(req_url_query,c(list(r),params))
+            z<-tryCatch(req_perform(req_error(r,is_error=function(x)FALSE)),error=function(e)NULL)
+            if(is.null(z))stop("OpenAlex transport failure",call.=FALSE)
+            cat("HTTP",resp_status(z),"for",path,"\n")
+            if(resp_status(z)!=200L)stop("OpenAlex non-success response",call.=FALSE)
+            resp_body_json(z,simplifyVector=FALSE)
+          }
+          x<-get("works",list(search="Atlantic salmon aquaculture",per_page=5,select="id,cited_by_count,referenced_works"))
+          stopifnot(length(x$results)>0)
+          ids<-vapply(x$results,function(z)sub("^.*/","",z$id),character(1))
+          write.csv(data.frame(seed_record_id=paste0("smoke-",seq_along(ids)),provider="openalex",identifier_type="openalex",query_identifier=ids),file.path(Sys.getenv("RUNNER_TEMP"),"smoke.csv"),row.names=FALSE)
+          for(id in ids){
+            w<-get(paste0("works/",id))
+            z<-get("works",list(filter=paste0("cites:",id),per_page=200,cursor="*",select="id"))
+            cat(id,"reported citations",w$cited_by_count,"query count",z$meta$count,"first page",length(z$results),"\n")
+          }
+      - name: Exercise actual production discovery script on five live seeds
+        env:
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+        run: |
+          set -uo pipefail
+          Rscript scripts/workflow08b/run_openalex_manifest.R "$RUNNER_TEMP/smoke.csv" "$RUNNER_TEMP/smoke-state" 5 2026-11
+          RC=$?
+          if test -f "$RUNNER_TEMP/smoke-state/openalex_summary.json"; then cat "$RUNNER_TEMP/smoke-state/openalex_summary.json"; fi
+          exit "$RC"
