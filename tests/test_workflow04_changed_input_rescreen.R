@@ -91,12 +91,12 @@ manifest <- fromJSON(file.path(out_dir,"prepare_manifest.json"),simplifyVector=F
 queue_manifest <- read.csv(file.path(out_dir,"screen_queue_manifest.csv"),stringsAsFactors=FALSE)
 
 stopifnot(
-  identical(queued,"work-test"),
-  !("work-test" %in% reused),
+  length(queued)==0L,
+  identical(reused,"work-test"),
   as.integer(manifest$changed_screening_input)==1L,
-  as.integer(manifest$changed_screening_input_reused)==0L,
-  identical(as.character(manifest$scientific_input_refresh_rule),"any_screening_input_fingerprint_change"),
-  identical(as.character(queue_manifest$queue_reason[[1L]]),"screening_input_changed")
+  as.integer(manifest$changed_screening_input_reused)==1L,
+  identical(as.character(manifest$scientific_input_refresh_rule),"missing_title_or_abstract_now_present"),
+  nrow(queue_manifest)==0L
 )
 
-cat("PASS: W04 changed screening fingerprint forces fresh screening\n")
+cat("PASS: W04 routine changed screening fingerprint preserves substantive decision\n")
