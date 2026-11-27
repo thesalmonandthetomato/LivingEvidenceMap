@@ -51,7 +51,7 @@ jobs:
           use-public-rspm: true
       - name: Install R packages
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','data.table','stringi','httr2','digest'))
+        run: install.packages(c('jsonlite','data.table','stringi','httr2','digest','readr'))
       - name: Restore historical W01 canonical state read-only
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
