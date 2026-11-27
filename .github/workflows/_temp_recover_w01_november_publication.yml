@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
-      - name: Verify exact existing generation and failed pre-provider execution
+      - name: Verify exact existing generation and failed checkpoint publication
         id: verify
         env:
           GH_TOKEN: ${{ github.token }}
@@ -28,12 +28,11 @@ jobs:
           P=docs/workflow08b/routing/w00-run-45130154568.json
           jq -e '.stage == "citation_chasing_started" and .update_month == "2026-11" and .original_w08_run_id == "45999469513" and .original_w01_run_id == "45459473670" and .original_w08_sha256 == "605b6d4299967dbb6360ea39a223300e497912a22bdcecf7d998777b4fdf0b51" and .second_generation_forbidden == true' "$P"
           jq -e '.update_id == "w00-run-45130154568" and .workflow_runs.W08 == "45999469513" and .workflow_runs.W01 == "45459473670"' docs/current_run/current_run_status.json
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/45999469513/jobs?per_page=100" > "$RUNNER_TEMP/failed_jobs.json"
-          jq -e '[.jobs[] | select(.name=="w08b_monthly_chain / discover / discovery" and .conclusion=="failure") | .steps[] | select(.name=="Restore complete authoritative identities and accepted historical citation state" and .conclusion=="failure")] | length==1' "$RUNNER_TEMP/failed_jobs.json"
-          jq -e '[.jobs[] | select(.name=="w08b_monthly_chain / discover / discovery") | .steps[] | select(.name=="Resolve all DOI manifestations to every matching Lens ID" and .conclusion=="skipped")] | length==1' "$RUNNER_TEMP/failed_jobs.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/46011353005/jobs?per_page=100" > "$RUNNER_TEMP/failed_jobs.json"
+          jq -e '[.jobs[] | select(.name=="discover / discovery" and .conclusion=="failure") | .steps[] | select(.name=="Archive every genuine bounded discovery attempt to restricted Zenodo" and .conclusion=="failure")] | length==1' "$RUNNER_TEMP/failed_jobs.json"
           echo 'transition=start_first_citation_generation' >> "$GITHUB_OUTPUT"
           echo 'update_month=2026-11' >> "$GITHUB_OUTPUT"
-          echo 'PASS: resuming the existing original generation, no previous provider execution'
+          echo 'PASS: resuming same generation from published pre-OpenAlex checkpoint'
   discover:
     needs: begin
     if: ${{ needs.begin.outputs.transition == 'start_first_citation_generation' }}
@@ -41,6 +40,8 @@ jobs:
     with:
       update_month: ${{ needs.begin.outputs.update_month }}
       execute_provider_queries: true
+      resume_checkpoint_zenodo_id: "24593445"
+      resume_attempt: 1
       max_doi_batches: 100
       max_lens_batches: 100
       max_openalex_works: 500
