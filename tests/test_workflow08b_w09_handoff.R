@@ -1,0 +1,30 @@
+source("scripts/workflow08b/ensure_w09_handoff.R")
+h<-paste(rep("a",64),collapse="")
+r<-list(update_id="w00-run-100",update_month="2026-12",w08_run_id="200",w08_canonical_sha256=h)
+s<-list(branch="workflow01-final-architecture",update_id=r$update_id,workflow_runs=list(W08="200"),progress=list(completed_through=9L))
+m<-list(schema="workflow08b-monthly-routing-state-v1",stage="completed",update_id=r$update_id,update_month=r$update_month,final_w08_run_id="200",final_w08_sha256=h)
+g<-list(schema="workflow08b-monthly-checkpoint-registry-v1",checkpoints=list(list(month=r$update_month,status="verified_archive",post_chasing_w08_source_run_id="200",post_chasing_w08_sha256=h)))
+d<-w09_handoff(s,r,m,g)
+stopifnot(d$action=="dispatch")
+run<-list(displayTitle=d$title,status="queued",conclusion="")
+stopifnot(w09_handoff(s,r,m,g,list(run))$action=="await")
+run$status<-"in_progress"
+stopifnot(w09_handoff(s,r,m,g,list(run))$action=="await")
+run$status<-"completed";run$conclusion<-"failure"
+stopifnot(w09_handoff(s,r,m,g,list(run))$action=="dispatch")
+run$conclusion<-"success"
+err<-function(x)stopifnot(inherits(tryCatch(force(x),error=identity),"error"))
+err(w09_handoff(s,r,m,g,list(run)))
+run$displayTitle<-"unrelated"
+stopifnot(w09_handoff(s,r,m,g,list(run))$action=="dispatch")
+for(n in 10:11){s$progress$completed_through<-n;stopifnot(w09_handoff(s,r,m,g)$action=="complete")}
+s$progress$completed_through<-9L
+bad<-m;bad$final_w08_sha256<-paste(rep("b",64),collapse="")
+err(w09_handoff(s,r,bad,g))
+bad<-g;bad$checkpoints[[1]]$post_chasing_w08_source_run_id<-"201"
+err(w09_handoff(s,r,m,bad))
+bad<-s;bad$update_id<-"w00-run-999"
+err(w09_handoff(bad,r,m,g))
+bad<-m;bad$stage<-"citation_chasing_started"
+err(w09_handoff(s,r,bad,g))
+cat("PASS: missing dispatch, active dispatch, failed dispatch, successful release, stale and conflicting identities\n")
