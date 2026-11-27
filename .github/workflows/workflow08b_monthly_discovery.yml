@@ -148,6 +148,7 @@ jobs:
         id: plan
         env:
           UPDATE_MONTH: ${{ inputs.update_month }}
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
         run: |
           set -euo pipefail
           ROOT="$RUNNER_TEMP/w08b"
