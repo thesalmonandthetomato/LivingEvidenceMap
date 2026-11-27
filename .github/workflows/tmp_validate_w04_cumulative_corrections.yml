@@ -1,0 +1,43 @@
+name: TEMP W04 cumulative correction archive audit
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/tmp_validate_w04_cumulative_corrections.yml']
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - run: Rscript -e 'install.packages(c("jsonlite","httr2","digest"))'
+      - name: Parse implementation
+        run: Rscript -e 'invisible(parse(file="scripts/updater/workflow_04_restore_cumulative_abstracts.R"))'
+      - name: Restore November lean checkpoint
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/updater/workflow_03_restore_lean_checkpoint.R --pointer docs/compaction/zenodo/run-45886317416.json --output-dir "$RUNNER_TEMP/lean"
+      - name: Reconcile actual restricted correction archives without publication
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          P="$(find "$RUNNER_TEMP/lean" -type f -name canonical_lean.jsonl -print -quit)"
+          test -n "$P"
+          Rscript scripts/updater/workflow_04_restore_cumulative_abstracts.R --canonical "$P" --registry docs/workflow04/zenodo_registry.csv --pointer-dir docs/workflow04/zenodo --legacy-pointer docs/workflow04/human_abstract_corrections/run-37511638503.json --output-dir "$RUNNER_TEMP/audit"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: w04-cumulative-aggregate-audit
+          path: ${{ runner.temp }}/audit/summary.json
+          if-no-files-found: warn
+          retention-days: 7
