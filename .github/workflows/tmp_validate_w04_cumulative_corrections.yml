@@ -1,4 +1,4 @@
-name: TEMP W04 cumulative correction conflict diagnosis
+name: TEMP W04 stable identity corroboration audit
 on:
   push:
     branches: [workflow01-final-architecture]
