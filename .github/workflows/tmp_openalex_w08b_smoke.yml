@@ -1,4 +1,4 @@
-name: TEMP W08b OpenAlex live smoke test
+name: TEMP validate corrected OpenAlex citation cardinality
 on:
   push:
     branches: [workflow01-final-architecture]
@@ -38,7 +38,7 @@ jobs:
           }
           x<-get("works",list(search="Atlantic salmon aquaculture",per_page=5,select="id,cited_by_count,referenced_works"))
           stopifnot(length(x$results)>0)
-          ids<-vapply(x$results,function(z)sub("^.*/","",z$id),character(1))
+          ids<-unique(c("W4391991454","W121326122","W2302907701","W4226094908","W2336988127"))
           write.csv(data.frame(seed_record_id=paste0("smoke-",seq_along(ids)),provider="openalex",identifier_type="openalex",query_identifier=ids),file.path(Sys.getenv("RUNNER_TEMP"),"smoke.csv"),row.names=FALSE)
           for(id in ids){
             w<-get(paste0("works/",id))
