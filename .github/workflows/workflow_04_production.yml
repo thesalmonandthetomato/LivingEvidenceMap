@@ -125,6 +125,7 @@ jobs:
           parse(file='scripts/updater/workflow_04_restore_recovery_pass1.R')
           parse(file='scripts/updater/workflow_04_seed_recovered_pass1.R')
           parse(file='scripts/updater/workflow_04_restore_protected_abstracts_current.R')
+          parse(file='scripts/updater/workflow_04_restore_cumulative_abstracts.R')
           parse(file='scripts/updater/workflow_04_prepare_incremental.R')
           parse(file='scripts/updater/workflow_04_luna_consensus.R')
           parse(file='scripts/updater/workflow_04_merge_consensus.R')
@@ -172,20 +173,24 @@ jobs:
             --force-rescreen-output inputs/current/manual_repair_force_rescreen_record_ids.txt
           mv inputs/current/canonical_lean.repaired.jsonl inputs/current/canonical_lean.jsonl
 
-      - name: Restore protected W04 human abstracts before screening
+      - name: Restore cumulative protected W04 human abstracts before screening
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-          HUMAN_CORRECTIONS_POINTER: ${{ github.workspace }}/docs/workflow04/human_abstract_corrections/run-37511638503.json
         shell: bash
         run: |
           set -euo pipefail
-          test -s "$HUMAN_CORRECTIONS_POINTER"
           test -s inputs/current/canonical_lean.jsonl
-          cp inputs/current/canonical_lean.jsonl inputs/current/canonical_lean.raw.jsonl
-          Rscript scripts/updater/workflow_04_restore_protected_abstracts_current.R
-          test -s inputs/current/canonical_lean.jsonl
-          test -s outputs/human_overlay/audit.jsonl
-          test "$(wc -l < outputs/human_overlay/audit.jsonl)" -eq 157
+          Rscript scripts/updater/workflow_04_restore_cumulative_abstracts.R \
+            --canonical inputs/current/canonical_lean.jsonl \
+            --registry docs/workflow04/zenodo_registry.csv \
+            --pointer-dir docs/workflow04/zenodo \
+            --legacy-pointer docs/workflow04/human_abstract_corrections/run-37511638503.json \
+            --output-dir "$RUNNER_TEMP/w04_cumulative_overlay"
+          test -s "$RUNNER_TEMP/w04_cumulative_overlay/canonical_lean.jsonl"
+          Rscript -e 's<-jsonlite::fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"w04_cumulative_overlay","summary.json"));stopifnot(identical(s$status,"PASS"),s$conflicts==0L,s$unique_resolved_works>0L)'
+          mv "$RUNNER_TEMP/w04_cumulative_overlay/canonical_lean.jsonl" inputs/current/canonical_lean.jsonl
+          mkdir -p outputs/workflow04_prepare
+          cp "$RUNNER_TEMP/w04_cumulative_overlay/summary.json" "$RUNNER_TEMP/w04_cumulative_corrections_summary.json"
 
       - name: Restore prior W04 state
         if: ${{ inputs.prior_workflow04_pointer_path != 'none' && inputs.prior_workflow04_pointer_path != '' }}
@@ -297,6 +302,7 @@ jobs:
             ARGS+=(--force-rescreen-record-ids inputs/current/manual_repair_force_rescreen_record_ids.txt)
           fi
           Rscript scripts/updater/workflow_04_prepare_incremental.R "${ARGS[@]}"
+          cp "$RUNNER_TEMP/w04_cumulative_corrections_summary.json" outputs/workflow04_prepare/cumulative_corrections_summary.json
           QUEUE_N=$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_prepare/prepare_manifest.json");cat(as.integer(x$screen_queue_records))')
           MODE=$(Rscript -e 'x<-jsonlite::fromJSON("outputs/workflow04_prepare/prepare_manifest.json");cat(as.character(x$mode))')
           echo "queue_n=$QUEUE_N" >> "$GITHUB_OUTPUT"
