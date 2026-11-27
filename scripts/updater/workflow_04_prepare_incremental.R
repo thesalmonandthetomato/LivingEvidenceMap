@@ -132,15 +132,13 @@ if(length(bootstrap_ids)){
   }
 }
 
-# A prior screening decision is reusable only when the complete scientific
-# screening-input fingerprint is unchanged. Any change to title, abstract,
-# keywords, journal/source title, affiliations or funding invalidates reuse and
-# requires fresh screening. Missing-to-present title/abstract gains remain
-# labelled separately for audit reporting.
+# Preserve prior substantive decisions for routine metadata changes.
+# Refresh scientific screening only when a previously missing title or abstract
+# becomes available, or when an explicit audited rescreen is requested.
 changed_ids <- known[current_fp[known] != prior_fp[known]]
 title_gained_ids <- known[!prior_title_present[known] & current_title_present[known]]
 abstract_gained_ids <- known[!prior_abstract_present[known] & current_abstract_present[known]]
-refresh_ids <- sort(unique(changed_ids))
+refresh_ids <- sort(unique(c(title_gained_ids,abstract_gained_ids)))
 force_ids <- character()
 if(nzchar(force_rescreen_path)){
   force_ids <- trimws(readLines(force_rescreen_path,warn=FALSE,encoding="UTF-8"))
@@ -150,10 +148,8 @@ if(nzchar(force_rescreen_path)){
   force_without_prior <- setdiff(force_ids,prior_ids)
   if(length(force_without_prior)) stop(sprintf("Forced rescreen list contains %d IDs without a prior W04 decision; new records must not be force-listed",length(force_without_prior)),call.=FALSE)
 }
-# Metadata enrichment never invalidates an already approved substantive W04 decision.
-# Preserve changed-input diagnostics, but only explicit human repair requests may
-# cause a previously screened record to be screened again.
-rescreen_existing_ids <- sort(force_ids)
+# User-approved missing-to-present refresh rule; routine changes remain diagnostic.
+rescreen_existing_ids <- sort(unique(c(refresh_ids,force_ids)))
 reuse_ids <- sort(setdiff(known,rescreen_existing_ids))
 queue_ids <- sort(unique(c(new_ids,rescreen_existing_ids)))
 
@@ -233,7 +229,7 @@ manifest <- list(
   existing_records_abstract_gained=length(abstract_gained_ids),
   existing_records_title_and_abstract_gained=length(intersect(title_gained_ids,abstract_gained_ids)),
   existing_records_refreshed=length(refresh_ids),
-  scientific_input_refresh_rule="any_screening_input_fingerprint_change",
+  scientific_input_refresh_rule="missing_title_or_abstract_now_present",
   changed_screening_input=length(changed_ids),
   changed_screening_input_reused=length(setdiff(changed_ids,rescreen_existing_ids)),
   rescreen_existing_decisions=length(rescreen_existing_ids)>0L,
