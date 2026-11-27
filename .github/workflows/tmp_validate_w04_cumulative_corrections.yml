@@ -1,4 +1,4 @@
-name: TEMP W04 cumulative correction archive audit
+name: TEMP W04 cumulative correction conflict diagnosis
 on:
   push:
     branches: [workflow01-final-architecture]
