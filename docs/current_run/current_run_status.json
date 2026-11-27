@@ -3,7 +3,7 @@
   "update_id": "w00-run-45130154568",
   "branch": "workflow01-final-architecture",
   "started_at_utc": "2026-11-23T07:37:32Z",
-  "last_updated_at_utc": "2026-11-27T12:27:48Z",
+  "last_updated_at_utc": "2026-11-27T13:13:24Z",
   "baseline": {
     "release_update_id": "w08b-citation-run-40191412234",
     "workflow01_source_run_id": "40218882441",
@@ -139,12 +139,12 @@
     "screened_exclude": 62487,
     "species_records": 28472,
     "geography": {
-      "with": 10283,
-      "without": 18189
+      "with": 10111,
+      "without": 17921
     },
     "topics": {
-      "with": 27950,
-      "without": 522
+      "with": 27715,
+      "without": 317
     }
   },
   "progress": {
@@ -173,18 +173,18 @@
       "status": "complete"
     },
     "W08": {
-      "status": "active"
+      "status": "complete"
     },
     "W09": {
-      "status": "pending"
+      "status": "active"
     },
     "W10": {
       "status": "pending"
     },
     "current_stage": "W08",
-    "completed_through": 8,
-    "active_position": 9,
-    "status_label": "Final adjudication awaiting human review"
+    "completed_through": 9,
+    "active_position": 10,
+    "status_label": "Final adjudication complete; awaiting report build"
   },
   "workflow_runs": {
     "W00": "45130154568",
@@ -195,6 +195,6 @@
     "W05": "45989191441",
     "W06": "45989191441",
     "W07": "45989191441",
-    "W08": "45989191441"
+    "W08": "45999469513"
   }
 }

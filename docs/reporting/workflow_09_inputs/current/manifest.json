@@ -1,6 +1,6 @@
 {
   "schema": "living-evidence-map-workflow09-input-manifest-v1",
-  "generated_at_utc": "2026-11-27T12:23:18Z",
+  "generated_at_utc": "2026-11-27T13:13:38Z",
   "stages": [
     {
       "stage": "W00",
@@ -44,7 +44,7 @@
     },
     {
       "stage": "W08",
-      "source_run_id": "40656599532",
+      "source_run_id": "45999469513",
       "file": "w08_summary.json"
     }
   ],
@@ -57,7 +57,7 @@
     {
       "file": "w00_summary.json",
       "bytes": 594,
-      "sha256": "1b880c9bb5c1d676c8be923a6291fc99f214284897a05430becb9c4c8312b24d"
+      "sha256": "3141d99536214413792a82e0a32792d45e116fd41595e7f55ee18551ecd73879"
     },
     {
       "file": "w01_source_intersections.csv",
@@ -82,7 +82,7 @@
     {
       "file": "w01_summary.json",
       "bytes": 595,
-      "sha256": "67d923748fd91be7398ad9086c8083908ca570a50e7e50ce6930f1d1b64401f2"
+      "sha256": "eabb14fa95982a273ff46dd9db6a1fb987ae12b4e104e814eaeb47d8f3e96ae3"
     },
     {
       "file": "w02_summary.json",
@@ -116,23 +116,23 @@
     },
     {
       "file": "w08_source_intersections.csv",
-      "bytes": 20565,
-      "sha256": "16f3edf278d0221681c96cc0256b4fc04419149229ea06297c97bf820f5b1864"
+      "bytes": 20802,
+      "sha256": "d83cb43b66e766b97552efed50f68926c57ccc967eff67247b08b38b6d5368a9"
     },
     {
       "file": "w08_source_manifest.json",
       "bytes": 796,
-      "sha256": "78ed27e88b59a033e4fe7618d2ee4938cb5b6fae5e166e61eacc8fa17e660f43"
+      "sha256": "0362c1a4ef02b185feff5cc074581a6960b5b38f7c1366d718c9c928c46d915b"
     },
     {
       "file": "w08_source_summary.csv",
-      "bytes": 1112,
-      "sha256": "a334da3237e1b1a1b988d071f9a1ad7ec56bc5376dda5f2c2338d819762a1b14"
+      "bytes": 1174,
+      "sha256": "1b25ace8b0262bf5813d1fb45a961891627a51626f4adb7362b575cf26e16438"
     },
     {
       "file": "w08_summary.json",
-      "bytes": 843,
-      "sha256": "a3b1380201a05fd10c64213eb56fc686a9d3fb6cd32fe203455298bc9958c820"
+      "bytes": 834,
+      "sha256": "294851ca346f4c2c8683671494b11d947d55d6368821f380532a095fdbe2367c"
     }
   ]
 }

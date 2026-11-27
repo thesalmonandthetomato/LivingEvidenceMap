@@ -1,22 +1,22 @@
 {
   "schema": "living-evidence-map-workflow09-stage-summary-v1",
   "stage": "W08",
-  "source_run_id": "40656599532",
-  "update_id": "w08b-citation-run-40191412234",
-  "generated_at_utc": "2026-10-28T10:20:28Z",
-  "pointer_path": "docs/workflow08/zenodo/run-40656599532.json",
-  "pointer_sha256": "105d04b65bd92c756bd775a61dbdeabef470414430ab2a7574f598e1b7bc7ea7",
+  "source_run_id": "45999469513",
+  "update_id": "w00-run-45130154568",
+  "generated_at_utc": "2026-11-27T13:13:28Z",
+  "pointer_path": "docs/workflow08/zenodo/run-45999469513.json",
+  "pointer_sha256": "f70b0cbdd3953853fe1288777d0c0a24389ab700f9ba5f48359898decda6ee99",
   "status": "complete",
   "metrics": {
-    "source_canonical_population": 79554,
-    "canonical_records": 27726,
-    "excluded_records": 51828,
-    "decision_issues": 172,
-    "geography_with": 9986,
-    "geography_without": 17740,
-    "topic_with": 27412,
-    "topic_without": 314,
-    "final_canonical_sha256": "778ec0fce106756e5fce7ed3d8092a5c9734ad9927ac4d616dbf88cfa77399ef",
-    "exclusions_sha256": "2da2440dbfcf59cd52156e2c8d4952604eeb1b8a3f5c8e0e4d3543bb6e1cf3b0"
+    "source_canonical_population": 90995,
+    "canonical_records": 28032,
+    "excluded_records": 62963,
+    "decision_issues": 176,
+    "geography_with": 10111,
+    "geography_without": 17921,
+    "topic_with": 27715,
+    "topic_without": 317,
+    "final_canonical_sha256": "605b6d4299967dbb6360ea39a223300e497912a22bdcecf7d998777b4fdf0b51",
+    "exclusions_sha256": "f98b2b0a6e03835fb4c39f24fcaa26f3d7095b16d1c7ae5d948001168725fc7a"
   }
 }
