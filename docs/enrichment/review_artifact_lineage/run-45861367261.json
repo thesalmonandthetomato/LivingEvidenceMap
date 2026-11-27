@@ -1,0 +1,7 @@
+{
+  "schema": "w02-review-artifact-lineage-v1",
+  "review_run_id": "45861367261",
+  "artifact_run_id": "45581540187",
+  "review_run_commit": "89b62e2e0e14566ab3aedc16c71cc879e4817d3a",
+  "reason": "Verified recovery of original production inputs and 43 batch checkpoints; review package regenerated following exact current/cumulative replay."
+}
