@@ -1,4 +1,4 @@
-name: TEMP W04 stable identity corroboration audit
+name: TEMP validate W04 unique long-title expansion recovery
 on:
   push:
     branches: [workflow01-final-architecture]
