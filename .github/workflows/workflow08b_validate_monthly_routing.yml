@@ -8,6 +8,11 @@ on:
       - 'scripts/workflow08b/record_routing_event.R'
       - 'tests/test_workflow08b_monthly_routing.R'
       - 'scripts/workflow08b/check_continuation_progress.R'
+      - 'scripts/workflow08b/archive_discovery.R'
+      - 'scripts/workflow08b/restore_discovery.R'
+      - 'scripts/workflow08b/publish_monthly_discovery_draft.R'
+      - 'scripts/workflow08b/save_monthly_discovery_checkpoint.sh'
+      - 'tests/test_workflow08b_monthly_draft.R'
       - 'scripts/workflow08b/measure_discovery_progress.R'
       - '.github/workflows/workflow08b_continue_discovery.yml'
       - '.github/workflows/workflow08b_monthly_discovery.yml'
@@ -58,7 +63,9 @@ jobs:
           err(check_continuation(bad,b,e,r,0L))
           bad <- s; bad$queries_remaining <- 0L
           err(check_continuation(bad,b,e,r,0L))
-          bad <- r; bad$status <- "draft"
+          draft <- r; draft$status <- "draft"
+          stopifnot(check_continuation(s,b,e,draft,0L))
+          bad <- r; bad$status <- "unverified"
           err(check_continuation(s,b,e,bad,0L))
           bad <- e; bad$update_month <- "2026-11"
           err(check_continuation(s,b,bad,r,0L))
@@ -67,3 +74,11 @@ jobs:
           cat("PASS: bounded continuation progress and fail-closed cases\n")
       - name: Lint discovery and continuation workflows
         run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 -shellcheck= .github/workflows/workflow08b_monthly_discovery.yml .github/workflows/workflow08b_continue_discovery.yml
+
+      - name: Parse monthly draft archive and restore scripts
+        shell: Rscript {0}
+        run: |
+          for (p in c("archive_discovery.R","restore_discovery.R","publish_monthly_discovery_draft.R")) {
+            parse(file=file.path("scripts/workflow08b",p))
+          }
+      - run: bash -n scripts/workflow08b/save_monthly_discovery_checkpoint.sh
