@@ -102,6 +102,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
+      - name: Establish discovery time budget
+        run: echo "W08B_DEADLINE_EPOCH=$(($(date +%s)+14400))" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
         with:
           ref: workflow01-final-architecture
@@ -250,6 +252,7 @@ jobs:
         run: |
           set -euo pipefail
           ROOT="$RUNNER_TEMP/w08b"
+          export W08B_DEFER_EDGE_MERGE=1
           # Persist a recoverable, SHA-bound checkpoint before the long
           # OpenAlex phase. Then archive every 2,500 completed Works.
           Rscript scripts/workflow08b/archive_discovery.R \
@@ -262,6 +265,10 @@ jobs:
             WORKS="$(Rscript -e '
               z<-jsonlite::fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"w08b/state/openalex_summary.json"))
               cat(as.integer(z$completed_this_run)+as.integer(z$not_found_this_run))')"
+            if [ "$(jq -r .budget_reached "$ROOT/state/openalex_summary.json")" = true ]; then
+              echo "Controlled discovery budget reached; proceed to final checkpoint"
+              break
+            fi
             if [ "$WORKS" -eq 0 ]; then break; fi
             if [ "$((iteration % 5))" -eq 0 ]; then
               Rscript scripts/workflow08b/archive_discovery.R \
@@ -271,7 +278,7 @@ jobs:
             fi
             if [ "$iteration" -eq 60 ]; then
               echo "OpenAlex remains incomplete after 60 bounded iterations" >&2
-              exit 1
+              break
             fi
           done
       - name: Lossless cumulative edge union and new candidate ID delta
@@ -338,8 +345,11 @@ jobs:
             downstream_bibliographies_authorised=FALSE,
             downstream_w01_authorised=FALSE),auto_unbox=TRUE,pretty=TRUE),
             file.path(root,"state/monthly_discovery_status.json"))
-          if(!isTRUE((x$planned_lens_id_queries+x$planned_openalex_id_queries+x$planned_doi_lookups)==0))
-            stop("Incomplete provider discovery; no automatic candidate handoff")
+          if(!isTRUE((x$planned_lens_id_queries+x$planned_openalex_id_queries+x$planned_doi_lookups)==0)){
+            cat("complete=false\n",file=Sys.getenv("GITHUB_OUTPUT"),append=TRUE)
+            cat("Incomplete provider discovery; checkpoint only, no candidate handoff\n")
+            quit(status=0)
+          }
           cat("complete=true\n",file=Sys.getenv("GITHUB_OUTPUT"),append=TRUE)
       - name: Archive every genuine bounded discovery attempt to restricted Zenodo
         id: archive
