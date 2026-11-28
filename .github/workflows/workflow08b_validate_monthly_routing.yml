@@ -1,7 +1,7 @@
 name: W08b - Validate monthly routing and idempotency
 on:
   push:
-    branches: [workflow01-final-architecture, fix/monthly-citation-original-search-not]
+    branches: [workflow01-final-architecture]
     paths:
       - '.github/workflows/workflow08b_validate_monthly_routing.yml'
       - 'scripts/workflow08b/route_after_w08.R'
