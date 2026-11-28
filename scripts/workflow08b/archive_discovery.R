@@ -39,10 +39,11 @@ call<-function(r,allowed,label,timeout=120,retries=1L){
    Sys.sleep(min(60,5*2^(attempt-1L)))
  }
 }
-created<-resp_body_json(call(auth(req_method(request(api),"POST")) |>
- req_body_raw(charToRaw("{}"),type="application/json"),201L,"draft create"),simplifyVector=FALSE)
-id<-as.character(created$id); bucket<-as.character(created$links$bucket)
-if(!nzchar(id)||!nzchar(bucket))stop("Invalid draft response")
+monthly<-identical(Sys.getenv("W08B_MONTHLY_DRAFT"),"1")
+final<-identical(Sys.getenv("W08B_FINAL_PUBLISH"),"1")
+readdep<-function(id)resp_body_json(call(auth(request(paste0(api,"/",id))),200L,"read deposition",retries=3L),simplifyVector=FALSE)
+file_md5<-function(x)sub("^md5:","",tolower(as.character(if(is.null(x$checksum))x$checksum_md5 else x$checksum)))
+file_name<-function(x)as.character(x$filename)
 metadata<-list(metadata=list(
  title=paste("Living Evidence Map W08b citation-discovery checkpoint | run",run),
  upload_type="dataset",publication_date=format(Sys.Date(),"%Y-%m-%d"),
@@ -50,17 +51,101 @@ metadata<-list(metadata=list(
  creators=list(list(name="Haddaway, Neal")),access_right="restricted",
  access_conditions="Derived citation edges and record identifiers from licensed scholarly metadata sources.",
  keywords=list("Living Evidence Map","citation chasing","W08b","checkpoint")))
-call(auth(req_method(request(paste0(api,"/",id)),"PUT")) |> req_body_json(metadata,auto_unbox=TRUE),200L,"metadata")
-fn<-basename(archive)
-up<-auth(req_method(request(paste0(bucket,"/",URLencode(fn,reserved=TRUE))),"PUT")) |>
- req_headers(Expect="") |> req_body_file(archive) |> req_timeout(1800)
+pointer<-NULL
+if(monthly){
+ s<-fromJSON(file.path(root,"monthly_discovery_status.json"),simplifyVector=FALSE)
+ month<-as.character(s$update_month);canonical<-tolower(as.character(s$w08_canonical_sha256))
+ stopifnot(grepl("^[0-9]{4}-(0[1-9]|1[0-2])$",month),grepl("^[a-f0-9]{64}$",canonical))
+ if(final&&!isTRUE(s$provider_discovery_complete))stop("Refusing to publish incomplete discovery")
+ title<-paste("Living Evidence Map W08b monthly discovery",month)
+ identity<-paste0("W08b release identity: ",month," / ",canonical)
+ metadata$metadata$title<-title
+ metadata$metadata$description<-paste0(metadata$metadata$description,"<p>",identity,"</p>")
+ pointer<-Sys.getenv("W08B_DRAFT_POINTER","")
+ if(!nzchar(pointer))stop("Monthly draft pointer required")
+ if(file.exists(pointer)){
+   p<-fromJSON(pointer,simplifyVector=FALSE)
+   stopifnot(identical(p$update_month,month),identical(p$w08_canonical_sha256,canonical),
+      grepl("^[0-9]+$",p$zenodo_record_id))
+   created<-readdep(p$zenodo_record_id)
+ }else{
+   # Atomic creation with identifying metadata; recover a named draft after
+   # a lost response rather than knowingly create a second deposition.
+   found<-list()
+   for(page in seq_len(100L)){
+     rr<-auth(request(api))|>req_url_query(q=paste0('title:"',title,'"'),size=100,page=page,all_versions=TRUE)
+     rows<-resp_body_json(call(rr,200L,"find monthly deposit",retries=3L),simplifyVector=FALSE)
+     if(!is.list(rows)||!is.null(rows$hits))stop("Unexpected deposition listing")
+     found<-c(found,Filter(function(z)identical(z$metadata$title,title)||identical(z$title,title),rows))
+     if(length(rows)<100L)break
+     if(page==100L)stop("Monthly deposition lookup exceeded pagination bound")
+   }
+   if(length(found)>1L)stop("Multiple monthly deposits; reconcile explicitly")
+   if(length(found)==1L)created<-readdep(as.character(found[[1]]$id))
+   else created<-resp_body_json(call(auth(req_method(request(api),"POST"))|>
+      req_body_json(metadata,auto_unbox=TRUE),201L,"create named monthly draft"),simplifyVector=FALSE)
+ }
+ id<-as.character(created$id)
+ stopifnot(grepl("^[0-9]+$",id),identical(created$metadata$title,title),
+   identical(created$metadata$access_right,"restricted"),
+   grepl(identity,created$metadata$description,fixed=TRUE))
+ if(isTRUE(created$submitted))stop("Monthly deposit is already published; reconcile its receipt rather than modify or create another")
+ # Record draft identity before uploading; callers persist the receipt.
+ fn<-paste0("w08b-discovery-run-",run,"-",sha,".tar.gz")
+ # On the next upload, keep the last committed checkpoint until the new
+ # object has passed the remote checksum gate.
+ previous_file<-if(file.exists(pointer))as.character(p$archive_filename)else ""
+ if(nzchar(previous_file)&&!previous_file%in%vapply(created$files,file_name,character(1)))stop("Committed draft checkpoint missing")
+}else{
+ created<-resp_body_json(call(auth(req_method(request(api),"POST"))|>
+   req_body_raw(charToRaw("{}"),type="application/json"),201L,"draft create"),simplifyVector=FALSE)
+ id<-as.character(created$id)
+ call(auth(req_method(request(paste0(api,"/",id)),"PUT"))|>req_body_json(metadata,auto_unbox=TRUE),200L,"metadata")
+ fn<-basename(archive)
+}
+bucket<-as.character(created$links$bucket)
+stopifnot(nzchar(id),nzchar(bucket))
+up<-auth(req_method(request(paste0(bucket,"/",URLencode(fn,reserved=TRUE))),"PUT"))|>
+ req_headers(Expect="")|>req_body_file(archive)
 call(up,c(200L,201L),"upload",timeout=1800,retries=5L)
-pub<-resp_body_json(call(auth(req_method(request(paste0(api,"/",id,"/actions/publish")),"POST")),
- c(200L,201L,202L),"publish"),simplifyVector=FALSE)
-record<-as.character(if(is.null(pub$record_id))pub$id else pub$record_id)
+dep<-readdep(id)
+hits<-Filter(function(x)identical(file_name(x),fn),dep$files)
+md5<-tolower(digest(file=archive,algo="md5",serialize=FALSE))
+if(length(hits)!=1L||!identical(file_md5(hits[[1]]),md5))stop("Uploaded archive failed remote MD5 verification")
+record<-id
+status<-"draft"
+if(!monthly||final){
+ if(monthly){
+  # Only the fully checked final archive belongs in the published record.
+  for(x in dep$files){
+    nm<-file_name(x)
+    if(identical(nm,fn))next
+    if(!grepl("^w08b-discovery-run-.*[.]tar[.]gz$",nm))stop("Unexpected file in monthly draft; refusing deletion")
+    call(auth(req_method(request(paste0(api,"/",id,"/files/",x$id)),"DELETE")),c(200L,204L),"delete superseded checkpoint")
+  }
+  dep<-readdep(id)
+  stopifnot(length(dep$files)==1L,identical(file_name(dep$files[[1]]),fn),identical(file_md5(dep$files[[1]]),md5))
+ }
+ pub<-tryCatch(resp_body_json(call(auth(req_method(request(paste0(api,"/",id,"/actions/publish")),"POST")),
+    c(200L,201L,202L),"publish"),simplifyVector=FALSE),error=identity)
+ if(inherits(pub,"error")){
+    pub<-readdep(id)
+    if(!isTRUE(pub$submitted))stop("Publication not confirmed; retained draft ",id)
+ }
+ pub<-readdep(id)
+ if(!isTRUE(pub$submitted)||!identical(pub$metadata$access_right,"restricted"))stop("Publication/restriction not confirmed")
+ record<-as.character(if(is.null(pub$record_id))pub$id else pub$record_id)
+ status<-"published"
+}
 dir.create(dirname(receipt),recursive=TRUE,showWarnings=FALSE)
-writeLines(toJSON(list(schema="workflow08b-discovery-checkpoint-v1",status="published",
+writeLines(toJSON(list(schema="workflow08b-discovery-checkpoint-v1",status=status,
  run_id=run,zenodo_record_id=record,sha256=sha,archive_filename=fn,
  requests=info$requests_this_execution,complete=info$complete_seeds,
  incomplete=info$incomplete_seeds),pretty=TRUE,auto_unbox=TRUE),receipt)
-cat("PASS: archived W08b restricted checkpoint: Zenodo record ",record,"\n",sep="")
+if(monthly){
+ p<-list(schema="workflow08b-monthly-draft-pointer-v1",update_month=month,w08_canonical_sha256=canonical,
+   zenodo_record_id=record,status=status,archive_filename=fn,sha256=sha,run_id=run)
+ dir.create(dirname(pointer),recursive=TRUE,showWarnings=FALSE)
+ writeLines(toJSON(p,auto_unbox=TRUE,pretty=TRUE),pointer)
+}
+cat("PASS: W08b restricted checkpoint ",status,": Zenodo ",record,"\n",sep="")
