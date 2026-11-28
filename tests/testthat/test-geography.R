@@ -22,28 +22,28 @@ testthat::test_that("geography detector rejects duplicate target identifiers", {
 
 testthat::test_that("primary country gives strict precedence to a title country", {
   mentions <- data.frame(record_sequence = c(1L, 1L), record_id = c("A", "A"), source = c("title", "abstract"), matched_text = c("Norway", "Chile"), country_name = c("Norway", "Chile"), iso3c = c("NOR", "CHL"), region_name = c("Europe", "South America"), context = c("Norway aquaculture", "study conducted in Chile"), stringsAsFactors = FALSE)
-  result <- assign_primary_country(mentions)
+  result <- assign_primary_country(mentions, domain_config_path = testthat::test_path("..", "..", "user_input", "workflow06_geography_domain_config.json"))
   testthat::expect_equal(result$summary$primary_iso3c, "NOR")
   testthat::expect_false(result$summary$review_required)
 })
 
 testthat::test_that("primary country retains multiple countries explicitly co-named in title", {
   mentions <- data.frame(record_sequence = c(1L, 1L), record_id = c("A", "A"), source = c("title", "title"), matched_text = c("Norway", "Chile"), country_name = c("Norway", "Chile"), iso3c = c("NOR", "CHL"), region_name = c("Europe", "South America"), context = c("Norway", "Chile"), stringsAsFactors = FALSE)
-  result <- assign_primary_country(mentions)
+  result <- assign_primary_country(mentions, domain_config_path = testthat::test_path("..", "..", "user_input", "workflow06_geography_domain_config.json"))
   testthat::expect_equal(result$summary$primary_country_count, 2L)
   testthat::expect_setequal(strsplit(result$summary$primary_iso3c, "; ")[[1]], c("CHL", "NOR"))
 })
 
 testthat::test_that("exact abstract country ties are sent to review", {
   mentions <- data.frame(record_sequence = c(1L, 1L), record_id = c("A", "A"), source = c("abstract", "abstract"), matched_text = c("Norway", "Chile"), country_name = c("Norway", "Chile"), iso3c = c("NOR", "CHL"), region_name = c("Europe", "South America"), context = c("fish industry", "fish industry"), stringsAsFactors = FALSE)
-  result <- assign_primary_country(mentions)
+  result <- assign_primary_country(mentions, domain_config_path = testthat::test_path("..", "..", "user_input", "workflow06_geography_domain_config.json"))
   testthat::expect_true(result$summary$review_required)
   testthat::expect_equal(result$review_queue$review_reason, "Abstract candidates remain exactly tied")
 })
 
 testthat::test_that("regional title scope is sent to review", {
   mentions <- data.frame(record_sequence = c(1L, 1L), record_id = c("A", "A"), source = c("title", "abstract"), matched_text = c("Europe", "Norway"), country_name = c(NA, "Norway"), iso3c = c(NA, "NOR"), region_name = c("Europe", "Europe"), context = c("Europe aquaculture", "study conducted in Norway"), stringsAsFactors = FALSE)
-  result <- assign_primary_country(mentions)
+  result <- assign_primary_country(mentions, domain_config_path = testthat::test_path("..", "..", "user_input", "workflow06_geography_domain_config.json"))
   testthat::expect_true(result$summary$review_required)
   testthat::expect_equal(result$summary$primary_country_count, 0L)
 })
