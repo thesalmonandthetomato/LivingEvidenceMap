@@ -13,6 +13,8 @@ on:
       - 'scripts/workflow08b/publish_monthly_discovery_draft.R'
       - 'scripts/workflow08b/save_monthly_discovery_checkpoint.sh'
       - 'tests/test_workflow08b_monthly_draft.R'
+      - 'scripts/workflow08b/run_lens_bulk_manifest.R'
+      - 'tests/test_workflow08b_lens_coverage.R'
       - 'scripts/workflow08b/measure_discovery_progress.R'
       - '.github/workflows/workflow08b_continue_discovery.yml'
       - '.github/workflows/workflow08b_monthly_discovery.yml'
@@ -38,7 +40,7 @@ jobs:
         with:
           r-version: release
           use-public-rspm: true
-      - run: Rscript -e 'install.packages(c("jsonlite","httr2","digest"))'
+      - run: Rscript -e 'install.packages(c("jsonlite","httr2","digest","data.table"))'
       - run: Rscript tests/test_workflow08b_monthly_routing.R
       - run: Rscript tests/test_workflow08b_w09_handoff.R
       - run: Rscript tests/test_workflow08b_w10_handoff.R
@@ -83,3 +85,4 @@ jobs:
           }
       - run: bash -n scripts/workflow08b/save_monthly_discovery_checkpoint.sh
       - run: Rscript tests/test_workflow08b_monthly_draft.R
+      - run: Rscript tests/test_workflow08b_lens_coverage.R

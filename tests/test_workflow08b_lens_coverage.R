@@ -1,0 +1,23 @@
+# Offline test of the production Lens retrieval script.
+library(jsonlite)
+(function(){
+ root<-tempfile("lens-coverage-");dir.create(root)
+ on.exit(unlink(root,recursive=TRUE),add=TRUE)
+ manifest<-file.path(root,"manifest.csv");fixture<-file.path(root,"response.json")
+ write.csv(data.frame(seed_record_id=c("s1","s2","s3"),provider="lens",identifier_type="lens",query_identifier=c("L1","L1","L2")),manifest,row.names=FALSE)
+ write_json(list(total=1L,data=list(list(lens_id="L1",references_count=14L,references_resolved_count=12L,references=list(list(lens_id="R1"),list(lens_id="R2"),list()),scholarly_citations_count=3L,scholarly_citations=list("C1")))),fixture,auto_unbox=TRUE)
+ Sys.setenv(W08B_LENS_TEST_FIXTURE=fixture,W08B_TEST_MODE="1")
+ script<-"scripts/workflow08b/run_lens_bulk_manifest.R"
+ state<-file.path(root,"state")
+ run<-function(out)system2("Rscript",c(script,shQuote(manifest),shQuote(out),"1","2026-11"))
+ stopifnot(run(state)==0L)
+ z<-lapply(readLines(file.path(state,"lens_seed_status.jsonl")),fromJSON)
+ stopifnot(length(z)==2L,z[[1]]$status=="complete",z[[1]]$reference_count_discrepancy==12L,z[[1]]$resolved_count_discrepancy==10L,z[[1]]$citing_count_discrepancy==2L,z[[2]]$status=="not_found")
+ e<-lapply(readLines(file.path(state,"lens_edges_input.jsonl")),fromJSON)
+ stopifnot(length(e)==2L,all(vapply(e,function(x)setequal(x$backward_ids,c("R1","R2"))&&identical(x$forward_ids,"C1"),logical(1))))
+ s<-fromJSON(file.path(state,"discovery_summary.json"));stopifnot(s$requests_this_execution==3L,s$coverage_discrepancies==1L,s$not_found_this_execution==1L)
+ stopifnot(run(state)==0L,length(readLines(file.path(state,"lens_seed_status.jsonl")))==2L)
+ write_json(list(total=2L,data=list(list(lens_id="L1"))),fixture,auto_unbox=TRUE)
+ bad<-file.path(root,"bad");stopifnot(run(bad)!=0L,!file.exists(file.path(bad,"lens_seed_status.jsonl")))
+ cat("PASS: coverage gaps retained, shared seed associations, two targeted absence checks, idempotent retry and truncated search rejected\n")
+})()

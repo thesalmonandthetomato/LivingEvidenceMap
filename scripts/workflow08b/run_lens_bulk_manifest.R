@@ -166,7 +166,7 @@ summary<-list(schema="workflow08b-lens-discovery-dev-v1",
   requests_this_execution=requests,completed_this_execution=completed,
   coverage_discrepancies=coverage_gaps,not_found_this_execution=unavailable,
   complete_seeds=sum(vapply(as.list(previous),function(z)identical(z$status,"complete"),logical(1))),
-  incomplete_seeds=sum(vapply(previous,function(z)!isTRUE(z$status%in%c("complete","not_found")),logical(1))),
+  incomplete_seeds=sum(vapply(as.list(previous),function(z)!isTRUE(z$status%in%c("complete","not_found")),logical(1))),
   halted_early=!is.null(halt),halt_reason=halt,http_status_counts=as.list(table(failures)),
   openalex_not_queried=TRUE,candidate_bibliography_not_downloaded=TRUE,w01_handoff_not_enabled=TRUE,
   test_fixture_mode=test_mode)
