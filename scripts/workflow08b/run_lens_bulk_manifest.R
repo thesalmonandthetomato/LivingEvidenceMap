@@ -103,7 +103,7 @@ for(indices in chunks){
  if(inherits(records,"error")){halt<-conditionMessage(records);break}
  for(i in seq_len(nrow(batch))){
   lid<-batch$lens_id[[i]];old<-previous[[lid]]
-  back<-forward<-character();bc<-fc<-rc<-NA_integer_;status<-"incomplete";err<-NULL
+  back<-forward<-character();bc<-fc<-rc<-NA_integer_;status<-"incomplete";err<-NULL;backward_refresh<-FALSE
   z<-records[[lid]]
   # Absence is only accepted after two successful targeted searches.
   if(is.null(z)){
@@ -141,9 +141,18 @@ for(indices in chunks){
   seed_ids<-seed_index[[lid]]
   if(!length(seed_ids))stop("Discovered Lens ID without canonical seed association")
   if(identical(status,"complete")){
+   # Forward citations are always refreshed; backward edges are emitted only
+   # for new/retry seeds, increased reference coverage or new associations.
+   oldbc<-if(is.null(old))NA_integer_ else count_value(old$reference_count)
+   oldrc<-if(is.null(old))NA_integer_ else count_value(old$references_resolved_count)
+   old_seeds<-if(is.null(old))character() else as.character(unlist(old$seed_record_ids %||% old$record_id))
+   backward_refresh<-is.null(old)||!identical(old$status,"complete")||
+     is.na(oldbc)||(!is.na(bc)&&bc>oldbc)||
+     (!is.na(rc)&&(is.na(oldrc)||rc>oldrc))||
+     any(!seed_ids%in%old_seeds)
    for(id in seed_ids)save_edges(list(seed_record_id=id,provider="lens",
       queried_seed_identifier=lid,
-      backward_ids=back,forward_ids=forward))
+      backward_ids=if(backward_refresh)back else character(),forward_ids=forward))
    completed<-completed+1L
   }
   record_status(list(record_id=seed_ids[[1]],seed_record_ids=as.list(seed_ids),lens_id=lid,provider="lens",status=status,
@@ -152,8 +161,8 @@ for(indices in chunks){
    references_resolved_count=rc,
    reference_count_discrepancy=bc-length(back),resolved_count_discrepancy=rc-length(back),
    scholarly_citations_count=fc,citing_count_discrepancy=fc-length(forward),
-   backward_ids=length(back),
-   forward_ids=length(forward),backward_refreshed=identical(status,"complete"),
+   backward_ids=if(identical(status,"complete")&&!backward_refresh)old$backward_ids %||% length(back) else length(back),
+   forward_ids=length(forward),backward_refreshed=backward_refresh,
    last_checked_utc=stamp(),error=err))
  }
  if(!is.null(halt))break
