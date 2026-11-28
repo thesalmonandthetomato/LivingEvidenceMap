@@ -7,6 +7,10 @@ on:
       - 'scripts/workflow08b/route_after_w08.R'
       - 'scripts/workflow08b/record_routing_event.R'
       - 'tests/test_workflow08b_monthly_routing.R'
+      - 'scripts/workflow08b/check_continuation_progress.R'
+      - 'scripts/workflow08b/measure_discovery_progress.R'
+      - '.github/workflows/workflow08b_continue_discovery.yml'
+      - '.github/workflows/workflow08b_monthly_discovery.yml'
       - 'tests/test_workflow08b_w09_handoff.R'
       - 'tests/test_workflow08b_w10_handoff.R'
       - 'scripts/workflow08b/ensure_w10_handoff.*'
@@ -36,3 +40,30 @@ jobs:
       - run: bash -n scripts/workflow08b/ensure_w09_handoff.sh && bash -n scripts/workflow08b/ensure_w10_handoff.sh
       - name: Lint changed production handoff workflows
         run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 -shellcheck= .github/workflows/workflow08b_monthly_dispatch.yml .github/workflows/workflow08b_monthly_chain.yml .github/workflows/report_workflow09_figures.yml .github/workflows/workflow_10_dashboard.yml
+
+      - name: Validate bounded continuation progress gate
+        shell: Rscript {0}
+        run: |
+          source("scripts/workflow08b/check_continuation_progress.R")
+          m <- "2026-12"
+          s <- list(update_month=m,provider_discovery_complete=FALSE,queries_remaining=9L)
+          b <- list(update_month=m,counts=list(doi=2L,lens=3L,openalex=4L),total=9L)
+          e <- b; e$counts$openalex <- 5L; e$total <- 10L
+          r <- list(status="published",zenodo_record_id="123",sha256=paste(rep("a",64),collapse=""))
+          stopifnot(check_continuation(s,b,e,r,0L))
+          err <- function(x) stopifnot(inherits(tryCatch(force(x),error=identity),"error"))
+          err(check_continuation(s,b,b,r,0L))
+          err(check_continuation(s,b,e,r,12L))
+          bad <- s; bad$provider_discovery_complete <- TRUE
+          err(check_continuation(bad,b,e,r,0L))
+          bad <- s; bad$queries_remaining <- 0L
+          err(check_continuation(bad,b,e,r,0L))
+          bad <- r; bad$status <- "draft"
+          err(check_continuation(s,b,e,bad,0L))
+          bad <- e; bad$update_month <- "2026-11"
+          err(check_continuation(s,b,bad,r,0L))
+          bad <- e; bad$counts$doi <- 1L; bad$counts$openalex <- 6L
+          err(check_continuation(s,b,bad,r,0L))
+          cat("PASS: bounded continuation progress and fail-closed cases\n")
+      - name: Lint discovery and continuation workflows
+        run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 -shellcheck= .github/workflows/workflow08b_monthly_discovery.yml .github/workflows/workflow08b_continue_discovery.yml
