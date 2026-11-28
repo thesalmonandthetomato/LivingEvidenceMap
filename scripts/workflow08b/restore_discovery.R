@@ -23,6 +23,8 @@ res<-request(url)|>req_headers(Authorization=paste("Bearer",token))|>req_timeout
  req_error(is_error=function(x)FALSE)|>req_perform(path=archive)
 if(resp_status(res)!=200L)stop("Checkpoint download HTTP ",resp_status(res))
 actual<-tolower(digest(file=archive,algo="sha256",serialize=FALSE))
+expected<-tolower(Sys.getenv("W08B_EXPECTED_ARCHIVE_SHA",""))
+if(nzchar(expected)&&(!grepl("^[a-f0-9]{64}$",expected)||!identical(actual,expected)))stop("Continuation archive SHA256 does not match published receipt")
 checksum<-tolower(as.character(files[[1]]$checksum %||% files[[1]]$checksum_md5 %||% ""))
 if(nzchar(checksum)&&grepl("^[a-f0-9]{32}$",checksum))checksum<-paste0("md5:",checksum)
 if(!nzchar(checksum)){
