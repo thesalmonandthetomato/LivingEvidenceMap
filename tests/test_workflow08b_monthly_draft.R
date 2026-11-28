@@ -1,0 +1,106 @@
+# Offline lifecycle test of the actual archive/restore/publication scripts.
+# All HTTP operations are intercepted; no credentials or network are used.
+suppressPackageStartupMessages({library(jsonlite);library(digest);library(httr2)})
+local({
+ scripts<-normalizePath("scripts/workflow08b")
+ root<-tempfile("draft-test-");dir.create(root)
+ on.exit(unlink(root,recursive=TRUE),add=TRUE)
+ state<-file.path(root,"state");dir.create(state)
+ pointer<-file.path(root,"pointer.json");receipt<-file.path(root,"receipt.json")
+ status<-file.path(state,"monthly_discovery_status.json")
+ sha<-paste(rep("a",64),collapse="")
+ write_json(list(schema="workflow08b-lens-discovery-dev-v1",test_fixture_mode=FALSE,requests_this_execution=1L,complete_seeds=1L,incomplete_seeds=0L),file.path(state,"discovery_summary.json"),auto_unbox=TRUE)
+ writeLines(toJSON(list(record_id="seed-1",lens_id="lens-1",status="complete"),auto_unbox=TRUE),file.path(state,"lens_seed_status.jsonl"))
+ save_status<-function(done)write_json(list(schema="workflow08b-monthly-discovery-check-v1",update_month="2026-12",w08_canonical_sha256=sha,provider_discovery_complete=done,queries_remaining=if(done)0L else 5L),status,auto_unbox=TRUE)
+ save_status(FALSE)
+ Sys.setenv(ZENODO_ACCESS_TOKEN="offline-test",W08B_MONTHLY_DRAFT="1",W08B_DRAFT_POINTER=pointer,W08B_FINAL_PUBLISH="0",W08B_ALLOW_DRAFT_RESTORE="1")
+ dep<-NULL;creates<-0L;publishes<-0L;nextfile<-0L
+ api<-"https://zenodo.org/api/deposit/depositions";bucket<-"https://zenodo.org/api/files/mock"
+ blobs<-new.env(parent=emptyenv())
+ fail_upload<-FALSE
+ response<-function(code,body=list())list(code=code,body=body)
+ getfile<-function(n)Filter(function(x)identical(x$filename,n),dep$files)
+ mock<-function(req,path=NULL){
+   u<-req$url;m<-req$method
+   if(identical(u,api)&&m=="GET")return(response(200L,if(is.null(dep))list()else list(dep)))
+   if(identical(u,api)&&m=="POST"){
+     creates<<-creates+1L
+     stopifnot(creates==1L)
+     dep<<-list(id=100L,submitted=FALSE,metadata=req$data$metadata,links=list(bucket=bucket),files=list())
+     return(response(201L,dep))
+   }
+   if(identical(u,paste0(api,"/100"))&&m=="GET")return(response(200L,dep))
+   if(startsWith(u,paste0(bucket,"/"))){
+     n<-URLdecode(substring(u,nchar(bucket)+2L))
+     if(m=="PUT"){
+       stopifnot(!dep$submitted)
+       if(fail_upload)return(response(400L))
+       nextfile<<-nextfile+1L
+       p<-file.path(root,paste0("blob-",nextfile))
+       stopifnot(file.copy(req$data,p))
+       blobs[[n]]<-p
+       dep$files<<-c(Filter(function(x)!identical(x$filename,n),dep$files),list(list(id=as.character(nextfile),filename=n,checksum=paste0("md5:",digest(p,algo="md5",serialize=FALSE)))))
+       return(response(201L))
+     }
+     if(m=="GET"){
+       stopifnot(length(getfile(n))==1L,file.copy(blobs[[n]],path))
+       return(response(200L))
+     }
+   }
+   if(startsWith(u,paste0(api,"/100/files/"))&&m=="DELETE"){
+     stopifnot(!dep$submitted)
+     id<-sub(".*/","",u)
+     dep$files<<-Filter(function(x)!identical(x$id,id),dep$files)
+     return(response(204L))
+   }
+   if(identical(u,paste0(api,"/100/actions/publish"))&&m=="POST"){
+     stopifnot(!dep$submitted,length(dep$files)==1L)
+     publishes<<-publishes+1L;dep$submitted<<-TRUE;dep$record_id<<-100L
+     return(response(202L,dep))
+   }
+   stop("Unexpected mock operation: ",m," ",u)
+ }
+ run<-function(script,args){
+   e<-new.env(parent=globalenv())
+   e$commandArgs<-function(...)args
+   e$request<-function(url)list(url=url,method="GET")
+   e$req_method<-function(r,method){r$method<-method;r}
+   passthrough<-function(r,...)r
+   for(n in c("req_headers","req_timeout","req_error","req_retry","req_url_query"))e[[n]]<-passthrough
+   e$req_body_json<-function(r,data,...){r$data<-data;r}
+   e$req_body_file<-function(r,path,...){r$data<-path;r}
+   e$req_perform<-mock
+   e$resp_status<-function(r)r$code
+   e$resp_body_json<-function(r,...)r$body
+   e$resp_body_string<-function(r)toJSON(r$body,auto_unbox=TRUE)
+   sys.source(file.path(scripts,script),envir=e)
+ }
+ save<-function(tag)run("archive_discovery.R",c(state,tag,receipt))
+ readp<-function()fromJSON(pointer)
+ fail<-function(expr)stopifnot(inherits(tryCatch(force(expr),error=identity),"error"))
+ save("1001");p1<-readp()
+ stopifnot(creates==1L,publishes==0L,p1$status=="draft",length(dep$files)==1L)
+ writeLines("more progress",file.path(state,"progress.txt"))
+ save("1002");p2<-readp()
+ stopifnot(creates==1L,publishes==0L,p2$zenodo_record_id==p1$zenodo_record_id,p2$sha256!=p1$sha256,length(dep$files)==2L)
+ Sys.setenv(W08B_EXPECTED_ARCHIVE_SHA=p2$sha256)
+ run("restore_discovery.R",c("100",file.path(root,"restored")))
+ stopifnot(file.exists(file.path(root,"restored","progress.txt")))
+ Sys.setenv(W08B_EXPECTED_ARCHIVE_SHA=paste(rep("b",64),collapse=""))
+ fail(run("restore_discovery.R",c("100",file.path(root,"bad-restore"))))
+ fail(run("publish_monthly_discovery_draft.R",c(pointer,status,receipt)))
+ fail_upload<-TRUE
+ fail(save("1003"))
+ stopifnot(identical(readp(),p2),length(getfile(p2$archive_filename))==1L,creates==1L)
+ fail_upload<-FALSE
+ save_status(TRUE);save("1004")
+ p3<-readp()
+ stopifnot(p3$status=="draft",creates==1L,publishes==0L)
+ run("publish_monthly_discovery_draft.R",c(pointer,status,receipt))
+ stopifnot(readp()$status=="published",fromJSON(receipt)$status=="published",creates==1L,publishes==1L,length(dep$files)==1L)
+ run("publish_monthly_discovery_draft.R",c(pointer,status,receipt))
+ stopifnot(publishes==1L)
+ fail(save("1005"))
+ stopifnot(creates==1L,publishes==1L)
+ cat("PASS: single monthly draft, replacement, interrupted upload, SHA-bound restoration, completion-only publication, idempotent publication\n")
+})
