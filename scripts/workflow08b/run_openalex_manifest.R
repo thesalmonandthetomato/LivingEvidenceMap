@@ -17,11 +17,12 @@ d<-d[d$provider=="openalex" & d$identifier_type=="openalex" & nzchar(d$query_ide
 d$query_identifier<-toupper(sub("^https?://openalex[.]org/","",d$query_identifier,ignore.case=TRUE))
 if(any(!grepl("^W[0-9]+$",d$query_identifier)))stop("Malformed OpenAlex query identifier")
 associations<-unique(d[,c("seed_record_id","query_identifier"),drop=FALSE])
+seed_index<-split(associations$seed_record_id,associations$query_identifier)
 d<-unique(data.frame(openalex_id=d$query_identifier,stringsAsFactors=FALSE))
 d<-d[order(d$openalex_id),,drop=FALSE]
 dir.create(out,recursive=TRUE,showWarnings=FALSE)
 ledger<-file.path(out,"openalex_seed_status.jsonl");edges<-file.path(out,"openalex_edges_input.jsonl")
-old<-list()
+old<-new.env(hash=TRUE,parent=emptyenv())
 if(file.exists(ledger))for(line in readLines(ledger,warn=FALSE)){
  if(!nzchar(line))next
  z<-fromJSON(line,simplifyVector=FALSE);if(nzchar(as.character(z$openalex_id %||% "")))old[[as.character(z$openalex_id)]]<-z
@@ -80,9 +81,13 @@ query<-function(url,params=list()){
 }
 append<-function(path,z){con<-file(path,"at");on.exit(close(con));writeLines(toJSON(z,auto_unbox=TRUE,null="null"),con)}
 complete<-0L;not_found<-0L;halt<-NULL;requests<-0L
+budget_end<-suppressWarnings(as.numeric(Sys.getenv("W08B_DEADLINE_EPOCH","Inf")))
+if(length(budget_end)!=1L||is.na(budget_end))stop("Invalid W08b deadline")
+budget_reached<-FALSE
 for(i in seq_len(nrow(d))){
+ if(as.numeric(Sys.time())>=budget_end){budget_reached<-TRUE;break}
  oa<-normal(d$openalex_id[[i]])
- seed_ids<-associations$seed_record_id[associations$query_identifier==oa]
+ seed_ids<-seed_index[[oa]]
  if(!length(seed_ids))stop("OpenAlex Work ID without canonical seed associations")
  prior<-old[[oa]]
  if(!nzchar(oa)){halt<-"Invalid OpenAlex seed identifier";break}
@@ -145,12 +150,14 @@ for(i in seq_len(nrow(d))){
   last_checked_utc=now(),error=NULL)
  append(ledger,z);old[[oa]]<-z;complete<-complete+1L
 }
-if(file.exists(edges)&&file.info(edges)$size>0){
+# Monthly orchestration merges the full raw edge ledger exactly once at finalisation.
+# Standalone calls retain the existing materialised output contract.
+if(!identical(Sys.getenv("W08B_DEFER_EDGE_MERGE"),"1")&&file.exists(edges)&&file.info(edges)$size>0){
  exit<-system2("Rscript",c("scripts/workflow08b/merge_edges.R",shQuote(edges),shQuote(file.path(out,"openalex_merged"))))
  if(exit!=0L)stop("OpenAlex edge merge failed")
 }
 summary<-list(schema="workflow08b-openalex-fallback-v1",completed_this_run=complete,
-  requests_this_run=requests,not_found_this_run=not_found,halted=!is.null(halt),halt_reason=halt,
+  requests_this_run=requests,not_found_this_run=not_found,budget_reached=budget_reached,halted=!is.null(halt),halt_reason=halt,
   all_manifestation_openalex_ids=TRUE,w01_handoff_authorised=FALSE,
   test_fixture_mode=test_mode)
 writeLines(toJSON(summary,auto_unbox=TRUE,pretty=TRUE,null="null"),file.path(out,"openalex_summary.json"))
