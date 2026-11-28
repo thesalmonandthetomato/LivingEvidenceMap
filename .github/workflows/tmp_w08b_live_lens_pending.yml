@@ -1,4 +1,4 @@
-name: TEMP W08b resume verified November discovery
+name: TEMP W08b continue November from published discovery
 on:
   push:
     branches: [workflow01-final-architecture]
@@ -6,13 +6,132 @@ on:
 permissions:
   contents: write
   actions: write
+concurrency:
+  group: w08b-one-generation-45999469513
+  cancel-in-progress: false
 jobs:
-  discover:
-    uses: ./.github/workflows/workflow08b_monthly_discovery.yml
+  register_checkpoint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - run: Rscript -e 'install.packages("jsonlite")'
+      - name: Verify successful published discovery and original release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/46161668634" | jq -e '.conclusion=="success" and .head_branch=="workflow01-final-architecture"'
+          P=docs/workflow08b/drafts/2026-11.json
+          jq -e '.status=="published" and .run_id=="46161668634" and .zenodo_record_id=="24628405" and .sha256=="53b66c5db3c4e710ff8dacebf50151b6e1e12109a37273f78ead0f83535a489f" and .w08_canonical_sha256=="605b6d4299967dbb6360ea39a223300e497912a22bdcecf7d998777b4fdf0b51"' "$P"
+          Rscript scripts/workflow08b/resolve_monthly_release.R docs/current_run/current_run_status.json docs/workflow08/zenodo_registry.csv docs/deduplication/zenodo 2026-11 "$RUNNER_TEMP/release.json"
+          jq -e '.w08_run_id=="45999469513" and .w01_run_id=="45459473670" and .w08_canonical_sha256=="605b6d4299967dbb6360ea39a223300e497912a22bdcecf7d998777b4fdf0b51"' "$RUNNER_TEMP/release.json"
+          jq -e '.stage=="citation_chasing_started" and .original_w08_run_id=="45999469513"' docs/workflow08b/routing/w00-run-45130154568.json
+          Rscript scripts/workflow08b/register_monthly_checkpoint.R docs/workflow08b/monthly_checkpoint_registry.json 2026-11 24628405 53b66c5db3c4e710ff8dacebf50151b6e1e12109a37273f78ead0f83535a489f 848433 2740188 45999469513 605b6d4299967dbb6360ea39a223300e497912a22bdcecf7d998777b4fdf0b51 "$RUNNER_TEMP/registry.json"
+          mv "$RUNNER_TEMP/registry.json" docs/workflow08b/monthly_checkpoint_registry.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/workflow08b/monthly_checkpoint_registry.json
+          if ! git diff --cached --quiet; then
+            git commit -m "W08b: register verified November discovery checkpoint"
+            git pull --rebase origin workflow01-final-architecture
+            git push origin HEAD:workflow01-final-architecture
+          fi
+  candidates:
+    needs: [register_checkpoint]
+    uses: ./.github/workflows/workflow08b_monthly_candidates.yml
     with:
       update_month: '2026-11'
-      execute_provider_queries: true
-      resume_checkpoint_zenodo_id: '24628405'
-      resume_checkpoint_sha256: '9e6fdd0ff5a43789bfb28e6ff02427315c0162cbb05ee3ce38a869273fc8c54f'
-      resume_attempt: 1
+      discovery_checkpoint_zenodo_id: '24628405'
+      execute_bibliography: true
+      max_novel_provider_ids: 50000
+    secrets: inherit
+
+  no_new_records:
+    needs: [candidates]
+    if: ${{ needs.candidates.outputs.no_new_bibliographies == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: workflow01-final-architecture
+          fetch-depth: 0
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - run: Rscript -e 'install.packages("jsonlite")'
+      - name: Complete the original W08 generation exactly once and publish W09
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPDATE_MONTH: '2026-11'
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/resolve_monthly_release.R \
+            docs/current_run/current_run_status.json \
+            docs/workflow08/zenodo_registry.csv docs/deduplication/zenodo \
+            "$UPDATE_MONTH" "$RUNNER_TEMP/release.json"
+          UPDATE_ID="$(jq -r '.update_id' "$RUNNER_TEMP/release.json")"
+          [[ "$UPDATE_ID" =~ ^[A-Za-z0-9._-]+$ ]]
+          STATE="docs/workflow08b/routing/$UPDATE_ID.json"
+          test -s "$STATE"
+          STAGE="$(jq -r .stage "$STATE")"
+          if [ "$STAGE" != completed ]; then
+            if [ "$STAGE" != completed_without_supplemental ]; then
+              Rscript scripts/workflow08b/record_routing_event.R no_supplemental \
+                "$RUNNER_TEMP/release.json" "$STATE"
+            fi
+            Rscript scripts/workflow08b/record_routing_event.R completed \
+              "$RUNNER_TEMP/release.json" "$STATE"
+          fi
+          jq -e --arg r "$(jq -r .w08_run_id "$RUNNER_TEMP/release.json")" \
+            --arg h "$(jq -r .w08_canonical_sha256 "$RUNNER_TEMP/release.json")" \
+            '.original_w08_run_id==$r and .final_w08_run_id==$r and .final_w08_sha256==$h' "$STATE"
+          Rscript scripts/workflow08b/finish_monthly_checkpoint.R \
+            docs/workflow08b/monthly_checkpoint_registry.json \
+            "$UPDATE_MONTH" \
+            "$(jq -r '.w08_run_id' "$RUNNER_TEMP/release.json")" \
+            "$(jq -r '.w08_canonical_sha256' "$RUNNER_TEMP/release.json")" \
+            "$RUNNER_TEMP/next_registry.json"
+          mv "$RUNNER_TEMP/next_registry.json" docs/workflow08b/monthly_checkpoint_registry.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$STATE" docs/workflow08b/monthly_checkpoint_registry.json
+          if ! git diff --cached --quiet; then
+            git commit -m "W08b: no new bibliography, final W08 and monthly checkpoint accepted"
+            git pull --rebase origin workflow01-final-architecture
+            git push origin HEAD:workflow01-final-architecture
+          fi
+          bash scripts/workflow08b/ensure_w09_handoff.sh "$RUNNER_TEMP/release.json" "$STATE"
+
+
+  deduplicate:
+    needs: [candidates]
+    if: ${{ needs.candidates.outputs.bibliography_ready == 'true' }}
+    uses: ./.github/workflows/workflow08b_lightweight_dedup.yml
+    with:
+      bibliography_run: ${{ github.run_id }}
+      previous_w01_pointer: ${{ needs.candidates.outputs.original_w01_pointer }}
+    secrets: inherit
+
+  publish_review:
+    needs: [deduplicate, candidates]
+    if: ${{ needs.deduplicate.outputs.dedup_completed == 'true' }}
+    uses: ./.github/workflows/workflow08b_publish_shiny.yml
+    with:
+      dedup_run: ${{ github.run_id }}
+      bibliography_run: ${{ github.run_id }}
+      previous_w01_pointer: ${{ needs.candidates.outputs.original_w01_pointer }}
+    secrets: inherit
+
+  canonical_without_human_review:
+    needs: [publish_review]
+    if: ${{ needs.publish_review.outputs.no_human_review_required == 'true' }}
+    uses: ./.github/workflows/workflow08b_canonical_to_w02.yml
     secrets: inherit
