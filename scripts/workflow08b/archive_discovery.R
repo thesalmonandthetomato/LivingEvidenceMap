@@ -96,6 +96,18 @@ if(monthly){
  # object has passed the remote checksum gate.
  previous_file<-if(file.exists(pointer))as.character(p$archive_filename)else ""
  if(nzchar(previous_file)&&!previous_file%in%vapply(created$files,file_name,character(1)))stop("Committed draft checkpoint missing")
+ if(nzchar(previous_file)){
+   prior<-Filter(function(x)identical(file_name(x),previous_file),created$files)
+   stopifnot(length(prior)==1L,identical(file_md5(prior[[1]]),p$md5))
+   # Remove only superseded draft files after the previous pointer is durable.
+   for(x in created$files){
+     nm<-file_name(x)
+     if(identical(nm,previous_file))next
+     if(!grepl("^w08b-discovery-run-.*[.]tar[.]gz$",nm))stop("Unexpected monthly draft file")
+     call(auth(req_method(request(paste0(api,"/",id,"/files/",x$id)),"DELETE")),c(200L,204L),"prune superseded draft checkpoint")
+   }
+ }
+
 }else{
  created<-resp_body_json(call(auth(req_method(request(api),"POST"))|>
    req_body_raw(charToRaw("{}"),type="application/json"),201L,"draft create"),simplifyVector=FALSE)
@@ -114,18 +126,7 @@ md5<-tolower(digest(file=archive,algo="md5",serialize=FALSE))
 if(length(hits)!=1L||!identical(file_md5(hits[[1]]),md5))stop("Uploaded archive failed remote MD5 verification")
 record<-id
 status<-"draft"
-if(!monthly||final){
- if(monthly){
-  # Only the fully checked final archive belongs in the published record.
-  for(x in dep$files){
-    nm<-file_name(x)
-    if(identical(nm,fn))next
-    if(!grepl("^w08b-discovery-run-.*[.]tar[.]gz$",nm))stop("Unexpected file in monthly draft; refusing deletion")
-    call(auth(req_method(request(paste0(api,"/",id,"/files/",x$id)),"DELETE")),c(200L,204L),"delete superseded checkpoint")
-  }
-  dep<-readdep(id)
-  stopifnot(length(dep$files)==1L,identical(file_name(dep$files[[1]]),fn),identical(file_md5(dep$files[[1]]),md5))
- }
+if(!monthly){
  pub<-tryCatch(resp_body_json(call(auth(req_method(request(paste0(api,"/",id,"/actions/publish")),"POST")),
     c(200L,201L,202L),"publish"),simplifyVector=FALSE),error=identity)
  if(inherits(pub,"error")){
@@ -139,12 +140,12 @@ if(!monthly||final){
 }
 dir.create(dirname(receipt),recursive=TRUE,showWarnings=FALSE)
 writeLines(toJSON(list(schema="workflow08b-discovery-checkpoint-v1",status=status,
- run_id=run,zenodo_record_id=record,sha256=sha,archive_filename=fn,
+ run_id=run,zenodo_record_id=record,sha256=sha,md5=md5,archive_filename=fn,
  requests=info$requests_this_execution,complete=info$complete_seeds,
  incomplete=info$incomplete_seeds),pretty=TRUE,auto_unbox=TRUE),receipt)
 if(monthly){
  p<-list(schema="workflow08b-monthly-draft-pointer-v1",update_month=month,w08_canonical_sha256=canonical,
-   zenodo_record_id=record,status=status,archive_filename=fn,sha256=sha,run_id=run)
+   zenodo_record_id=record,status=status,archive_filename=fn,sha256=sha,md5=md5,run_id=run)
  dir.create(dirname(pointer),recursive=TRUE,showWarnings=FALSE)
  writeLines(toJSON(p,auto_unbox=TRUE,pretty=TRUE),pointer)
 }
