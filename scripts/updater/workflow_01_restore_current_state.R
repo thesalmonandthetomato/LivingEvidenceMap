@@ -57,6 +57,13 @@ chain <- rev(chain)
 chain_paths <- rev(chain_paths)
 if(!identical(chain[[1L]]$state,"final")) stop("Workflow 01 lineage does not terminate in a full final baseline",call.=FALSE)
 
+# Check replay dependencies before downloading any baseline or delta.
+if(length(chain)>1L){
+  required <- c("data.table","readr")
+  missing <- required[!vapply(required,requireNamespace,logical(1),quietly=TRUE)]
+  if(length(missing)) stop("W01 restoration dependencies missing: ",paste(missing,collapse=", "),call.=FALSE)
+}
+
 work <- tempfile("workflow01_restore_")
 dir.create(work,recursive=TRUE)
 on.exit(unlink(work,recursive=TRUE,force=TRUE),add=TRUE)
