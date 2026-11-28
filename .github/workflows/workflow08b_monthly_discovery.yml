@@ -212,6 +212,11 @@ jobs:
               w08_canonical_sha256=rel$w08_canonical_sha256,
               provider_discovery_complete=FALSE,queries_remaining=NULL),
               auto_unbox=TRUE,pretty=TRUE,null="null"),p)'
+      - name: Measure distinct completed identifiers before this compartment
+        if: ${{ inputs.execute_provider_queries }}
+        env:
+          UPDATE_MONTH: ${{ inputs.update_month }}
+        run: Rscript scripts/workflow08b/measure_discovery_progress.R "$RUNNER_TEMP/w08b/state" "$UPDATE_MONTH" "$RUNNER_TEMP/w08b/start_progress.json"
       - name: Resolve all DOI manifestations to every matching Lens ID
         id: doi
         if: ${{ inputs.execute_provider_queries }}
@@ -351,6 +356,11 @@ jobs:
             quit(status=0)
           }
           cat("complete=true\n",file=Sys.getenv("GITHUB_OUTPUT"),append=TRUE)
+      - name: Measure distinct completed identifiers after this compartment
+        if: ${{ inputs.execute_provider_queries }}
+        env:
+          UPDATE_MONTH: ${{ inputs.update_month }}
+        run: Rscript scripts/workflow08b/measure_discovery_progress.R "$RUNNER_TEMP/w08b/state" "$UPDATE_MONTH" "$RUNNER_TEMP/w08b/state/compartment_progress.json"
       - name: Archive every genuine bounded discovery attempt to restricted Zenodo
         id: archive
         if: ${{ always() && inputs.execute_provider_queries && steps.plan.outcome == 'success' }}
@@ -394,6 +404,22 @@ jobs:
             ${{ runner.temp }}/w08b/state/delta/summary.json
           retention-days: 30
           if-no-files-found: warn
+      - name: Dispatch next bounded compartment only after verified progress
+        if: ${{ success() && inputs.execute_provider_queries && steps.completion.outputs.complete == 'false' && steps.archive.outcome == 'success' && steps.doi.outcome == 'success' && steps.lens.outcome == 'success' && steps.openalex.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ATTEMPT: ${{ inputs.resume_attempt }}
+          MONTH: ${{ inputs.update_month }}
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/w08b"
+          Rscript scripts/workflow08b/check_continuation_progress.R "$ROOT/state/monthly_discovery_status.json" "$ROOT/start_progress.json" "$ROOT/state/compartment_progress.json" "$RUNNER_TEMP/w08b-receipt.json" "$ATTEMPT"
+          gh workflow run workflow08b_continue_discovery.yml --repo "$GITHUB_REPOSITORY" --ref workflow01-final-architecture \
+            -f update_month="$MONTH" \
+            -f source_w08_run_id="$(jq -er .w08_run_id "$RUNNER_TEMP/w08_release.json")" \
+            -f checkpoint_id="$(jq -er .zenodo_record_id "$RUNNER_TEMP/w08b-receipt.json")" \
+            -f checkpoint_sha256="$(jq -er .sha256 "$RUNNER_TEMP/w08b-receipt.json")" \
+            -f parent_run_id="$GITHUB_RUN_ID" -f compartment="$((ATTEMPT+1))"
       - name: Fail on provider errors after preserving restricted checkpoint
         if: ${{ inputs.execute_provider_queries && (steps.doi.outcome == 'failure' || steps.lens.outcome == 'failure' || steps.openalex.outcome == 'failure') }}
         run: |
