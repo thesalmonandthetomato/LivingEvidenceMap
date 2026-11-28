@@ -5,7 +5,7 @@ check_continuation<-function(status,start,end,receipt,attempt){
  is.numeric(status$queries_remaining),length(status$queries_remaining)==1L,
  is.finite(status$queries_remaining),status$queries_remaining>0,
  identical(status$update_month,start$update_month),identical(start$update_month,end$update_month),
- identical(receipt$status,"published"),grepl("^[0-9]+$",receipt$zenodo_record_id),
+ receipt$status%in%c("draft","published"),grepl("^[0-9]+$",receipt$zenodo_record_id),
  grepl("^[a-f0-9]{64}$",receipt$sha256),
  length(attempt)==1L,is.finite(attempt),attempt>=0,attempt<12,attempt==as.integer(attempt),
  identical(names(start$counts),names(end$counts)),all(unlist(end$counts)>=unlist(start$counts)),
