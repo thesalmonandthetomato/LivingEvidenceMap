@@ -230,7 +230,7 @@ test_that("species matcher tolerates case spaces hyphens and markup", {
 
   for (txt in cases) {
     m <- detect_species_mentions(txt, NA_character_, d)
-    expect_gt(nrow(m), 0L, info = txt)
+    expect_true(nrow(m) > 0L, info = txt)
   }
 })
 
@@ -247,7 +247,7 @@ test_that("W05 deterministic concepts use exactly three columns", {
   x <- readr::read_csv(file.path(project_root, "user_input", "workflow05_deterministic_concepts.csv"), show_col_types = FALSE)
   expect_identical(names(x), c("coding", "entity", "terms"))
   expect_true(all(x$entity == "farmed species"))
-  expect_false(any(grepl("spring salmon", x$terms, ignore.case = TRUE, fixed = TRUE)))
+  expect_false(any(grepl("spring salmon", tolower(x$terms), fixed = TRUE)))
   expect_true(any(grepl("Salmons", x$terms, fixed = TRUE)))
   expect_true(any(grepl("salmones", x$terms, fixed = TRUE)))
 })
