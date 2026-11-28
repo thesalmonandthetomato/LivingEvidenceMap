@@ -1,5 +1,8 @@
 name: W08b continue bounded citation discovery
 on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/workflow08b_continue_discovery.yml']
   workflow_dispatch:
     inputs:
       update_month:
@@ -27,7 +30,13 @@ concurrency:
   group: w08b-one-generation-${{ inputs.source_w08_run_id }}
   cancel-in-progress: false
 jobs:
+  registration:
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo 'Continuation workflow registered; no discovery authorised by push'
   begin:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     outputs:
       update_month: ${{ steps.verify.outputs.update_month }}
@@ -60,6 +69,21 @@ jobs:
           test -f "$RECEIPT" && test -f "$STATUS"
           jq -e --arg c "$CHECKPOINT" --arg h "$SHA" --arg p "$PARENT" '.status=="published" and .zenodo_record_id==$c and .sha256==$h and .run_id==$p' "$RECEIPT"
           jq -e --arg m "$MONTH" --arg h "$(jq -r .original_w08_sha256 "docs/workflow08b/routing/$U.json")" '.update_month==$m and .w08_canonical_sha256==$h and .provider_discovery_complete==false and .queries_remaining>0' "$STATUS"
+          # Claim a checkpoint once, under the generation-wide concurrency lock.
+          # A rerun of the same GitHub run may reuse its claim; another run cannot.
+          CLAIM="docs/workflow08b/continuation/$U/checkpoint-$CHECKPOINT.json"
+          if [ -f "$CLAIM" ]; then
+            jq -e --arg r "$GITHUB_RUN_ID" --arg p "$PARENT" --arg h "$SHA" '.run_id==$r and .parent_run_id==$p and .sha256==$h' "$CLAIM"
+          else
+            mkdir -p "$(dirname "$CLAIM")"
+            jq -n --arg r "$GITHUB_RUN_ID" --arg p "$PARENT" --arg h "$SHA" --arg c "$CHECKPOINT" --arg a "$COMPARTMENT" '{run_id:$r,parent_run_id:$p,sha256:$h,checkpoint_id:$c,compartment:$a}' > "$CLAIM"
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add "$CLAIM"
+            git commit -m "W08b: claim continuation checkpoint $CHECKPOINT"
+            git pull --rebase origin workflow01-final-architecture
+            git push origin HEAD:workflow01-final-architecture
+          fi
           echo "update_month=$MONTH" >> "$GITHUB_OUTPUT"
   discover:
     needs: begin
