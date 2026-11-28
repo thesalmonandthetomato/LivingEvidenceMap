@@ -105,8 +105,6 @@ jobs:
             --output-root "$RUNNER_TEMP/w08b_current_w01"
           test -s "$RUNNER_TEMP/w08b_current_w01/canonical/records.jsonl"
       - name: Drop previously indexed IDs without dropping their historical citation relationships
-        env:
-          MAX_NOVEL: ${{ inputs.max_novel_provider_ids }}
         run: |
           set -euo pipefail
           ROOT="$RUNNER_TEMP/w08b_checkpoint"
@@ -118,12 +116,6 @@ jobs:
             "$ROOT/delta/new_candidate_citation_edges.csv" \
             "$RUNNER_TEMP/w01_precheck/candidates_not_matched_by_provider_id.csv" \
             "$RUNNER_TEMP/w08b_candidates"
-          Rscript -e '
-            x<-jsonlite::fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"w08b_candidates/summary.json"))
-            n<-as.integer(Sys.getenv("MAX_NOVEL"))
-            stopifnot(!is.na(n),n>=0L,x$require_provider_not_filter<=n)
-            cat("PASS: provider NOT search cost guard: ",x$require_provider_not_filter,
-                " candidate IDs <= ",n,"\n",sep="")'
           cat "$RUNNER_TEMP/w08b_candidates/summary.json"
       - name: Provider-side Lens species AND NOT farm-term eligible-ID search
         id: lens_not
@@ -181,6 +173,8 @@ jobs:
           fi
       - name: Check eligible-ID totals and explicit empty-provider case
         id: eligibility
+        env:
+          MAX_NOVEL: ${{ inputs.max_novel_provider_ids }}
         if: ${{ inputs.execute_bibliography }}
         run: |
           set -euo pipefail
@@ -188,7 +182,20 @@ jobs:
             r<-Sys.getenv("RUNNER_TEMP")
             l<-read.csv(file.path(r,"lens_eligible/eligible_lens_ids.csv"))
             o<-read.csv(file.path(r,"openalex_eligible/eligible_openalex_ids.csv"))
-            stopifnot(!anyDuplicated(l),!anyDuplicated(o))
+            ls<-jsonlite::fromJSON(file.path(r,"lens_eligible/summary.json"))
+            os<-jsonlite::fromJSON(file.path(r,"openalex_eligible/summary.json"))
+            pre<-jsonlite::fromJSON(file.path(r,"w08b_candidates/summary.json"))
+            n<-as.integer(Sys.getenv("MAX_NOVEL"))
+            stopifnot(isTRUE(ls$provider_side_species_and_not_farming),
+              isTRUE(os$provider_side_species_and_not_farming),
+              ls$candidate_ids==pre$lens_candidates,
+              os$candidate_ids==pre$openalex_candidates,
+              ls$eligible_ids==nrow(l),os$eligible_ids==nrow(o),
+              !anyDuplicated(l),!anyDuplicated(o),
+              !is.na(n),n>=0L)
+            cat("Species AND NOT farming: before=",pre$require_provider_not_filter,
+                "; after=",nrow(l)+nrow(o),"\n",sep="")
+            if(nrow(l)+nrow(o)>n) stop("Post-NOT candidate safeguard exceeded: ",nrow(l)+nrow(o)," > ",n)
             cat(paste0("LENS_ELIGIBLE=",nrow(l),"\nOPENALEX_ELIGIBLE=",nrow(o),"\n"),
                 file=file.path(r,"eligible_counts.env"))
             cat("PASS: eligible provider IDs: Lens=",nrow(l),", OpenAlex=",nrow(o),"\n")'

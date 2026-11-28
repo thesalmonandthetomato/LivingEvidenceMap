@@ -1,7 +1,7 @@
 name: W08b - Validate monthly routing and idempotency
 on:
   push:
-    branches: [workflow01-final-architecture]
+    branches: [workflow01-final-architecture, fix/monthly-citation-original-search-not]
     paths:
       - '.github/workflows/workflow08b_validate_monthly_routing.yml'
       - 'scripts/workflow08b/route_after_w08.R'
@@ -25,6 +25,9 @@ on:
       - 'scripts/workflow08b/ensure_w09_handoff.*'
       - '.github/workflows/workflow08b_monthly_dispatch.yml'
       - '.github/workflows/workflow08b_monthly_chain.yml'
+      - '.github/workflows/workflow08b_monthly_candidates.yml'
+      - 'scripts/workflow08b/lens_species_not_farming_ids.R'
+      - 'scripts/workflow08b/harvest_openalex_eligible.R'
       - '.github/workflows/report_workflow09_figures.yml'
 permissions:
   contents: read
@@ -46,7 +49,7 @@ jobs:
       - run: Rscript tests/test_workflow08b_w10_handoff.R
       - run: bash -n scripts/workflow08b/ensure_w09_handoff.sh && bash -n scripts/workflow08b/ensure_w10_handoff.sh
       - name: Lint changed production handoff workflows
-        run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 -shellcheck= .github/workflows/workflow08b_monthly_dispatch.yml .github/workflows/workflow08b_monthly_chain.yml .github/workflows/report_workflow09_figures.yml .github/workflows/workflow_10_dashboard.yml
+        run: docker run --rm -v "$PWD:/repo" --workdir /repo rhysd/actionlint:1.7.12 -shellcheck= .github/workflows/workflow08b_monthly_dispatch.yml .github/workflows/workflow08b_monthly_chain.yml .github/workflows/workflow08b_monthly_candidates.yml .github/workflows/report_workflow09_figures.yml .github/workflows/workflow_10_dashboard.yml
 
       - name: Validate bounded continuation progress gate
         shell: Rscript {0}
