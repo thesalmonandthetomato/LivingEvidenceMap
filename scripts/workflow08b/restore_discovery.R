@@ -13,8 +13,16 @@ token<-Sys.getenv("ZENODO_ACCESS_TOKEN","");if(!nzchar(token))stop("Missing ZENO
 api<-paste0("https://zenodo.org/api/deposit/depositions/",record)
 response<-request(api)|>req_headers(Authorization=paste("Bearer",token))|>req_timeout(90)|>req_perform()
 dep<-resp_body_json(response,simplifyVector=FALSE)
-if(!isTRUE(dep$submitted))stop("Checkpoint has not been published")
+expected<-tolower(Sys.getenv("W08B_EXPECTED_ARCHIVE_SHA",""))
+draft<-!isTRUE(dep$submitted)
+if(draft){
+ if(!identical(Sys.getenv("W08B_ALLOW_DRAFT_RESTORE"),"1")||
+    !grepl("^[a-f0-9]{64}$",expected)||
+    !identical(dep$metadata$access_right,"restricted"))
+   stop("Draft restoration requires explicit authorisation and exact checkpoint SHA256")
+}
 files<-Filter(function(x)grepl("^w08b-discovery-run-.*[.]tar[.]gz$",as.character(x$filename)),dep$files)
+if(draft)files<-Filter(function(x)endsWith(as.character(x$filename),paste0("-",expected,".tar.gz")),files)
 if(length(files)!=1L)stop("Expected one W08b checkpoint tarball")
 fn<-as.character(files[[1]]$filename)
 archive<-tempfile(fileext=".tar.gz")
@@ -23,7 +31,6 @@ res<-request(url)|>req_headers(Authorization=paste("Bearer",token))|>req_timeout
  req_error(is_error=function(x)FALSE)|>req_perform(path=archive)
 if(resp_status(res)!=200L)stop("Checkpoint download HTTP ",resp_status(res))
 actual<-tolower(digest(file=archive,algo="sha256",serialize=FALSE))
-expected<-tolower(Sys.getenv("W08B_EXPECTED_ARCHIVE_SHA",""))
 if(nzchar(expected)&&(!grepl("^[a-f0-9]{64}$",expected)||!identical(actual,expected)))stop("Continuation archive SHA256 does not match published receipt")
 checksum<-tolower(as.character(files[[1]]$checksum %||% files[[1]]$checksum_md5 %||% ""))
 if(nzchar(checksum)&&grepl("^[a-f0-9]{32}$",checksum))checksum<-paste0("md5:",checksum)
