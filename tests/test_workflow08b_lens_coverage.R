@@ -17,6 +17,20 @@ library(jsonlite)
  stopifnot(length(e)==2L,all(vapply(e,function(x)setequal(x$backward_ids,c("R1","R2"))&&identical(x$forward_ids,"C1"),logical(1))))
  s<-fromJSON(file.path(state,"discovery_summary.json"));stopifnot(s$requests_this_execution==3L,s$coverage_discrepancies==1L,s$not_found_this_execution==1L)
  stopifnot(run(state)==0L,length(readLines(file.path(state,"lens_seed_status.jsonl")))==2L)
+ # Actual Lens response shape: missing list, count field present. R's
+ # partial matching used to interpret the numeric count as a relationship.
+ write_json(list(total=2L,data=list(
+   list(lens_id="L1",references_count=14L,scholarly_citations_count=3L,scholarly_citations=list("C1")),
+   list(lens_id="L2",references_resolved_count=0L,scholarly_citations_count=4L))),fixture,auto_unbox=TRUE)
+ exact<-file.path(root,"missing-lists");stopifnot(run(exact)==0L)
+ z<-lapply(readLines(file.path(exact,"lens_seed_status.jsonl")),fromJSON)
+ stopifnot(length(z)==2L,all(vapply(z,function(x)x$status=="complete",logical(1))),
+   z[[1]]$backward_ids==0L,z[[1]]$forward_ids==1L,z[[2]]$forward_ids==0L)
+ e<-lapply(readLines(file.path(exact,"lens_edges_input.jsonl")),fromJSON)
+ stopifnot(length(e)==3L,all(vapply(e,function(x)length(x$backward_ids)==0L,logical(1))))
+ # A genuinely malformed numeric relationship field is still rejected.
+ write_json(list(total=1L,data=list(list(lens_id="L1",references=14L))),fixture,auto_unbox=TRUE)
+ malformed<-file.path(root,"malformed");stopifnot(run(malformed)!=0L,!file.exists(file.path(malformed,"lens_seed_status.jsonl")))
  write_json(list(total=2L,data=list(list(lens_id="L1"))),fixture,auto_unbox=TRUE)
  bad<-file.path(root,"bad");stopifnot(run(bad)!=0L,!file.exists(file.path(bad,"lens_seed_status.jsonl")))
  cat("PASS: coverage gaps retained, shared seed associations, two targeted absence checks, idempotent retry and truncated search rejected\n")

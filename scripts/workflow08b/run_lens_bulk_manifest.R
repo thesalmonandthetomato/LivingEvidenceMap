@@ -47,7 +47,7 @@ if(length(chunks)>max_batches)chunks<-chunks[seq_len(max_batches)]
 get_ids<-function(x){
  if(is.null(x))return(character())
  if(!is.list(x)&&!is.character(x))stop("Malformed Lens citation relationship list")
- u<-vapply(x,function(y)if(is.list(y))as.character(y$lens_id %||% "") else as.character(y),character(1))
+ u<-vapply(x,function(y)if(is.list(y))as.character(y[["lens_id"]] %||% "") else as.character(y),character(1))
  unique(u[nzchar(u)&!is.na(u)])
 }
 stamp<-function()format(Sys.time(),tz="UTC",format="%Y-%m-%dT%H:%M:%SZ")
@@ -122,9 +122,11 @@ for(indices in chunks){
    result<-tryCatch({
     # Lens total references include references without resolved Lens IDs.
     # A structurally valid full response is accepted with the available IDs.
-    list(back=get_ids(z$references),forward=get_ids(z$scholarly_citations),
-      bc=count_value(z$references_count),rc=count_value(z$references_resolved_count),
-      fc=count_value(z$scholarly_citations_count))
+    # Exact indexing is essential: R's $ partially matches count fields
+    # when the corresponding relationship list is absent.
+    list(back=get_ids(z[["references"]]),forward=get_ids(z[["scholarly_citations"]]),
+      bc=count_value(z[["references_count"]]),rc=count_value(z[["references_resolved_count"]]),
+      fc=count_value(z[["scholarly_citations_count"]]))
    },error=identity)
    if(inherits(result,"error")){halt<-conditionMessage(result);break}
    back<-result$back;forward<-result$forward;bc<-result$bc;rc<-result$rc;fc<-result$fc
@@ -156,7 +158,7 @@ for(indices in chunks){
  }
  if(!is.null(halt))break
 }
-if(file.exists(edgefile)&&file.info(edgefile)$size>0){
+if(is.null(halt)&&!identical(Sys.getenv("W08B_DEFER_EDGE_MERGE"),"1")&&file.exists(edgefile)&&file.info(edgefile)$size>0){
  res<-system2("Rscript",c("scripts/workflow08b/merge_edges.R",shQuote(edgefile),
                          shQuote(file.path(out,"merged"))))
  if(res!=0L)stop("Edge merge failed")

@@ -265,12 +265,13 @@ jobs:
         run: |
           set -euo pipefail
           ROOT="$RUNNER_TEMP/w08b"
+          export W08B_DEFER_EDGE_MERGE=1
           Rscript scripts/workflow08b/run_lens_bulk_manifest.R \
             "$ROOT/state/expanded_lens_identifier_queries.csv" "$ROOT/state" \
             "$MAX_BATCHES" "$UPDATE_MONTH"
       - name: Discover OpenAlex references and citing IDs for every OpenAlex manifestation
         id: openalex
-        if: ${{ inputs.execute_provider_queries }}
+        if: ${{ inputs.execute_provider_queries && steps.doi.outcome == 'success' && steps.lens.outcome == 'success' }}
         continue-on-error: true
         env:
           OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
@@ -309,9 +310,53 @@ jobs:
               break
             fi
           done
+      - name: Check current-month identifier completion without fabricating success
+        id: completion
+        if: ${{ inputs.execute_provider_queries }}
+        env:
+          UPDATE_MONTH: ${{ inputs.update_month }}
+        shell: Rscript {0}
+        run: |
+          library(jsonlite)
+          root<-file.path(Sys.getenv("RUNNER_TEMP"),"w08b")
+          # The full set includes DOI-resolved Lens IDs, not only the original
+          # canonical's direct Lens IDs.
+          original<-read.csv(file.path(root,"expanded/seed_identifier_queries.csv"),stringsAsFactors=FALSE)
+          resolved<-file.path(root,"state/expanded_lens_identifier_queries.csv")
+          lens<-if(file.exists(resolved))read.csv(resolved,stringsAsFactors=FALSE)else original[original$identifier_type=="lens",]
+          all<-unique(rbind(lens[,c("seed_record_id","provider","identifier_type","query_identifier")],
+                           original[original$identifier_type!="lens",c("seed_record_id","provider","identifier_type","query_identifier")]))
+          write.csv(all,file.path(root,"expanded/current_all_ids.csv"),row.names=FALSE)
+          out<-file.path(root,"identifier_completion")
+          dir.create(out,showWarnings=FALSE)
+          for(k in c("lens_seed_status.jsonl","openalex_seed_status.jsonl","lens_doi_resolution.jsonl")){
+            src<-file.path(root,"state",k)
+            if(file.exists(src))file.copy(src,file.path(out,k))
+          }
+          rc<-system2("Rscript",c("scripts/workflow08b/plan_identifier_checks.R",
+            shQuote(file.path(root,"expanded/current_all_ids.csv")),shQuote(out),
+            Sys.getenv("UPDATE_MONTH"),shQuote(file.path(root,"final_query_plan"))))
+          if(rc!=0L)stop("Identifier completion planner failed")
+          x<-fromJSON(file.path(root,"final_query_plan/summary.json"))
+          writeLines(toJSON(list(schema="workflow08b-monthly-discovery-check-v1",
+            update_month=Sys.getenv("UPDATE_MONTH"),
+            w08_canonical_sha256=fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"w08_release.json"))$w08_canonical_sha256,
+            seed_identifiers=x$seed_identifier_associations,
+            distinct_queries=x$distinct_provider_queries,
+            queries_remaining=x$planned_lens_id_queries+x$planned_openalex_id_queries+x$planned_doi_lookups,
+            provider_discovery_complete=(x$planned_lens_id_queries+x$planned_openalex_id_queries+x$planned_doi_lookups)==0,
+            downstream_bibliographies_authorised=FALSE,
+            downstream_w01_authorised=FALSE),auto_unbox=TRUE,pretty=TRUE),
+            file.path(root,"state/monthly_discovery_status.json"))
+          if(!isTRUE((x$planned_lens_id_queries+x$planned_openalex_id_queries+x$planned_doi_lookups)==0)){
+            cat("complete=false\n",file=Sys.getenv("GITHUB_OUTPUT"),append=TRUE)
+            cat("Incomplete provider discovery; checkpoint only, no candidate handoff\n")
+            quit(status=0)
+          }
+          cat("complete=true\n",file=Sys.getenv("GITHUB_OUTPUT"),append=TRUE)
       - name: Lossless cumulative edge union and new candidate ID delta
         id: delta
-        if: ${{ inputs.execute_provider_queries }}
+        if: ${{ inputs.execute_provider_queries && steps.completion.outputs.complete == 'true' && steps.doi.outcome == 'success' && steps.lens.outcome == 'success' && steps.openalex.outcome == 'success' }}
         env:
           UPDATE_MONTH: ${{ inputs.update_month }}
         run: |
@@ -336,49 +381,6 @@ jobs:
           echo "cumulative_candidates=$(jq -r '.cumulative_provider_candidate_ids' "$ROOT/state/merged/summary.json")" >> "$GITHUB_OUTPUT"
           echo "cumulative_edges=$(jq -r '.cumulative_direction_edges' "$ROOT/state/merged/summary.json")" >> "$GITHUB_OUTPUT"
           cat "$ROOT/state/existing_w01/summary.json"
-      - name: Check current-month identifier completion without fabricating success
-        id: completion
-        if: ${{ inputs.execute_provider_queries }}
-        env:
-          UPDATE_MONTH: ${{ inputs.update_month }}
-        shell: Rscript {0}
-        run: |
-          library(jsonlite)
-          root<-file.path(Sys.getenv("RUNNER_TEMP"),"w08b")
-          # The full set includes DOI-resolved Lens IDs, not only the original
-          # canonical's direct Lens IDs.
-          original<-read.csv(file.path(root,"expanded/seed_identifier_queries.csv"),stringsAsFactors=FALSE)
-          resolved<-file.path(root,"state/expanded_lens_identifier_queries.csv")
-          lens<-if(file.exists(resolved))read.csv(resolved,stringsAsFactors=FALSE)else original[original$identifier_type=="lens",]
-          all<-unique(rbind(lens[,c("seed_record_id","provider","identifier_type","query_identifier")],
-                           original[original$identifier_type!="lens",c("seed_record_id","provider","identifier_type","query_identifier")]))
-          write.csv(all,file.path(root,"expanded/current_all_ids.csv"),row.names=FALSE)
-          out<-file.path(root,"identifier_completion")
-          dir.create(out,showWarnings=FALSE)
-          for(k in c("lens_seed_status.jsonl","openalex_seed_status.jsonl","lens_doi_resolution.jsonl")){
-            src<-file.path(root,"state",k)
-            if(file.exists(src))file.copy(src,file.path(out,k))
-          }
-          system2("Rscript",c("scripts/workflow08b/plan_identifier_checks.R",
-            shQuote(file.path(root,"expanded/current_all_ids.csv")),shQuote(out),
-            Sys.getenv("UPDATE_MONTH"),shQuote(file.path(root,"final_query_plan"))))
-          x<-fromJSON(file.path(root,"final_query_plan/summary.json"))
-          writeLines(toJSON(list(schema="workflow08b-monthly-discovery-check-v1",
-            update_month=Sys.getenv("UPDATE_MONTH"),
-            w08_canonical_sha256=fromJSON(file.path(Sys.getenv("RUNNER_TEMP"),"w08_release.json"))$w08_canonical_sha256,
-            seed_identifiers=x$seed_identifier_associations,
-            distinct_queries=x$distinct_provider_queries,
-            queries_remaining=x$planned_lens_id_queries+x$planned_openalex_id_queries+x$planned_doi_lookups,
-            provider_discovery_complete=(x$planned_lens_id_queries+x$planned_openalex_id_queries+x$planned_doi_lookups)==0,
-            downstream_bibliographies_authorised=FALSE,
-            downstream_w01_authorised=FALSE),auto_unbox=TRUE,pretty=TRUE),
-            file.path(root,"state/monthly_discovery_status.json"))
-          if(!isTRUE((x$planned_lens_id_queries+x$planned_openalex_id_queries+x$planned_doi_lookups)==0)){
-            cat("complete=false\n",file=Sys.getenv("GITHUB_OUTPUT"),append=TRUE)
-            cat("Incomplete provider discovery; checkpoint only, no candidate handoff\n")
-            quit(status=0)
-          }
-          cat("complete=true\n",file=Sys.getenv("GITHUB_OUTPUT"),append=TRUE)
       - name: Measure distinct completed identifiers after this compartment
         if: ${{ inputs.execute_provider_queries }}
         env:
