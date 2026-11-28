@@ -1,7 +1,7 @@
 # Offline lifecycle test of the actual archive/restore/publication scripts.
 # All HTTP operations are intercepted; no credentials or network are used.
 suppressPackageStartupMessages({library(jsonlite);library(digest);library(httr2)})
-local({
+(function(){
  scripts<-normalizePath("scripts/workflow08b")
  root<-tempfile("draft-test-");dir.create(root)
  on.exit(unlink(root,recursive=TRUE),add=TRUE)
@@ -39,7 +39,7 @@ local({
        p<-file.path(root,paste0("blob-",nextfile))
        stopifnot(file.copy(req$data,p))
        blobs[[n]]<-p
-       dep$files<<-c(Filter(function(x)!identical(x$filename,n),dep$files),list(list(id=as.character(nextfile),filename=n,checksum=paste0("md5:",digest(p,algo="md5",serialize=FALSE)))))
+       dep$files<<-c(Filter(function(x)!identical(x$filename,n),dep$files),list(list(id=as.character(nextfile),filename=n,checksum=paste0("md5:",digest(file=p,algo="md5",serialize=FALSE)))))
        return(response(201L))
      }
      if(m=="GET"){
@@ -103,4 +103,4 @@ local({
  fail(save("1005"))
  stopifnot(creates==1L,publishes==1L)
  cat("PASS: single monthly draft, replacement, interrupted upload, SHA-bound restoration, completion-only publication, idempotent publication\n")
-})
+})()

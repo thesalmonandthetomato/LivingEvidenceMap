@@ -20,9 +20,15 @@ for(p in c("openalex_summary.json","doi_resolution_summary.json")){
 archive<-file.path(tempdir(),paste0("w08b-discovery-run-",run,".tar.gz"))
 files<-list.files(root,recursive=TRUE,all.files=TRUE,no..=TRUE)
 if(!length(files))stop("Empty checkpoint")
-old<-setwd(root);on.exit(setwd(old),add=TRUE)
-utils::tar(archive,files=files,compression="gzip",tar="internal")
-setwd(old);on.exit(NULL,add=FALSE)
+# Use a real function scope for cleanup, including when sourced in tests.
+create_archive<-function(){
+ old<-setwd(root)
+ on.exit(setwd(old),add=TRUE)
+ utils::tar(archive,files=files,compression="gzip",tar="internal")
+ members<-utils::untar(archive,list=TRUE)
+ if(!setequal(sub("^\\./","",members),files))stop("Checkpoint tar inventory differs from source files")
+}
+create_archive()
 sha<-digest(file=archive,algo="sha256",serialize=FALSE)
 api<-"https://zenodo.org/api/deposit/depositions"
 auth<-function(r)req_headers(r,Authorization=paste("Bearer",token))
@@ -123,7 +129,8 @@ call(up,c(200L,201L),"upload",timeout=1800,retries=5L)
 dep<-readdep(id)
 hits<-Filter(function(x)identical(file_name(x),fn),dep$files)
 md5<-tolower(digest(file=archive,algo="md5",serialize=FALSE))
-if(length(hits)!=1L||!identical(file_md5(hits[[1]]),md5))stop("Uploaded archive failed remote MD5 verification")
+if(length(hits)!=1L)stop("Uploaded archive not uniquely present in remote inventory: ",fn)
+if(!identical(file_md5(hits[[1]]),md5))stop("Uploaded archive failed remote MD5 verification: expected ",md5,"; received ",file_md5(hits[[1]]))
 record<-id
 status<-"draft"
 if(!monthly){
