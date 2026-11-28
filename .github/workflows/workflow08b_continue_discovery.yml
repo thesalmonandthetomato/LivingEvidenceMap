@@ -67,11 +67,14 @@ jobs:
           RECEIPT="$(find "$RUNNER_TEMP/parent-receipt" -name w08b-receipt.json -type f)"
           STATUS="$(find "$RUNNER_TEMP/parent-receipt" -name monthly_discovery_status.json -type f)"
           test -f "$RECEIPT" && test -f "$STATUS"
-          jq -e --arg c "$CHECKPOINT" --arg h "$SHA" --arg p "$PARENT" '.status=="published" and .zenodo_record_id==$c and .sha256==$h and .run_id==$p' "$RECEIPT"
+          jq -e --arg c "$CHECKPOINT" --arg h "$SHA" --arg p "$PARENT" '(.status=="draft" or .status=="published") and .zenodo_record_id==$c and .sha256==$h and .run_id==$p' "$RECEIPT"
           jq -e --arg m "$MONTH" --arg h "$(jq -r .original_w08_sha256 "docs/workflow08b/routing/$U.json")" '.update_month==$m and .w08_canonical_sha256==$h and .provider_discovery_complete==false and .queries_remaining>0' "$STATUS"
           # Claim a checkpoint once, under the generation-wide concurrency lock.
           # A rerun of the same GitHub run may reuse its claim; another run cannot.
-          CLAIM="docs/workflow08b/continuation/$U/checkpoint-$CHECKPOINT.json"
+          if [ "$(jq -r .status "$RECEIPT")" = draft ]; then
+            jq -e --arg c "$CHECKPOINT" --arg h "$SHA" --arg p "$PARENT" '.status=="draft" and .zenodo_record_id==$c and .sha256==$h and .run_id==$p' "docs/workflow08b/drafts/$MONTH.json"
+          fi
+          CLAIM="docs/workflow08b/continuation/$U/checkpoint-$CHECKPOINT-$SHA.json"
           if [ -f "$CLAIM" ]; then
             jq -e --arg r "$GITHUB_RUN_ID" --arg p "$PARENT" --arg h "$SHA" '.run_id==$r and .parent_run_id==$p and .sha256==$h' "$CLAIM"
           else
