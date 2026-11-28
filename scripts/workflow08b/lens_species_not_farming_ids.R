@@ -51,7 +51,7 @@ for(i in seq_along(chunks)){
 z<-read.csv(ledger,stringsAsFactors=FALSE,na.strings=NULL)
 if(!setequal(unique(z$batch),seq_along(chunks)))stop("Incomplete ledger")
 eligible<-sort(unique(z$id[nzchar(z$id)]))
-write.csv(data.frame(provider="lens",related_provider_id=eligible),file.path(out,"eligible_lens_ids.csv"),row.names=FALSE)
+write.csv(data.frame(provider=rep("lens",length(eligible)),related_provider_id=eligible),file.path(out,"eligible_lens_ids.csv"),row.names=FALSE)
 # Joining only after filtering preserves all directions and originating seeds.
 edges<-read.csv(a[[2]],stringsAsFactors=FALSE,na.strings=NULL)
 if(!all(c("provider","related_provider_id","seed_record_id","direction")%in%names(edges)))stop("Invalid citation-edge schema")
