@@ -12,6 +12,10 @@ on:
         required: false
         type: string
         default: ''
+      resume_checkpoint_sha256:
+        required: false
+        type: string
+        default: ''
       resume_attempt:
         required: false
         type: number
@@ -68,6 +72,9 @@ on:
         required: true
       resume_checkpoint_zenodo_id:
         description: "Optional restricted prior checkpoint for same-month resume"
+        type: string
+        default: ''
+      resume_checkpoint_sha256:
         type: string
         default: ''
       resume_attempt:
@@ -173,6 +180,7 @@ jobs:
               e$seed_identifier_edges==p$seed_identifier_associations,
               p$provider_calls_performed==FALSE)'
           RESUME_ID="${{ inputs.resume_checkpoint_zenodo_id || '' }}"
+          export W08B_EXPECTED_ARCHIVE_SHA="${{ inputs.resume_checkpoint_sha256 || '' }}"
           if [ -n "$RESUME_ID" ]; then
             [[ "$RESUME_ID" =~ ^[0-9]+$ ]] || { echo "Invalid resume checkpoint ID"; exit 1; }
             Rscript scripts/workflow08b/restore_discovery.R "$RESUME_ID" "$ROOT/state"
