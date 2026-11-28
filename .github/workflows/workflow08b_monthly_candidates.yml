@@ -67,7 +67,7 @@ jobs:
           r-version: release
           use-public-rspm: true
       - name: Install R libraries
-        run: Rscript -e 'install.packages(c("jsonlite","httr2","digest","data.table","stringi"))'
+        run: Rscript -e 'install.packages(c("jsonlite","httr2","digest","data.table","stringi","readr"))'
       - name: Require a complete checksum-matched monthly discovery checkpoint
         id: baseline
         env:
