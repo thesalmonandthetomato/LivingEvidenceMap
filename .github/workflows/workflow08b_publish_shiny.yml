@@ -61,7 +61,7 @@ jobs:
           use-public-rspm: true
       - name: Install R libraries
         shell: Rscript {0}
-        run: install.packages(c('jsonlite','data.table','googlesheets4','digest','httr2'))
+        run: install.packages(c('jsonlite','data.table','googlesheets4','digest','httr2','readr'))
       - name: Restore new citation bibliography and verified dedup outputs
         env:
           GH_TOKEN: ${{ github.token }}
