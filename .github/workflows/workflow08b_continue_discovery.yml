@@ -68,6 +68,7 @@ jobs:
       update_month: ${{ needs.begin.outputs.update_month }}
       execute_provider_queries: true
       resume_checkpoint_zenodo_id: ${{ inputs.checkpoint_id }}
+      resume_checkpoint_sha256: ${{ inputs.checkpoint_sha256 }}
       resume_attempt: ${{ fromJSON(inputs.compartment) }}
     secrets: inherit
 
