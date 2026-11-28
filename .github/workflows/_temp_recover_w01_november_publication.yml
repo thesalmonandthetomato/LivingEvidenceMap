@@ -28,11 +28,16 @@ jobs:
           P=docs/workflow08b/routing/w00-run-45130154568.json
           jq -e '.stage == "citation_chasing_started" and .update_month == "2026-11" and .original_w08_run_id == "45999469513" and .original_w01_run_id == "45459473670" and .original_w08_sha256 == "605b6d4299967dbb6360ea39a223300e497912a22bdcecf7d998777b4fdf0b51" and .second_generation_forbidden == true' "$P"
           jq -e '.update_id == "w00-run-45130154568" and .workflow_runs.W08 == "45999469513" and .workflow_runs.W01 == "45459473670"' docs/current_run/current_run_status.json
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/46039873916/jobs?per_page=100" > "$RUNNER_TEMP/failed_jobs.json"
-          jq -e '[.jobs[] | select(.name=="discover / discovery" and .conclusion=="cancelled") | .steps[] | select(.name=="Archive every genuine bounded discovery attempt to restricted Zenodo" and .conclusion=="success")] | length==1' "$RUNNER_TEMP/failed_jobs.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/46124367157/jobs?per_page=100" > "$RUNNER_TEMP/failed_jobs.json"
+          jq -e '[.jobs[] | select(.name=="discover / discovery" and .conclusion=="success") | .steps[] | select(.name=="Archive every genuine bounded discovery attempt to restricted Zenodo" and .conclusion=="success")] | length==1' "$RUNNER_TEMP/failed_jobs.json"
+          gh run download 46124367157 --repo "$GITHUB_REPOSITORY" --name w08b-monthly-discovery-summary-46124367157 --dir "$RUNNER_TEMP/parent-receipt"
+          RECEIPT="$(find "$RUNNER_TEMP/parent-receipt" -name w08b-receipt.json -type f)"
+          STATUS="$(find "$RUNNER_TEMP/parent-receipt" -name monthly_discovery_status.json -type f)"
+          jq -e '.status=="published" and .zenodo_record_id=="24624603" and .sha256=="6c367d35c045dee9fe74480be36b0b467277c6f56a643a84181116434c7d8e9d" and .run_id=="46124367157"' "$RECEIPT"
+          jq -e '.update_month=="2026-11" and .w08_canonical_sha256=="605b6d4299967dbb6360ea39a223300e497912a22bdcecf7d998777b4fdf0b51" and .provider_discovery_complete==false and .queries_remaining==190' "$STATUS"
           echo 'transition=start_first_citation_generation' >> "$GITHUB_OUTPUT"
           echo 'update_month=2026-11' >> "$GITHUB_OUTPUT"
-          echo 'PASS: resuming same generation from published cancellation checkpoint 24612592'
+          echo 'PASS: resuming same generation from published incomplete discovery checkpoint 24624603'
   discover:
     needs: begin
     if: ${{ needs.begin.outputs.transition == 'start_first_citation_generation' }}
@@ -40,8 +45,9 @@ jobs:
     with:
       update_month: ${{ needs.begin.outputs.update_month }}
       execute_provider_queries: true
-      resume_checkpoint_zenodo_id: "24612592"
-      resume_attempt: 3
+      resume_checkpoint_zenodo_id: "24624603"
+      resume_checkpoint_sha256: "6c367d35c045dee9fe74480be36b0b467277c6f56a643a84181116434c7d8e9d"
+      resume_attempt: 4
       max_doi_batches: 100
       max_lens_batches: 100
       max_openalex_works: 500
