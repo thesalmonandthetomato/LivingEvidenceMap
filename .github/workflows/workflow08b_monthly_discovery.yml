@@ -98,10 +98,10 @@ concurrency:
 jobs:
   discovery:
     outputs:
-      checkpoint_zenodo_id: ${{ steps.archive.outputs.checkpoint }}
-      discovery_complete: ${{ steps.completion.outputs.complete == 'true' && steps.archive.outputs.published == 'true' && 'true' || 'false' }}
+      checkpoint_zenodo_id: ${{ steps.receipt.outputs.checkpoint }}
+      discovery_complete: ${{ steps.completion.outputs.complete == 'true' && steps.publish.outputs.published == 'true' && 'true' || 'false' }}
       original_w01_pointer: ${{ steps.select.outputs.w01_pointer }}
-      archive_sha256: ${{ steps.archive.outputs.archive_sha256 }}
+      archive_sha256: ${{ steps.receipt.outputs.archive_sha256 }}
       cumulative_candidates: ${{ steps.delta.outputs.cumulative_candidates }}
       cumulative_edges: ${{ steps.delta.outputs.cumulative_edges }}
       original_w08_run: ${{ steps.select.outputs.original_w08_run }}
@@ -389,15 +389,33 @@ jobs:
         if: ${{ always() && inputs.execute_provider_queries && steps.plan.outcome == 'success' }}
         env:
           ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
-          FINAL: ${{ steps.completion.outputs.complete == 'true' && steps.completion.outcome == 'success' && steps.delta.outcome == 'success' && steps.doi.outcome == 'success' && steps.lens.outcome == 'success' && steps.openalex.outcome == 'success' && !cancelled() }}
         run: |
           set -euo pipefail
           bash scripts/workflow08b/save_monthly_discovery_checkpoint.sh \
-            "$RUNNER_TEMP/w08b/state" "$GITHUB_RUN_ID" "$RUNNER_TEMP/w08b-receipt.json" "$FINAL"
+            "$RUNNER_TEMP/w08b/state" "$GITHUB_RUN_ID" "$RUNNER_TEMP/w08b-receipt.json" false
+      - name: Publish the complete verified monthly draft
+        id: publish
+        if: ${{ !cancelled() && success() && inputs.execute_provider_queries && steps.completion.outputs.complete == 'true' && steps.completion.outcome == 'success' && steps.delta.outcome == 'success' && steps.doi.outcome == 'success' && steps.lens.outcome == 'success' && steps.openalex.outcome == 'success' && steps.archive.outcome == 'success' }}
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/publish_monthly_discovery_draft.R "$W08B_DRAFT_POINTER" "$RUNNER_TEMP/w08b/state/monthly_discovery_status.json" "$RUNNER_TEMP/w08b-receipt.json"
+          git add "$W08B_DRAFT_POINTER"
+          if ! git diff --cached --quiet; then
+            git commit -m "W08b: accept final published monthly draft [skip ci]"
+            git pull --rebase origin workflow01-final-architecture
+            git push origin HEAD:workflow01-final-architecture
+          fi
+          echo "published=true" >> "$GITHUB_OUTPUT"
+      - name: Emit verified archive receipt
+        id: receipt
+        if: ${{ always() && steps.archive.outcome == 'success' }}
+        run: |
+          set -euo pipefail
           cat "$RUNNER_TEMP/w08b-receipt.json"
-          echo "published=$(jq -r '.status == "published"' "$RUNNER_TEMP/w08b-receipt.json")" >> "$GITHUB_OUTPUT"
-          echo "checkpoint=$(jq -r '.zenodo_record_id' "$RUNNER_TEMP/w08b-receipt.json")" >> "$GITHUB_OUTPUT"
-          echo "archive_sha256=$(jq -r '.sha256' "$RUNNER_TEMP/w08b-receipt.json")" >> "$GITHUB_OUTPUT"
+          echo "checkpoint=$(jq -er '.zenodo_record_id' "$RUNNER_TEMP/w08b-receipt.json")" >> "$GITHUB_OUTPUT"
+          echo "archive_sha256=$(jq -er '.sha256' "$RUNNER_TEMP/w08b-receipt.json")" >> "$GITHUB_OUTPUT"
       - name: Preserve aggregated progress and receipt (no licensed citation data)
         if: always()
         run: |
