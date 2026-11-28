@@ -54,7 +54,7 @@ for(i in seq_along(groups)) {
 ledger <- read.csv(file,stringsAsFactors=FALSE,na.strings=NULL)
 if(!setequal(unique(ledger$batch),seq_along(groups))) stop("Incomplete harvest ledger")
 selected <- sort(unique(ledger$id[nzchar(ledger$id)]))
-write.csv(data.frame(provider="openalex",related_provider_id=selected),
+write.csv(data.frame(provider=rep("openalex",length(selected)),related_provider_id=selected),
   file.path(out,"eligible_openalex_ids.csv"),row.names=FALSE)
 e <- edges[edges$provider=="openalex" & norm(edges$related_provider_id)%in%selected,,drop=FALSE]
 write.csv(e,file.path(out,"eligible_openalex_citation_edges.csv"),row.names=FALSE)
