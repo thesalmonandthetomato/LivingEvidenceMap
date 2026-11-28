@@ -1,0 +1,69 @@
+name: TEMP W08b live pending Lens response diagnosis
+on:
+  push:
+    branches: [workflow01-final-architecture]
+    paths: ['.github/workflows/tmp_w08b_live_lens_pending.yml']
+permissions:
+  contents: read
+concurrency:
+  group: w08b-live-lens-diagnostic
+  cancel-in-progress: false
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+      - run: Rscript -e 'install.packages(c("jsonlite","httr2","digest"))'
+      - name: Restore only latest November draft
+        env:
+          ZENODO_ACCESS_TOKEN: ${{ secrets.ZENODO_ACCESS_TOKEN }}
+          W08B_ALLOW_DRAFT_RESTORE: '1'
+          W08B_EXPECTED_ARCHIVE_SHA: 9e6fdd0ff5a43789bfb28e6ff02427315c0162cbb05ee3ce38a869273fc8c54f
+        run: |
+          set -euo pipefail
+          Rscript scripts/workflow08b/restore_discovery.R 24628405 "$RUNNER_TEMP/state"
+          jq -e '.update_month=="2026-11" and .queries_remaining==189 and .provider_discovery_complete==false' "$RUNNER_TEMP/state/monthly_discovery_status.json"
+      - name: Inspect actual remaining Lens response types without logging licensed data
+        env:
+          LENS_API_TOKEN: ${{ secrets.LENS_API_TOKEN }}
+        shell: Rscript {0}
+        run: |
+          library(jsonlite);library(httr2)
+          root<-file.path(Sys.getenv("RUNNER_TEMP"),"state")
+          q<-read.csv(file.path(root,"expanded_lens_identifier_queries.csv"),stringsAsFactors=FALSE)
+          h<-new.env(hash=TRUE,parent=emptyenv())
+          for(line in readLines(file.path(root,"lens_seed_status.jsonl"))){
+            x<-fromJSON(line,simplifyVector=FALSE);h[[x$lens_id]]<-x
+          }
+          ids<-unique(q$query_identifier)
+          ids<-ids[vapply(ids,function(id){x<-h[[id]];is.null(x)||!identical(x$update_id,"2026-11")||!isTRUE(x$status%in%c("complete","not_found"))},logical(1))]
+          stopifnot(length(ids)<=189L,length(ids)>0L)
+          cat("Remaining Lens IDs:",length(ids),"\n")
+          fetch<-function(ids){
+            r<-request("https://api.lens.org/scholarly/search")|>req_headers(Authorization=paste("Bearer",Sys.getenv("LENS_API_TOKEN")),Accept="application/json")|>
+             req_body_json(list(query=list(terms=list(lens_id=as.list(ids))),size=500L,include=c("lens_id","references","references_count","references_resolved_count","scholarly_citations","scholarly_citations_count")),auto_unbox=TRUE)|>req_timeout(60)
+            resp_body_json(req_perform(r),simplifyVector=FALSE)
+          }
+          b<-fetch(ids);actual<-vapply(b$data,function(x)x$lens_id,character(1))
+          cat("Bulk total:",b$total,"returned:",length(actual),"exact:",sum(actual%in%ids),"unexpected:",sum(!actual%in%ids),"\n")
+          shape<-function(x){
+            if(is.null(x))return("null")
+            paste(typeof(x),"length",length(x),if(is.logical(x)&&length(x)==1L)as.character(x)else if(is.numeric(x)&&length(x)==1L)if(x==0)"zero"else"nonzero"else if(is.character(x)&&length(x)==1L)if(!nzchar(x))"empty"else"nonempty"else "",sep=" ")
+          }
+          for(field in c("references","scholarly_citations")){
+            cat(field,"types for exact hits:\n")
+            print(table(vapply(b$data[actual%in%ids],function(x)shape(x[[field]]),character(1))))
+          }
+          missing<-setdiff(ids,actual)
+          for(id in head(missing,10L)){
+            z<-fetch(id);actual<-vapply(z$data,function(x)x$lens_id,character(1))
+            cat("Targeted search total:",z$total,"exact:",sum(actual==id),"unexpected:",sum(actual!=id),"\n")
+            for(x in z$data)for(field in c("references","scholarly_citations"))cat("field:",field,"shape:",shape(x[[field]]),"\n")
+          }
