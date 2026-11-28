@@ -4,8 +4,8 @@
   "w08_canonical_sha256": "605b6d4299967dbb6360ea39a223300e497912a22bdcecf7d998777b4fdf0b51",
   "zenodo_record_id": "24628405",
   "status": "draft",
-  "archive_filename": "w08b-discovery-run-46161668634-pre-oa-b1e80e0f1ce851f5da6666a71c1741f993f6452c4fa54b3cc23a5529326235f1.tar.gz",
-  "sha256": "b1e80e0f1ce851f5da6666a71c1741f993f6452c4fa54b3cc23a5529326235f1",
-  "md5": "35f5ecb879cf86f657e5522238593faf",
-  "run_id": "46161668634-pre-oa"
+  "archive_filename": "w08b-discovery-run-46161668634-53b66c5db3c4e710ff8dacebf50151b6e1e12109a37273f78ead0f83535a489f.tar.gz",
+  "sha256": "53b66c5db3c4e710ff8dacebf50151b6e1e12109a37273f78ead0f83535a489f",
+  "md5": "23977c47de2b8d7a8670e968a9f4d980",
+  "run_id": "46161668634"
 }
