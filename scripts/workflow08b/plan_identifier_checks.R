@@ -31,7 +31,7 @@ read_entries<-function(file,provider,typ,field){
 read_entries(file.path(state,files[["lens"]]),"lens","lens","lens_id")
 read_entries(file.path(state,files[["openalex"]]),"openalex","openalex","openalex_id")
 read_entries(file.path(state,files[["doi"]]),"lens","doi","doi")
-association_counts<-table(keys(q$provider,q$identifier_type,q$query_identifier))
+association_counts<-list2env(as.list(table(keys(q$provider,q$identifier_type,q$query_identifier))),hash=TRUE,parent=emptyenv())
 unique_queries<-unique(q[,c("provider","identifier_type","query_identifier"),drop=FALSE])
 unique_queries<-unique_queries[order(unique_queries$provider,
                        unique_queries$identifier_type,unique_queries$query_identifier),,drop=FALSE]
