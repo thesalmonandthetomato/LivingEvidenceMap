@@ -16,7 +16,7 @@ files<-c(lens="lens_seed_status.jsonl",openalex="openalex_seed_status.jsonl",
          doi="lens_doi_resolution.jsonl")
 if(!all(file.exists(file.path(state,files[c("lens","openalex")]))))
   stop("Missing historical Lens/OpenAlex checkpoint; fail closed")
-history<-list()
+history<-new.env(hash=TRUE,parent=emptyenv())
 keys<-function(provider,typ,value)paste(provider,typ,value,sep="\037")
 read_entries<-function(file,provider,typ,field){
  if(!file.exists(file))return(invisible(NULL))
@@ -31,6 +31,7 @@ read_entries<-function(file,provider,typ,field){
 read_entries(file.path(state,files[["lens"]]),"lens","lens","lens_id")
 read_entries(file.path(state,files[["openalex"]]),"openalex","openalex","openalex_id")
 read_entries(file.path(state,files[["doi"]]),"lens","doi","doi")
+association_counts<-table(keys(q$provider,q$identifier_type,q$query_identifier))
 unique_queries<-unique(q[,c("provider","identifier_type","query_identifier"),drop=FALSE])
 unique_queries<-unique_queries[order(unique_queries$provider,
                        unique_queries$identifier_type,unique_queries$query_identifier),,drop=FALSE]
@@ -61,8 +62,7 @@ row<-lapply(seq_len(nrow(unique_queries)),function(i){
    backward_retrieval_policy=if(completed)"already_complete_this_month" else
      if(z$identifier_type=="doi")"resolve_all_lens_matches" else
      if(status=="complete"&&!is.na(previous_count))"if_count_increases" else "initial_or_retry",
-   associated_canonical_seeds=sum(q$provider==z$provider &
-      q$identifier_type==z$identifier_type & q$query_identifier==z$query_identifier),
+   associated_canonical_seeds=as.integer(association_counts[[key]]),
    stringsAsFactors=FALSE)
 })
 df<-if(length(row))do.call(rbind,row)else
